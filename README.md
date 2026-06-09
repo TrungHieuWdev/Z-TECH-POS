@@ -51,7 +51,7 @@ npm run dev
 
 Frontend chạy tại `http://localhost:5173`.
 
-## Tài khoản mặc định
+## Tài khoản test
 
 - Admin: `admin@pos.com` / `admin123`
 - Cashier: `cashier@pos.com` / `123456`
