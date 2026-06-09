@@ -1,5 +1,41 @@
 import { query } from '../config/db.js';
 
+const DEVICE_FAMILY_KEYWORDS = {
+  apple: ['iphone', 'ipad', 'magsafe', 'lightning', 'apple', 'airpods', 'air pro'],
+  samsung: ['samsung'],
+  vivo: ['vivo'],
+  oppo: ['oppo'],
+  xiaomi: ['xiaomi', 'redmi']
+};
+
+function getSearchTokens(search = '') {
+  return search.trim().split(/\s+/).filter(Boolean);
+}
+
+function appendTextSearch(sql, params, tokens) {
+  let nextSql = sql;
+
+  for (const token of tokens) {
+    nextSql += ' AND (p.name LIKE ? OR p.description LIKE ? OR c.name LIKE ?)';
+    params.push(`%${token}%`, `%${token}%`, `%${token}%`);
+  }
+
+  return nextSql;
+}
+
+function appendKeywordSearch(sql, params, keywords = []) {
+  if (keywords.length === 0) return sql;
+
+  const conditions = [];
+
+  for (const keyword of keywords) {
+    conditions.push('p.name LIKE ?', 'p.description LIKE ?', 'c.name LIKE ?');
+    params.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`);
+  }
+
+  return `${sql} AND (${conditions.join(' OR ')})`;
+}
+
 function normalizeProductBody(body, existing = {}) {
   return {
     category_id: body.category_id === '' ? null : body.category_id ?? existing.category_id ?? null,
@@ -15,7 +51,7 @@ function normalizeProductBody(body, existing = {}) {
 
 export async function getAll(req, res) {
   try {
-    const { category_id, search } = req.query;
+    const { category_id, search = '', device_family } = req.query;
     const params = [];
     let sql = `
       SELECT p.*, c.name AS category_name
@@ -29,10 +65,10 @@ export async function getAll(req, res) {
       params.push(category_id);
     }
 
-    if (search) {
-      sql += ' AND (p.name LIKE ? OR p.description LIKE ?)';
-      params.push(`%${search}%`, `%${search}%`);
-    }
+    // Loc nhanh theo dong may tach rieng voi category_id:
+    // category_id loc loai san pham, device_family tim san pham hop voi hang/dong may.
+    sql = appendKeywordSearch(sql, params, DEVICE_FAMILY_KEYWORDS[device_family]);
+    sql = appendTextSearch(sql, params, getSearchTokens(search));
 
     sql += ' ORDER BY p.created_at DESC';
 

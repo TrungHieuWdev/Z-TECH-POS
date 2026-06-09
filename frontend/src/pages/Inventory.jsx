@@ -85,7 +85,7 @@ export default function Inventory() {
           <button
             type="button"
             onClick={() => openModal('in')}
-            className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 font-semibold text-white transition hover:bg-emerald-700"
+            className="flex items-center gap-2 rounded-lg bg-[#74B8E0] px-4 py-2.5 font-semibold text-white transition hover:bg-[#74B8E0] active:bg-[#74B8E0]"
           >
             <PackagePlus size={18} />
             <span>Nhập kho</span>
@@ -93,7 +93,7 @@ export default function Inventory() {
           <button
             type="button"
             onClick={() => openModal('adjust')}
-            className="flex items-center gap-2 rounded-lg bg-indigo-700 px-4 py-2.5 font-semibold text-white transition hover:bg-indigo-800"
+            className="flex items-center gap-2 rounded-lg border border-[#BFE3F5] bg-white px-4 py-2.5 font-semibold text-[#5EAED9] transition hover:bg-brand-surface active:bg-brand-soft"
           >
             <RotateCcw size={18} />
             <span>Điều chỉnh</span>
@@ -159,7 +159,7 @@ export default function Inventory() {
             <select
               value={form.product_id}
               onChange={(event) => setForm({ ...form, product_id: event.target.value })}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-indigo-600"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-brand"
               required
             >
               <option value="">Chọn sản phẩm</option>
@@ -179,7 +179,7 @@ export default function Inventory() {
               min={mode === 'in' ? 1 : 0}
               value={form.quantity}
               onChange={(event) => setForm({ ...form, quantity: event.target.value })}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-indigo-600"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-brand"
               required
             />
           </label>
@@ -188,14 +188,14 @@ export default function Inventory() {
             <textarea
               value={form.note}
               onChange={(event) => setForm({ ...form, note: event.target.value })}
-              className="min-h-28 w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-indigo-600"
+              className="min-h-28 w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-brand"
             />
           </label>
           <div className="flex justify-end gap-3">
             <button type="button" onClick={closeModal} className="rounded-lg border border-gray-300 px-4 py-2 font-medium">
               Hủy
             </button>
-            <button type="submit" className="rounded-lg bg-indigo-700 px-4 py-2 font-semibold text-white hover:bg-indigo-800">
+            <button type="submit" className="rounded-lg bg-brand px-4 py-2 font-semibold text-brand-ink hover:bg-brand-muted">
               Lưu
             </button>
           </div>

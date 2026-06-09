@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   Banknote,
@@ -8,7 +9,6 @@ import {
   Plus,
   Search,
   Smartphone,
-  Trash2,
   UserSearch,
   WalletCards,
   X
@@ -22,31 +22,45 @@ const paymentOptions = [
   { value: 'card', label: 'Quẹt thẻ', icon: CreditCard }
 ];
 
-function getStockTone(stock) {
-  const value = Number(stock || 0);
+const deviceFamilyOptions = [
+  { value: 'apple', label: 'Phụ kiện Apple' },
+  { value: 'samsung', label: 'Phụ kiện Samsung' },
+  { value: 'vivo', label: 'Phụ kiện Vivo' },
+  { value: 'oppo', label: 'Phụ kiện Oppo' },
+  { value: 'xiaomi', label: 'Phụ kiện Xiaomi' }
+];
 
-  if (value <= 0) {
-    return 'bg-red-100 text-red-700';
-  }
-
-  if (value <= 8) {
-    return 'bg-amber-100 text-amber-700';
-  }
-
-  return 'bg-green-100 text-green-700';
+function toMoneyAmount(value) {
+  return Math.max(Number(value || 0), 0);
 }
 
 function getProductSku(product) {
   return `SKU: PRD-${String(product.id).padStart(4, '0')}`;
 }
 
+function getStockTone(stock) {
+  const value = Number(stock || 0);
+
+  if (value <= 0) return 'bg-red-100 text-red-700';
+  if (value <= 8) return 'bg-amber-100 text-amber-700';
+  return 'bg-green-100 text-green-700';
+}
+
+function buildOrderItems(cart) {
+  return cart.map((item) => ({ product_id: item.id, quantity: item.quantity }));
+}
+
 export default function POS() {
+  const [searchParams] = useSearchParams();
+  const routeSearch = searchParams.get('search') || '';
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [cart, setCart] = useState([]);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(routeSearch);
   const [categoryId, setCategoryId] = useState('');
+  const [deviceFamily, setDeviceFamily] = useState('');
   const [discount, setDiscount] = useState(0);
+  const [customerPaid, setCustomerPaid] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [customerName, setCustomerName] = useState('Khách lẻ');
   const [loading, setLoading] = useState(false);
@@ -56,6 +70,7 @@ export default function POS() {
 
     if (search) params.set('search', search);
     if (categoryId) params.set('category_id', categoryId);
+    if (deviceFamily) params.set('device_family', deviceFamily);
 
     const response = await api.get(`/products?${params.toString()}`);
     setProducts(response.data);
@@ -66,15 +81,31 @@ export default function POS() {
   }, []);
 
   useEffect(() => {
+    // Tu khoa den tu thanh tim nhanh header se tim toan bo POS, khong giu bo loc cu.
+    setSearch(routeSearch);
+    setCategoryId('');
+    setDeviceFamily('');
+  }, [routeSearch]);
+
+  useEffect(() => {
     loadProducts();
-  }, [search, categoryId]);
+  }, [search, categoryId, deviceFamily]);
 
   const subtotal = useMemo(
     () => cart.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0),
     [cart]
   );
-  const discountValue = Math.max(Number(discount || 0), 0);
+
+  const discountValue = toMoneyAmount(discount);
   const total = Math.max(subtotal - discountValue, 0);
+  const customerPaidValue = toMoneyAmount(customerPaid);
+  const changeDue = paymentMethod === 'cash' ? Math.max(customerPaidValue - total, 0) : 0;
+  const amountMissing = paymentMethod === 'cash' ? Math.max(total - customerPaidValue, 0) : 0;
+
+  const toggleDeviceFamily = (value) => {
+    // Tim nhanh theo dong may tach rieng voi loc danh muc san pham chung.
+    setDeviceFamily((current) => (current === value ? '' : value));
+  };
 
   const addToCart = (product) => {
     setCart((current) => {
@@ -119,6 +150,7 @@ export default function POS() {
   const clearCart = () => {
     setCart([]);
     setDiscount(0);
+    setCustomerPaid('');
   };
 
   const checkout = async () => {
@@ -127,11 +159,16 @@ export default function POS() {
       return;
     }
 
+    if (paymentMethod === 'cash' && customerPaidValue < total) {
+      toast.error(`Tiền khách đưa còn thiếu ${formatCurrency(amountMissing)}`);
+      return;
+    }
+
     setLoading(true);
 
     try {
       await api.post('/orders', {
-        items: cart.map((item) => ({ product_id: item.id, quantity: item.quantity })),
+        items: buildOrderItems(cart),
         discount: discountValue,
         payment_method: paymentMethod
       });
@@ -149,20 +186,20 @@ export default function POS() {
   return (
     <div className="grid h-[calc(100vh-6.5rem)] min-h-[720px] overflow-hidden rounded-xl border border-[#c3c6d7] bg-[#f7f9fb] lg:grid-cols-[minmax(0,1fr)_400px]">
       <section className="flex min-w-0 flex-col overflow-hidden p-5">
-        <div className="mb-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_260px]">
+        <div className="mb-3 grid gap-3 xl:grid-cols-[minmax(0,1fr)_260px]">
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-[#737686]" />
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              className="h-11 w-full rounded-lg border border-transparent bg-[#eceef0] pl-10 pr-4 text-sm font-medium text-[#191c1e] outline-none focus:border-[#004ac6] focus:bg-white focus:ring-2 focus:ring-[#dbe1ff]"
+              className="h-11 w-full rounded-lg border border-transparent bg-[#eceef0] pl-10 pr-4 text-sm font-medium text-[#191c1e] outline-none focus:border-brand focus:bg-white focus:ring-2 focus:ring-brand-soft"
               placeholder="Tìm sản phẩm..."
             />
           </div>
           <select
             value={categoryId}
             onChange={(event) => setCategoryId(event.target.value)}
-            className="h-11 rounded-lg border border-[#c3c6d7] bg-white px-3 text-sm font-semibold text-[#191c1e] outline-none focus:border-[#004ac6] focus:ring-2 focus:ring-[#dbe1ff]"
+            className="h-11 rounded-lg border border-[#c3c6d7] bg-white px-3 text-sm font-semibold text-[#191c1e] outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft"
           >
             <option value="">Tất cả danh mục</option>
             {categories.map((category) => (
@@ -173,28 +210,20 @@ export default function POS() {
           </select>
         </div>
 
-        <div className="mb-5 flex gap-2 overflow-x-auto pb-1">
-          <button
-            type="button"
-            onClick={() => setCategoryId('')}
-            className={`h-10 shrink-0 rounded-full px-5 text-sm font-semibold ${
-              categoryId === '' ? 'bg-[#2563eb] text-white' : 'border border-[#c3c6d7] bg-white text-[#191c1e]'
-            }`}
-          >
-            Tất cả
-          </button>
-          {categories.map((category) => (
+        <div className="mb-5 flex flex-wrap gap-2">
+          {deviceFamilyOptions.map((option) => (
             <button
-              key={category.id}
+              key={option.value}
               type="button"
-              onClick={() => setCategoryId(String(category.id))}
-              className={`h-10 shrink-0 rounded-full px-5 text-sm font-semibold ${
-                String(categoryId) === String(category.id)
-                  ? 'bg-[#2563eb] text-white'
+              aria-pressed={deviceFamily === option.value}
+              onClick={() => toggleDeviceFamily(option.value)}
+              className={`h-10 rounded-full px-5 text-sm font-semibold ${
+                deviceFamily === option.value
+                  ? 'bg-brand text-brand-ink'
                   : 'border border-[#c3c6d7] bg-white text-[#191c1e]'
               }`}
             >
-              {category.name}
+              {option.label}
             </button>
           ))}
         </div>
@@ -235,12 +264,12 @@ export default function POS() {
                       {getProductSku(product)}
                     </p>
                     <div className="mt-4 flex items-center justify-between gap-3">
-                      <span className="text-lg font-bold leading-6 text-[#004ac6]">
+                      <span className="text-lg font-bold leading-6 text-brand-strong">
                         {formatCurrency(product.price)}
                       </span>
                       <span
                         className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${
-                          isOutOfStock ? 'bg-[#eceef0] text-[#737686]' : 'bg-[#e6e8ea] text-[#004ac6]'
+                          isOutOfStock ? 'bg-[#eceef0] text-[#737686]' : 'bg-brand-soft text-brand-strong'
                         }`}
                       >
                         {isOutOfStock ? <X size={18} /> : <Plus size={18} />}
@@ -258,7 +287,7 @@ export default function POS() {
         <div className="border-b border-[#c3c6d7] bg-white p-4">
           <div className="mb-3 flex items-center justify-between">
             <span className="text-sm font-bold text-[#191c1e]">Khách hàng</span>
-            <button type="button" className="text-xs font-bold text-[#004ac6]">
+            <button type="button" className="text-xs font-bold text-brand-strong">
               Thêm mới (+)
             </button>
           </div>
@@ -267,7 +296,7 @@ export default function POS() {
             <input
               value={customerName}
               onChange={(event) => setCustomerName(event.target.value)}
-              className="h-11 w-full rounded-lg border border-[#c3c6d7] bg-[#f7f9fb] pl-10 pr-4 text-sm font-bold text-[#191c1e] outline-none focus:border-[#004ac6] focus:ring-2 focus:ring-[#dbe1ff]"
+              className="h-11 w-full rounded-lg border border-[#c3c6d7] bg-[#f7f9fb] pl-10 pr-4 text-sm font-bold text-[#191c1e] outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft"
             />
           </div>
         </div>
@@ -275,7 +304,7 @@ export default function POS() {
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-4">
           <div className="mb-4 flex items-center justify-between">
             <div className="flex items-center gap-2 text-sm font-bold text-[#191c1e]">
-              <Smartphone size={19} className="text-[#004ac6]" />
+              <Smartphone size={19} className="text-brand-strong" />
               <span>Giỏ hàng ({cart.length})</span>
             </div>
             <button type="button" onClick={clearCart} className="rounded px-2 py-1 text-xs font-bold text-[#ba1a1a]">
@@ -361,7 +390,7 @@ export default function POS() {
                 min="0"
                 value={discount}
                 onChange={(event) => setDiscount(event.target.value)}
-                className="h-9 w-36 rounded-lg border border-[#c3c6d7] bg-white px-3 text-right text-sm font-semibold text-[#191c1e] outline-none focus:border-[#004ac6] focus:ring-2 focus:ring-[#dbe1ff]"
+                className="h-9 w-36 rounded-lg border border-[#c3c6d7] bg-white px-3 text-right text-sm font-semibold text-[#191c1e] outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft"
               />
             </label>
             <div className="flex justify-between text-sm text-[#434655]">
@@ -370,8 +399,31 @@ export default function POS() {
             </div>
             <div className="flex items-center justify-between border-t border-[#c3c6d7] pt-3">
               <span className="text-base font-bold uppercase text-[#191c1e]">Tổng cộng</span>
-              <span className="text-base font-extrabold text-[#004ac6]">{formatCurrency(total)}</span>
+              <span className="text-base font-extrabold text-brand-strong">{formatCurrency(total)}</span>
             </div>
+            {paymentMethod === 'cash' && (
+              <div className="rounded-xl border border-[#c3c6d7] bg-white p-3">
+                <label className="flex items-center justify-between gap-3 text-sm text-[#434655]">
+                  <span>Tiền khách đưa</span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={customerPaid}
+                    onChange={(event) => setCustomerPaid(event.target.value)}
+                    className="h-9 w-36 rounded-lg border border-[#c3c6d7] bg-white px-3 text-right text-sm font-semibold text-[#191c1e] outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft"
+                    placeholder="0"
+                  />
+                </label>
+                <div className="mt-3 flex items-center justify-between border-t border-[#e0e3e5] pt-3 text-sm">
+                  <span className="font-semibold text-[#434655]">
+                    {amountMissing > 0 ? 'Còn thiếu' : 'Tiền thừa'}
+                  </span>
+                  <span className={`font-extrabold ${amountMissing > 0 ? 'text-[#ba1a1a]' : 'text-[#008a45]'}`}>
+                    {amountMissing > 0 ? formatCurrency(amountMissing) : formatCurrency(changeDue)}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="mb-4 grid grid-cols-3 gap-2">
@@ -386,7 +438,7 @@ export default function POS() {
                   onClick={() => setPaymentMethod(option.value)}
                   className={`flex min-h-[68px] flex-col items-center justify-center rounded-xl border px-2 py-3 ${
                     isSelected
-                      ? 'border-2 border-[#004ac6] bg-[#eef2ff] text-[#004ac6]'
+                      ? 'border-2 border-brand bg-brand-soft text-brand-strong'
                       : 'border-[#c3c6d7] bg-white text-[#434655]'
                   }`}
                 >
@@ -403,7 +455,7 @@ export default function POS() {
             type="button"
             onClick={checkout}
             disabled={loading}
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#2563eb] px-4 text-sm font-bold uppercase text-white shadow-[0_8px_20px_rgba(37,99,235,0.18)] disabled:opacity-70"
+            className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#74B8E0] px-4 text-sm font-bold uppercase text-white shadow-[0_8px_20px_rgba(116,184,224,0.22)] disabled:opacity-70"
           >
             <CreditCard size={18} />
             <span>{loading ? 'Đang xử lý...' : 'Thanh toán'}</span>

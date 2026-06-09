@@ -13,7 +13,7 @@ export default function Modal({ isOpen, onClose, title, children }) {
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-2 text-gray-500 transition hover:bg-gray-100 hover:text-gray-900"
+            className="rounded-lg p-2 text-gray-500 transition hover:bg-brand-surface hover:text-brand-strong"
             aria-label="Đóng"
             title="Đóng"
           >

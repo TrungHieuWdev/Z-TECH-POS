@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Check, Eye, EyeOff, LockKeyhole, LogIn, ReceiptText, User } from 'lucide-react';
+import { Check, Eye, EyeOff, LockKeyhole, LogIn, User } from 'lucide-react';
 import api from '../api/axios';
+import ztechLogo from '../assets/images/1111.png';
 import { saveAuth } from '../utils/auth';
 
 export default function Login() {
@@ -31,26 +32,36 @@ export default function Login() {
 
   return (
     <main className="flex min-h-screen flex-col bg-[#f8f9fa] font-sans text-[#191c1d] lg:flex-row">
-      <section className="relative hidden min-h-screen w-1/2 items-center justify-center overflow-hidden bg-[#c6e2ff] p-8 lg:flex">
-        <div className="absolute inset-0 opacity-20 [background-image:radial-gradient(#466179_0.5px,transparent_0.5px)] [background-size:24px_24px]" />
+      <section className="relative hidden min-h-screen w-1/2 items-center justify-center overflow-hidden bg-brand-soft p-8 lg:flex">
+        <div className="absolute inset-0 opacity-25 [background-image:radial-gradient(#74B8E0_0.5px,transparent_0.5px)] [background-size:24px_24px]" />
         <div className="relative z-10 flex max-w-[520px] flex-col items-center text-center">
-          <div className="mb-6 grid h-32 w-32 place-items-center rounded-full bg-white shadow-sm">
-            <ReceiptText size={64} strokeWidth={1.8} className="text-[#466179]" />
+          <div className="mb-6 h-32 w-32 overflow-hidden rounded-2xl bg-white shadow-sm">
+            <img
+              src={ztechLogo}
+              alt="Z-TECH POS logo"
+              className="max-w-none -translate-x-[128px] -translate-y-[42px] object-contain"
+              style={{ width: 389 }}
+            />
           </div>
-          <h1 className="text-[40px] font-bold leading-[48px] text-[#466179]">Z-TECH POS</h1>
-          <p className="mt-4 max-w-[430px] text-lg font-normal leading-[26px] text-[#4a657d]">
+          <h1 className="text-[40px] font-bold leading-[48px] text-brand">Z-TECH POS</h1>
+          <p className="mt-4 max-w-[430px] text-lg font-normal leading-[26px] text-brand-ink">
             Giải pháp quản lý bán hàng thông minh, tối ưu hóa quy trình vận hành cho doanh nghiệp của bạn.
           </p>
         </div>
       </section>
 
       <section className="flex min-h-screen flex-1 items-center justify-center bg-[#f8f9fa] px-4 py-10 sm:px-6 lg:min-h-0 lg:px-8">
-        <div className="w-full max-w-[440px]">
+        <div className="w-full max-w-[460px] rounded-2xl border border-[#e1e3e4] bg-white p-8 shadow-[0_16px_42px_rgba(25,28,29,0.10)] sm:p-9">
           <div className="mb-8 text-center lg:hidden">
-            <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-full bg-[#c6e2ff]">
-              <ReceiptText size={32} className="text-[#466179]" />
+            <div className="mx-auto mb-4 h-16 w-16 overflow-hidden rounded-xl bg-brand-soft">
+              <img
+                src={ztechLogo}
+                alt="Z-TECH POS logo"
+                className="max-w-none -translate-x-[64px] -translate-y-[21px] object-contain"
+                style={{ width: 195 }}
+              />
             </div>
-            <p className="text-2xl font-bold text-[#466179]">Z-TECH POS</p>
+            <p className="text-2xl font-bold text-brand">Z-TECH POS</p>
           </div>
 
           <div className="mb-8">
@@ -66,13 +77,13 @@ export default function Login() {
                 Tên đăng nhập hoặc Email
               </span>
               <div className="group relative">
-                <User className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#73777d] transition-colors group-focus-within:text-[#466179]" />
+                <User className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#73777d] transition-colors group-focus-within:text-brand-strong" />
                 <input
                   type="email"
                   value={form.email}
                   onChange={(event) => setForm({ ...form, email: event.target.value })}
                   autoComplete="email"
-                  className="h-12 w-full rounded-lg border border-[#c3c7cd] bg-[#f3f4f5] pl-11 pr-4 text-base leading-6 text-[#191c1d] outline-none transition-all placeholder:text-[#73777d] focus:border-[#466179] focus:ring-2 focus:ring-[#c6e2ff]"
+                  className="h-12 w-full rounded-lg border border-[#c3c7cd] bg-[#f3f4f5] pl-11 pr-4 text-base leading-6 text-[#191c1d] outline-none transition-all placeholder:text-[#73777d] focus:border-brand focus:ring-2 focus:ring-brand-soft"
                   placeholder="admin@pos.com"
                   required
                 />
@@ -82,20 +93,20 @@ export default function Login() {
             <label className="block">
               <span className="mb-1 block text-sm font-semibold leading-5 text-[#43474d]">Mật khẩu</span>
               <div className="group relative">
-                <LockKeyhole className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#73777d] transition-colors group-focus-within:text-[#466179]" />
+                <LockKeyhole className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#73777d] transition-colors group-focus-within:text-brand-strong" />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={form.password}
                   onChange={(event) => setForm({ ...form, password: event.target.value })}
                   autoComplete="current-password"
-                  className="h-12 w-full rounded-lg border border-[#c3c7cd] bg-[#f3f4f5] pl-11 pr-12 text-base leading-6 text-[#191c1d] outline-none transition-all placeholder:text-[#73777d] focus:border-[#466179] focus:ring-2 focus:ring-[#c6e2ff]"
+                  className="h-12 w-full rounded-lg border border-[#c3c7cd] bg-[#f3f4f5] pl-11 pr-12 text-base leading-6 text-[#191c1d] outline-none transition-all placeholder:text-[#73777d] focus:border-brand focus:ring-2 focus:ring-brand-soft"
                   placeholder="••••••••"
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((value) => !value)}
-                  className="absolute right-4 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full text-[#73777d] transition hover:bg-[#e7e8e9] hover:text-[#43474d]"
+                  className="absolute right-4 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full text-[#73777d] transition hover:bg-brand-surface hover:text-brand-strong"
                   title={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
                   aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
                 >
@@ -111,7 +122,7 @@ export default function Login() {
                     type="checkbox"
                     checked={remember}
                     onChange={(event) => setRemember(event.target.checked)}
-                    className="peer h-5 w-5 appearance-none rounded border-2 border-[#c3c7cd] bg-[#f3f4f5] transition-all checked:border-[#466179] checked:bg-[#466179] focus:outline-none focus:ring-2 focus:ring-[#c6e2ff]"
+                    className="peer h-5 w-5 appearance-none rounded border-2 border-[#c3c7cd] bg-[#f3f4f5] transition-all checked:border-brand checked:bg-brand focus:outline-none focus:ring-2 focus:ring-brand-soft"
                   />
                   <Check
                     size={15}
@@ -125,7 +136,7 @@ export default function Login() {
               </label>
               <button
                 type="button"
-                className="shrink-0 text-sm font-semibold leading-5 text-[#466179] transition hover:underline"
+                className="shrink-0 text-sm font-semibold leading-5 text-brand-strong transition hover:underline"
               >
                 Quên mật khẩu?
               </button>
@@ -134,7 +145,7 @@ export default function Login() {
             <button
               type="submit"
               disabled={loading}
-              className="flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-[#466179] px-4 text-xl font-semibold leading-7 text-white shadow-sm transition hover:bg-[#3d566c] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
+              className="flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-[#74B8E0] px-4 text-xl font-semibold leading-7 text-white shadow-sm transition hover:bg-[#6DAFDB] active:bg-[#66A8D4] disabled:cursor-not-allowed disabled:opacity-70"
             >
               <span>{loading ? 'Đang đăng nhập...' : 'Đăng nhập'}</span>
               <LogIn size={22} />

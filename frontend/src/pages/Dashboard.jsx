@@ -11,13 +11,13 @@ import {
 import api from '../api/axios';
 import { formatCurrency, formatDate, formatTime } from '../utils/format';
 
-const chartColors = ['#c6e2ff', '#d9e4ec', '#466179', '#fcdaa3', '#e1e3e4'];
+const chartColors = ['#74B8E0', '#BFE3F5', '#3F90BD', '#DFF2FB', '#9FD4EE'];
 
 const cardTones = {
-  blue: 'bg-[#c6e2ff] text-[#2e4961]',
-  gray: 'bg-[#f3f4f5] text-[#454749]',
-  amber: 'bg-[#fcdaa3] text-[#775e32]',
-  slate: 'bg-[#e2e2e5] text-[#454749]'
+  blue: 'bg-brand-soft text-brand-ink',
+  gray: 'bg-brand-surface text-brand-strong',
+  amber: 'bg-brand-muted text-brand-ink',
+  slate: 'bg-[#eef7fc] text-brand-deep'
 };
 
 const statusStyles = {
@@ -189,7 +189,7 @@ export default function Dashboard() {
             </div>
             <button
               type="button"
-              className="flex h-9 items-center gap-2 rounded-lg bg-[#f3f4f5] px-3 text-sm font-semibold text-[#454749] transition hover:bg-[#e7e8e9]"
+              className="flex h-9 items-center gap-2 rounded-lg bg-brand-surface px-3 text-sm font-semibold text-brand-ink transition hover:bg-brand-soft"
             >
               Tháng này
               <ChevronDown size={16} />
@@ -240,7 +240,7 @@ export default function Dashboard() {
         <article className="rounded-xl border border-[#e1e3e4] bg-white p-5 shadow-[0_1px_3px_rgba(25,28,29,0.08)]">
           <div className="mb-5 flex items-center justify-between gap-4">
             <h2 className="text-xl font-semibold leading-7 text-[#191c1d]">Top sản phẩm</h2>
-            <Link to="/products" className="text-sm font-semibold text-[#4a657d] transition hover:text-[#2e4961]">
+            <Link to="/products" className="text-sm font-semibold text-brand-strong transition hover:text-brand-deep">
               Tất cả
             </Link>
           </div>
@@ -272,7 +272,7 @@ export default function Dashboard() {
           <h2 className="text-xl font-semibold leading-7 text-[#191c1d]">Đơn hàng gần đây</h2>
           <Link
             to="/orders"
-            className="rounded-lg px-3 py-2 text-sm font-semibold text-[#4a657d] transition hover:bg-[#f3f4f5]"
+            className="rounded-lg px-3 py-2 text-sm font-semibold text-brand-strong transition hover:bg-brand-surface"
           >
             Xem tất cả
           </Link>
@@ -303,7 +303,7 @@ export default function Dashboard() {
                   <td className="px-5 py-4 align-middle font-bold text-[#191c1d]">{order.order_number}</td>
                   <td className="px-5 py-4 align-middle">
                     <div className="flex items-center gap-3">
-                      <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#f3f4f5] text-[11px] font-bold text-[#466179]">
+                      <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-soft text-[11px] font-bold text-brand-ink">
                         {getInitials(order.customer_name)}
                       </div>
                       <span className="font-medium text-[#43474d]">{order.customer_name}</span>
@@ -328,7 +328,7 @@ export default function Dashboard() {
                   <td className="px-5 py-4 align-middle">
                     <button
                       type="button"
-                      className="ml-auto grid h-8 w-8 place-items-center rounded-full text-[#73777d] transition hover:bg-[#edeeef] hover:text-[#191c1d]"
+                      className="ml-auto grid h-8 w-8 place-items-center rounded-full text-[#73777d] transition hover:bg-brand-surface hover:text-brand-strong"
                       title="Thao tác"
                       aria-label="Thao tác"
                     >

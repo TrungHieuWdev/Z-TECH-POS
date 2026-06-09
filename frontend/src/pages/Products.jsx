@@ -122,7 +122,7 @@ export default function Products() {
         <button
           type="button"
           onClick={openCreate}
-          className="flex items-center gap-2 rounded-lg bg-indigo-700 px-4 py-2.5 font-semibold text-white transition hover:bg-indigo-800"
+          className="flex items-center gap-2 rounded-lg bg-[#74B8E0] px-4 py-2.5 font-semibold text-white transition hover:bg-[#74B8E0] active:bg-[#74B8E0]"
         >
           <Plus size={18} />
           <span>Thêm sản phẩm</span>
@@ -142,7 +142,7 @@ export default function Products() {
         <select
           value={categoryId}
           onChange={(event) => setCategoryId(event.target.value)}
-          className="rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-indigo-600"
+          className="rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-brand"
         >
           <option value="">Tất cả danh mục</option>
           {categories.map((category) => (
@@ -196,7 +196,7 @@ export default function Products() {
                         <button
                           type="button"
                           onClick={() => openEdit(product)}
-                          className="rounded-lg p-2 text-gray-500 transition hover:bg-indigo-50 hover:text-indigo-700"
+                          className="rounded-lg p-2 text-gray-500 transition hover:bg-brand-surface hover:text-brand-strong"
                           title="Sửa"
                           aria-label="Sửa"
                         >
@@ -228,7 +228,7 @@ export default function Products() {
             <input
               value={form.name}
               onChange={(event) => setForm({ ...form, name: event.target.value })}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-indigo-600"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-brand"
               required
             />
           </label>
@@ -237,7 +237,7 @@ export default function Products() {
             <select
               value={form.category_id}
               onChange={(event) => setForm({ ...form, category_id: event.target.value })}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-indigo-600"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-brand"
             >
               <option value="">Chưa chọn</option>
               {categories.map((category) => (
@@ -254,7 +254,7 @@ export default function Products() {
               min="0"
               value={form.price}
               onChange={(event) => setForm({ ...form, price: event.target.value })}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-indigo-600"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-brand"
               required
             />
           </label>
@@ -265,7 +265,7 @@ export default function Products() {
               min="0"
               value={form.cost_price}
               onChange={(event) => setForm({ ...form, cost_price: event.target.value })}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-indigo-600"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-brand"
             />
           </label>
           <label>
@@ -275,7 +275,7 @@ export default function Products() {
               min="0"
               value={form.stock_quantity}
               onChange={(event) => setForm({ ...form, stock_quantity: event.target.value })}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-indigo-600"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-brand"
             />
           </label>
           <label>
@@ -285,7 +285,7 @@ export default function Products() {
               min="0"
               value={form.min_stock}
               onChange={(event) => setForm({ ...form, min_stock: event.target.value })}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-indigo-600"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-brand"
             />
           </label>
           <label className="md:col-span-2">
@@ -293,7 +293,7 @@ export default function Products() {
             <input
               value={form.image_url}
               onChange={(event) => setForm({ ...form, image_url: event.target.value })}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-indigo-600"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-brand"
               placeholder="https://..."
             />
           </label>
@@ -302,14 +302,14 @@ export default function Products() {
             <textarea
               value={form.description}
               onChange={(event) => setForm({ ...form, description: event.target.value })}
-              className="min-h-24 w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-indigo-600"
+              className="min-h-24 w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-brand"
             />
           </label>
           <div className="flex justify-end gap-3 md:col-span-2">
             <button type="button" onClick={closeModal} className="rounded-lg border border-gray-300 px-4 py-2 font-medium">
               Hủy
             </button>
-            <button type="submit" className="rounded-lg bg-indigo-700 px-4 py-2 font-semibold text-white hover:bg-indigo-800">
+            <button type="submit" className="rounded-lg bg-brand px-4 py-2 font-semibold text-brand-ink hover:bg-brand-muted">
               Lưu
             </button>
           </div>
