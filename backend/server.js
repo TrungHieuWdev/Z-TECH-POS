@@ -1,0 +1,99 @@
+import express from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import authRoutes from './routes/auth.js';
+import productRoutes from './routes/products.js';
+import categoryRoutes from './routes/categories.js';
+import customerRoutes from './routes/customers.js';
+import orderRoutes from './routes/orders.js';
+import inventoryRoutes from './routes/inventory.js';
+import dashboardRoutes from './routes/dashboard.js';
+
+dotenv.config();
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+app.use(cors({
+  origin: 'http://localhost:5173',
+  credentials: true
+}));
+app.use(express.json());
+
+app.get('/', (req, res) => {
+  res.type('html').send(`
+    <!doctype html>
+    <html lang="vi">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Z-TECH POS API</title>
+        <style>
+          body {
+            margin: 0;
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            background: #f5f7fb;
+            color: #111827;
+            font-family: Arial, sans-serif;
+          }
+          main {
+            width: min(560px, calc(100% - 32px));
+            padding: 28px;
+            border-radius: 12px;
+            background: white;
+            box-shadow: 0 20px 60px rgba(15, 23, 42, 0.12);
+          }
+          h1 { margin: 0 0 8px; font-size: 28px; }
+          p { margin: 8px 0; color: #4b5563; line-height: 1.5; }
+          a {
+            display: inline-block;
+            margin-top: 16px;
+            padding: 10px 14px;
+            border-radius: 8px;
+            background: #4338ca;
+            color: white;
+            text-decoration: none;
+            font-weight: 700;
+          }
+          code {
+            padding: 2px 6px;
+            border-radius: 6px;
+            background: #eef2ff;
+            color: #3730a3;
+          }
+        </style>
+      </head>
+      <body>
+        <main>
+          <h1>Z-TECH POS API đang chạy</h1>
+          <p>Backend chạy tại <code>http://localhost:${PORT}</code>.</p>
+          <p>API health: <code>/api/health</code></p>
+          <p>Giao diện frontend chạy tại <code>http://localhost:5173</code>.</p>
+          <a href="http://localhost:5173">Mở frontend</a>
+        </main>
+      </body>
+    </html>
+  `);
+});
+
+app.get('/api/health', (req, res) => {
+  res.json({ message: 'POS API is running' });
+});
+
+app.use('/api/auth', authRoutes);
+app.use('/api/products', productRoutes);
+app.use('/api/categories', categoryRoutes);
+app.use('/api/customers', customerRoutes);
+app.use('/api/orders', orderRoutes);
+app.use('/api/inventory', inventoryRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+
+app.use((req, res) => {
+  res.status(404).json({ message: 'Không tìm thấy API' });
+});
+
+app.listen(PORT, () => {
+  console.log(`POS API is running on http://localhost:${PORT}`);
+});
