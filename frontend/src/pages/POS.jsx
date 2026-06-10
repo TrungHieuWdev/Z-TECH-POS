@@ -3,9 +3,12 @@ import { useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   Banknote,
-  CreditCard,
+  CheckCircle2,
+  Copy,
   Minus,
   Plus,
+  Printer,
+  ReceiptText,
   Search,
   Smartphone,
   UserSearch,
@@ -13,14 +16,25 @@ import {
   X
 } from 'lucide-react';
 import api from '../api/axios';
+import Modal from '../components/Modal';
 import ProductImage from '../components/ProductImage';
+import {
+  buildTransferMemo,
+  buildVietQrDataUrl,
+  getBankTransferSettings,
+  isBankTransferConfigured
+} from '../utils/bankTransfer';
 import { formatCurrency } from '../utils/format';
 
 const paymentOptions = [
   { value: 'cash', label: 'Tiền mặt', icon: Banknote },
-  { value: 'transfer', label: 'Chuyển khoản', icon: WalletCards },
-  { value: 'card', label: 'Quẹt thẻ', icon: CreditCard }
+  { value: 'transfer', label: 'Chuyển khoản', icon: WalletCards }
 ];
+
+const paymentLabels = {
+  cash: 'Tiền mặt',
+  transfer: 'Chuyển khoản'
+};
 
 const deviceFamilyOptions = [
   { value: 'apple', label: 'Phụ kiện Apple' },
@@ -50,6 +64,93 @@ function buildOrderItems(cart) {
   return cart.map((item) => ({ product_id: item.id, quantity: item.quantity }));
 }
 
+function buildReceiptItems(cart) {
+  return cart.map((item) => ({
+    id: item.id,
+    name: item.name,
+    quantity: item.quantity,
+    unitPrice: Number(item.price || 0),
+    lineTotal: Number(item.price || 0) * item.quantity
+  }));
+}
+
+function ReceiptContent({ receipt }) {
+  if (!receipt) {
+    return null;
+  }
+
+  return (
+    <div className="space-y-4 text-sm text-[#191c1e]">
+      <div className="text-center">
+        <div className="text-lg font-extrabold text-brand-strong">Z-TECH POS</div>
+        <div className="mt-1 text-xs font-semibold text-[#737686]">Hóa đơn bán hàng</div>
+      </div>
+
+      <div className="grid gap-2 rounded-lg border border-[#d7eef3] bg-[#f8fdfe] p-3">
+        <div className="flex justify-between gap-3">
+          <span className="text-[#737686]">Mã đơn</span>
+          <span className="font-bold">{receipt.orderNumber}</span>
+        </div>
+        <div className="flex justify-between gap-3">
+          <span className="text-[#737686]">Khách hàng</span>
+          <span className="font-semibold">{receipt.customerName}</span>
+        </div>
+        <div className="flex justify-between gap-3">
+          <span className="text-[#737686]">Thanh toán</span>
+          <span className="font-semibold">{paymentLabels[receipt.paymentMethod]}</span>
+        </div>
+        {receipt.transferMemo && (
+          <div className="flex justify-between gap-3">
+            <span className="text-[#737686]">Nội dung CK</span>
+            <span className="font-semibold">{receipt.transferMemo}</span>
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-3">
+        {receipt.items.map((item) => (
+          <div key={item.id} className="border-b border-dashed border-[#d7eef3] pb-3 last:border-0 last:pb-0">
+            <div className="font-bold">{item.name}</div>
+            <div className="mt-1 flex justify-between text-xs text-[#737686]">
+              <span>
+                {item.quantity} x {formatCurrency(item.unitPrice)}
+              </span>
+              <span className="font-bold text-[#191c1e]">{formatCurrency(item.lineTotal)}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="space-y-2 border-t border-[#d7eef3] pt-3">
+        <div className="flex justify-between">
+          <span>Tạm tính</span>
+          <span>{formatCurrency(receipt.subtotal)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span>Giảm giá</span>
+          <span>{formatCurrency(receipt.discount)}</span>
+        </div>
+        <div className="flex justify-between text-base font-extrabold">
+          <span>Tổng cộng</span>
+          <span>{formatCurrency(receipt.total)}</span>
+        </div>
+        {receipt.paymentMethod === 'cash' && (
+          <>
+            <div className="flex justify-between">
+              <span>Tiền khách đưa</span>
+              <span>{formatCurrency(receipt.customerPaid)}</span>
+            </div>
+            <div className="flex justify-between font-bold text-emerald-700">
+              <span>Tiền thừa</span>
+              <span>{formatCurrency(receipt.changeDue)}</span>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function POS() {
   const [searchParams] = useSearchParams();
   const routeSearch = searchParams.get('search') || '';
@@ -64,6 +165,12 @@ export default function POS() {
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [customerName, setCustomerName] = useState('Khách lẻ');
   const [loading, setLoading] = useState(false);
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [receipt, setReceipt] = useState(null);
+  const [transferMemo, setTransferMemo] = useState('');
+  const [bankTransfer, setBankTransfer] = useState(getBankTransferSettings);
+  const [vietQrDataUrl, setVietQrDataUrl] = useState('');
+  const [checkoutStep, setCheckoutStep] = useState('confirm');
 
   async function loadProducts() {
     const params = new URLSearchParams();
@@ -153,7 +260,7 @@ export default function POS() {
     setCustomerPaid('');
   };
 
-  const checkout = async () => {
+  const openCheckoutConfirm = () => {
     if (cart.length === 0) {
       toast.error('Giỏ hàng đang trống');
       return;
@@ -164,18 +271,74 @@ export default function POS() {
       return;
     }
 
+    const latestBankTransfer = getBankTransferSettings();
+    if (paymentMethod === 'transfer' && !isBankTransferConfigured(latestBankTransfer)) {
+      toast.error('Chưa cấu hình thông tin ngân hàng chuyển khoản');
+      return;
+    }
+
+    setBankTransfer(latestBankTransfer);
+    setTransferMemo('');
+    setVietQrDataUrl('');
+    setCheckoutStep('confirm');
+    setIsConfirmOpen(true);
+  };
+
+  const continueToTransferPayment = async () => {
+    const latestBankTransfer = getBankTransferSettings();
+
+    if (!isBankTransferConfigured(latestBankTransfer)) {
+      toast.error('Chưa cấu hình thông tin ngân hàng chuyển khoản');
+      return;
+    }
+
+    const nextTransferMemo = buildTransferMemo();
+
     setLoading(true);
 
     try {
-      await api.post('/orders', {
+      const nextVietQrDataUrl = await buildVietQrDataUrl(latestBankTransfer, total, nextTransferMemo);
+
+      setBankTransfer(latestBankTransfer);
+      setTransferMemo(nextTransferMemo);
+      setVietQrDataUrl(nextVietQrDataUrl);
+      setCheckoutStep('transfer');
+    } catch (error) {
+      toast.error('Không thể tạo mã QR chuyển khoản');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const confirmCheckout = async () => {
+    const receiptItems = buildReceiptItems(cart);
+
+    setLoading(true);
+
+    try {
+      const response = await api.post('/orders', {
         items: buildOrderItems(cart),
         discount: discountValue,
         payment_method: paymentMethod
       });
 
-      toast.success('Thanh toán thành công');
+      setReceipt({
+        orderNumber: response.data.order_number,
+        customerName,
+        paymentMethod,
+        items: receiptItems,
+        subtotal,
+        discount: discountValue,
+        total,
+        customerPaid: paymentMethod === 'cash' ? customerPaidValue : total,
+        changeDue,
+        transferMemo: paymentMethod === 'transfer' ? transferMemo : ''
+      });
+      setIsConfirmOpen(false);
+      setCheckoutStep('confirm');
       clearCart();
       await loadProducts();
+      toast.success('Thanh toán thành công');
     } catch (error) {
       toast.error(error.response?.data?.message || 'Không thể thanh toán');
     } finally {
@@ -183,8 +346,31 @@ export default function POS() {
     }
   };
 
+  const printReceipt = () => {
+    window.print();
+  };
+
+  const copyToClipboard = async (value, label) => {
+    try {
+      await navigator.clipboard.writeText(String(value));
+      toast.success(`Đã sao chép ${label}`);
+    } catch (error) {
+      toast.error(`Không thể sao chép ${label}`);
+    }
+  };
+
+  const closeCheckoutConfirm = () => {
+    if (loading) return;
+
+    setIsConfirmOpen(false);
+    setCheckoutStep('confirm');
+  };
+
+  const isTransferQrStep = paymentMethod === 'transfer' && checkoutStep === 'transfer';
+
   return (
-    <div className="grid h-[calc(100vh-6.5rem)] min-h-[720px] overflow-hidden rounded-xl border border-[#c3c6d7] bg-[#f7f9fb] lg:grid-cols-[minmax(0,1fr)_400px]">
+    <>
+    <div className="no-print grid h-[calc(100vh-6.5rem)] min-h-[720px] overflow-hidden rounded-xl border border-[#c3c6d7] bg-[#f7f9fb] lg:grid-cols-[minmax(0,1fr)_400px]">
       <section className="flex min-w-0 flex-col overflow-hidden p-5">
         <div className="mb-3 grid gap-3 xl:grid-cols-[minmax(0,1fr)_260px]">
           <div className="relative">
@@ -414,7 +600,7 @@ export default function POS() {
             )}
           </div>
 
-          <div className="mb-4 grid grid-cols-3 gap-2">
+          <div className="mb-4 grid grid-cols-2 gap-2">
             {paymentOptions.map((option) => {
               const Icon = option.icon;
               const isSelected = paymentMethod === option.value;
@@ -441,15 +627,230 @@ export default function POS() {
 
           <button
             type="button"
-            onClick={checkout}
+            onClick={openCheckoutConfirm}
             disabled={loading}
             className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#74B8E0] px-4 text-sm font-bold uppercase text-white shadow-[0_8px_20px_rgba(116,184,224,0.22)] disabled:opacity-70"
           >
-            <CreditCard size={18} />
-            <span>{loading ? 'Đang xử lý...' : 'Thanh toán'}</span>
+            <ReceiptText size={18} />
+            <span>Thanh toán</span>
           </button>
         </div>
       </aside>
     </div>
+    <div className="no-print">
+    <Modal
+      isOpen={isConfirmOpen}
+      onClose={closeCheckoutConfirm}
+      title={isTransferQrStep ? 'Thanh toán chuyển khoản VietQR' : 'Xác nhận thanh toán'}
+      maxWidth={isTransferQrStep ? 'max-w-5xl' : 'max-w-2xl'}
+    >
+      <div className="space-y-5">
+        {isTransferQrStep && (
+          <div className="grid gap-5 lg:grid-cols-[minmax(260px,0.9fr)_minmax(0,1fr)]">
+            <div className="rounded-lg border border-[#d7eef3] bg-[#f8fdfe] p-5">
+              <div className="mx-auto grid max-w-[280px] place-items-center rounded-lg bg-white p-4 shadow-sm ring-1 ring-[#d7eef3]">
+                <img
+                  src={vietQrDataUrl}
+                  alt="Mã QR chuyển khoản VietQR"
+                  className="h-64 w-64 object-contain"
+                />
+              </div>
+              <div className="mx-auto mt-4 w-fit rounded-full border border-[#c0edf7] bg-white px-4 py-1 text-xs font-extrabold uppercase tracking-wide text-[#2563eb]">
+                VietQR / Napas 247
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <p className="text-xs font-extrabold uppercase tracking-wide text-[#98a2b3]">Ngân hàng thụ hưởng</p>
+                <p className="mt-1 text-lg font-extrabold text-[#191c1e]">{bankTransfer.bankName}</p>
+              </div>
+
+              <div className="border-t border-[#edf7f9] pt-4">
+                <div className="mb-1 flex items-center justify-between gap-3">
+                  <p className="text-xs font-extrabold uppercase tracking-wide text-[#98a2b3]">Số tài khoản</p>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(bankTransfer.accountNo, 'số tài khoản')}
+                    className="rounded p-1 text-[#2563eb] hover:bg-[#f4fcfe]"
+                    title="Sao chép số tài khoản"
+                    aria-label="Sao chép số tài khoản"
+                  >
+                    <Copy size={17} />
+                  </button>
+                </div>
+                <p className="text-lg font-bold text-[#191c1e]">{bankTransfer.accountNo}</p>
+              </div>
+
+              <div className="border-t border-[#edf7f9] pt-4">
+                <div className="mb-1 flex items-center justify-between gap-3">
+                  <p className="text-xs font-extrabold uppercase tracking-wide text-[#98a2b3]">Chủ tài khoản</p>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(bankTransfer.accountName, 'chủ tài khoản')}
+                    className="rounded p-1 text-[#2563eb] hover:bg-[#f4fcfe]"
+                    title="Sao chép chủ tài khoản"
+                    aria-label="Sao chép chủ tài khoản"
+                  >
+                    <Copy size={17} />
+                  </button>
+                </div>
+                <p className="text-lg font-bold text-[#191c1e]">{bankTransfer.accountName}</p>
+              </div>
+
+              <div className="border-t border-[#edf7f9] pt-4">
+                <div className="mb-1 flex items-center justify-between gap-3">
+                  <p className="text-xs font-extrabold uppercase tracking-wide text-[#98a2b3]">Số tiền thanh toán</p>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(Math.round(total), 'số tiền')}
+                    className="rounded p-1 text-[#2563eb] hover:bg-[#f4fcfe]"
+                    title="Sao chép số tiền"
+                    aria-label="Sao chép số tiền"
+                  >
+                    <Copy size={17} />
+                  </button>
+                </div>
+                <p className="text-2xl font-extrabold text-[#2563eb]">{formatCurrency(total)}</p>
+              </div>
+
+              <div className="border-t border-[#edf7f9] pt-4">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <p className="text-xs font-extrabold uppercase tracking-wide text-[#98a2b3]">
+                    Nội dung chuyển khoản
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(transferMemo, 'nội dung chuyển khoản')}
+                    className="rounded p-1 text-[#c05621] hover:bg-orange-50"
+                    title="Sao chép nội dung chuyển khoản"
+                    aria-label="Sao chép nội dung chuyển khoản"
+                  >
+                    <Copy size={17} />
+                  </button>
+                </div>
+                <div className="rounded border border-orange-200 bg-orange-50 px-4 py-3 text-lg font-extrabold text-[#9a3412]">
+                  {transferMemo}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="rounded-lg border border-[#d7eef3] bg-[#f8fdfe] p-4">
+          <div className="mb-3 flex items-center gap-2 text-sm font-bold text-[#0f3b46]">
+            <ReceiptText size={18} />
+            <span>{isTransferQrStep ? 'Sản phẩm trong đơn chuyển khoản' : 'Kiểm tra lại đơn trước khi thanh toán'}</span>
+          </div>
+          <div className="space-y-3">
+            {cart.map((item) => (
+              <div key={item.id} className="flex items-start justify-between gap-4 border-b border-dashed border-[#d7eef3] pb-3 last:border-0 last:pb-0">
+                <div className="min-w-0">
+                  <p className="font-bold text-[#191c1e]">{item.name}</p>
+                  <p className="mt-1 text-xs font-semibold text-[#737686]">
+                    Số lượng: {item.quantity} x {formatCurrency(item.price)}
+                  </p>
+                </div>
+                <span className="shrink-0 font-extrabold text-[#0f3b46]">
+                  {formatCurrency(Number(item.price) * item.quantity)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-2 rounded-lg border border-[#d7eef3] p-4 text-sm">
+          <div className="flex justify-between">
+            <span>Tạm tính</span>
+            <span>{formatCurrency(subtotal)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Giảm giá</span>
+            <span>{formatCurrency(discountValue)}</span>
+          </div>
+          <div className="flex justify-between text-lg font-extrabold text-[#191c1e]">
+            <span>Tổng cộng</span>
+            <span>{formatCurrency(total)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Phương thức</span>
+            <span className="font-bold">{paymentLabels[paymentMethod]}</span>
+          </div>
+          {paymentMethod === 'cash' && (
+            <>
+              <div className="flex justify-between">
+                <span>Tiền khách đưa</span>
+                <span>{formatCurrency(customerPaidValue)}</span>
+              </div>
+              <div className="flex justify-between font-bold text-emerald-700">
+                <span>Tiền thừa</span>
+                <span>{formatCurrency(changeDue)}</span>
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-3">
+          <button
+            type="button"
+            onClick={isTransferQrStep ? () => setCheckoutStep('confirm') : closeCheckoutConfirm}
+            disabled={loading}
+            className="rounded-lg border border-[#c3c6d7] px-4 py-2 font-semibold text-[#434655] disabled:opacity-60"
+          >
+            {isTransferQrStep ? 'Quay lại xác nhận' : 'Kiểm tra lại'}
+          </button>
+          <button
+            type="button"
+            onClick={paymentMethod === 'transfer' && checkoutStep === 'confirm' ? continueToTransferPayment : confirmCheckout}
+            disabled={loading}
+            className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 font-bold text-white disabled:opacity-60 ${
+              isTransferQrStep ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-[#74B8E0]'
+            }`}
+          >
+            <CheckCircle2 size={18} />
+            <span>
+              {loading
+                ? paymentMethod === 'transfer' && checkoutStep === 'confirm'
+                  ? 'Đang tạo QR...'
+                  : 'Đang thanh toán...'
+                : paymentMethod === 'transfer' && checkoutStep === 'confirm'
+                  ? 'Tiếp tục chuyển khoản'
+                  : isTransferQrStep
+                    ? 'Xác nhận đã nhận tiền'
+                    : 'Xác nhận thanh toán'}
+            </span>
+          </button>
+        </div>
+      </div>
+    </Modal>
+
+    <Modal isOpen={Boolean(receipt)} onClose={() => setReceipt(null)} title="Thanh toán thành công">
+      <div className="space-y-5">
+        <ReceiptContent receipt={receipt} />
+        <div className="flex justify-end gap-3">
+          <button
+            type="button"
+            onClick={() => setReceipt(null)}
+            className="rounded-lg border border-[#c3c6d7] px-4 py-2 font-semibold text-[#434655]"
+          >
+            Hoàn tất
+          </button>
+          <button
+            type="button"
+            onClick={printReceipt}
+            className="inline-flex items-center gap-2 rounded-lg bg-[#74B8E0] px-4 py-2 font-bold text-white"
+          >
+            <Printer size={18} />
+            <span>In bill</span>
+          </button>
+        </div>
+      </div>
+    </Modal>
+    </div>
+
+    <div className="print-receipt">
+      <ReceiptContent receipt={receipt} />
+    </div>
+    </>
   );
 }

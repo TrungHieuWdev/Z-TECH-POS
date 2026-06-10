@@ -1,13 +1,13 @@
 import { X } from 'lucide-react';
 
-export default function Modal({ isOpen, onClose, title, children }) {
+export default function Modal({ isOpen, onClose, title, children, maxWidth = 'max-w-2xl' }) {
   if (!isOpen) {
     return null;
   }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6">
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-6 shadow-xl">
+      <div className={`max-h-[90vh] w-full ${maxWidth} overflow-y-auto rounded-xl bg-white p-6 shadow-xl`}>
         <div className="mb-5 flex items-center justify-between gap-4">
           <h2 className="text-xl font-semibold text-gray-900">{title}</h2>
           <button

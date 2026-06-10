@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Bell, Search, Settings } from 'lucide-react';
 import Sidebar from './Sidebar';
+import SettingsModal from './SettingsModal';
 import { getUser } from '../utils/auth';
 
 export default function Layout() {
@@ -9,6 +10,7 @@ export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [quickSearch, setQuickSearch] = useState('');
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
@@ -51,6 +53,7 @@ export default function Layout() {
             </button>
             <button
               type="button"
+              onClick={() => setIsSettingsOpen(true)}
               className="hidden h-10 w-10 items-center justify-center rounded-full text-[#43474d] transition hover:bg-brand-surface hover:text-brand-strong sm:flex"
               title="Cài đặt"
               aria-label="Cài đặt"
@@ -75,6 +78,7 @@ export default function Layout() {
           <Outlet />
         </main>
       </div>
+      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
     </div>
   );
 }

@@ -22,3 +22,29 @@ select,
 textarea {
   font: inherit;
 }
+
+.print-receipt {
+  display: none;
+}
+
+@media print {
+  @page {
+    margin: 8mm;
+    size: 80mm auto;
+  }
+
+  body {
+    background: #fff;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-receipt {
+    display: block !important;
+    color: #111827;
+    font-family: 'Plus Jakarta Sans', Inter, ui-sans-serif, system-ui, sans-serif;
+    width: 72mm;
+  }
+}
