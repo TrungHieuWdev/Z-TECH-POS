@@ -9,9 +9,14 @@ import Categories from './pages/Categories';
 import Customers from './pages/Customers';
 import Orders from './pages/Orders';
 import Inventory from './pages/Inventory';
+import Suppliers from './pages/Suppliers';
+import Employees from './pages/Employees';
+import Shifts from './pages/Shifts';
+import Reports from './pages/Reports';
+import { getToken } from './utils/auth';
 
 function ProtectedRoute() {
-  const token = localStorage.getItem('token');
+  const token = getToken();
   return token ? <Outlet /> : <Navigate to="/login" replace />;
 }
 
@@ -28,8 +33,12 @@ export default function App() {
             <Route path="/products" element={<Products />} />
             <Route path="/categories" element={<Categories />} />
             <Route path="/customers" element={<Customers />} />
+            <Route path="/suppliers" element={<Suppliers />} />
+            <Route path="/employees" element={<Employees />} />
+            <Route path="/shifts" element={<Shifts />} />
             <Route path="/orders" element={<Orders />} />
             <Route path="/inventory" element={<Inventory />} />
+            <Route path="/reports" element={<Reports />} />
           </Route>
         </Route>
       </Routes>

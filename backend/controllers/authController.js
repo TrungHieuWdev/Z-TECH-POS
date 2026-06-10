@@ -2,15 +2,31 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { query } from '../config/db.js';
 
+function normalizeEmail(email = '') {
+  return String(email).trim().toLowerCase();
+}
+
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
 export async function login(req, res) {
   try {
-    const { email, password } = req.body;
+    const email = normalizeEmail(req.body.email);
+    const password = String(req.body.password || '');
 
     if (!email || !password) {
-      return res.status(400).json({ message: 'Thiếu email hoặc mật khẩu' });
+      return res.status(400).json({ message: 'Vui lòng nhập email và mật khẩu' });
     }
 
-    const users = await query('SELECT * FROM users WHERE email = ?', [email]);
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ message: 'Email không hợp lệ' });
+    }
+
+    const users = await query(
+      'SELECT id, name, email, password, role FROM users WHERE email = ?',
+      [email]
+    );
     const user = users[0];
 
     if (!user) {

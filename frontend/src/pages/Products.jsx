@@ -1,12 +1,23 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Edit, Plus, Search, Trash2 } from 'lucide-react';
 import api from '../api/axios';
 import Modal from '../components/Modal';
+import ProductImage from '../components/ProductImage';
 import { formatCurrency } from '../utils/format';
+
+const deviceFamilyOptions = [
+  { value: 'apple', label: 'Apple' },
+  { value: 'samsung', label: 'Samsung' },
+  { value: 'vivo', label: 'Vivo' },
+  { value: 'oppo', label: 'Oppo' },
+  { value: 'xiaomi', label: 'Xiaomi / Redmi' }
+];
 
 const initialForm = {
   category_id: '',
+  device_family: '',
+  device_model_id: '',
   name: '',
   description: '',
   price: '',
@@ -16,32 +27,50 @@ const initialForm = {
   image_url: ''
 };
 
+function getDeviceFamilyLabel(value) {
+  return deviceFamilyOptions.find((option) => option.value === value)?.label || 'Chưa chọn';
+}
+
 export default function Products() {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [deviceModels, setDeviceModels] = useState([]);
   const [search, setSearch] = useState('');
   const [categoryId, setCategoryId] = useState('');
+  const [deviceFamily, setDeviceFamily] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [form, setForm] = useState(initialForm);
+
+  const formDeviceModels = useMemo(() => {
+    if (!form.device_family) return deviceModels;
+    return deviceModels.filter((model) => model.family === form.device_family);
+  }, [deviceModels, form.device_family]);
 
   async function loadProducts() {
     const params = new URLSearchParams();
 
     if (search) params.set('search', search);
     if (categoryId) params.set('category_id', categoryId);
+    if (deviceFamily) params.set('device_family', deviceFamily);
 
     const response = await api.get(`/products?${params.toString()}`);
     setProducts(response.data);
   }
 
   useEffect(() => {
-    api.get('/categories').then((response) => setCategories(response.data));
+    Promise.all([
+      api.get('/categories'),
+      api.get('/device-models')
+    ]).then(([categoriesResponse, modelsResponse]) => {
+      setCategories(categoriesResponse.data);
+      setDeviceModels(modelsResponse.data);
+    });
   }, []);
 
   useEffect(() => {
     loadProducts();
-  }, [search, categoryId]);
+  }, [search, categoryId, deviceFamily]);
 
   const openCreate = () => {
     setEditingProduct(null);
@@ -53,6 +82,8 @@ export default function Products() {
     setEditingProduct(product);
     setForm({
       category_id: product.category_id || '',
+      device_family: product.device_family || '',
+      device_model_id: product.device_model_id || '',
       name: product.name || '',
       description: product.description || '',
       price: product.price || '',
@@ -70,12 +101,17 @@ export default function Products() {
     setForm(initialForm);
   };
 
+  const handleFamilyChange = (value) => {
+    setForm({ ...form, device_family: value, device_model_id: '' });
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
 
     const payload = {
       ...form,
       category_id: form.category_id || null,
+      device_model_id: form.device_model_id || null,
       price: Number(form.price),
       cost_price: form.cost_price === '' ? null : Number(form.cost_price),
       stock_quantity: Number(form.stock_quantity),
@@ -117,7 +153,7 @@ export default function Products() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-950">Sản phẩm</h1>
-          <p className="mt-1 text-sm text-gray-500">Quản lý hàng hóa bán tại cửa hàng</p>
+          <p className="mt-1 text-sm text-gray-500">Quản lý hàng hóa theo danh mục và model máy chuẩn</p>
         </div>
         <button
           type="button"
@@ -129,16 +165,28 @@ export default function Products() {
         </button>
       </div>
 
-      <div className="grid gap-3 rounded-lg bg-white p-4 shadow-sm md:grid-cols-[1fr_220px]">
+      <div className="grid gap-3 rounded-lg bg-white p-4 shadow-sm md:grid-cols-[1fr_220px_220px]">
         <div className="flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2">
           <Search size={18} className="text-gray-400" />
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             className="w-full outline-none"
-            placeholder="Tìm sản phẩm"
+            placeholder="Tìm tên, model hoặc mô tả"
           />
         </div>
+        <select
+          value={deviceFamily}
+          onChange={(event) => setDeviceFamily(event.target.value)}
+          className="rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-brand"
+        >
+          <option value="">Tất cả dòng máy</option>
+          {deviceFamilyOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
         <select
           value={categoryId}
           onChange={(event) => setCategoryId(event.target.value)}
@@ -155,11 +203,12 @@ export default function Products() {
 
       <section className="rounded-lg bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[920px] text-left text-sm">
+          <table className="w-full min-w-[1040px] text-left text-sm">
             <thead className="bg-gray-50 text-gray-500">
               <tr>
                 <th className="px-4 py-3 font-semibold">Ảnh</th>
                 <th className="px-4 py-3 font-semibold">Tên</th>
+                <th className="px-4 py-3 font-semibold">Dòng máy</th>
                 <th className="px-4 py-3 font-semibold">Danh mục</th>
                 <th className="px-4 py-3 font-semibold">Giá</th>
                 <th className="px-4 py-3 font-semibold">Tồn kho</th>
@@ -173,13 +222,15 @@ export default function Products() {
                 return (
                   <tr key={product.id}>
                     <td className="px-4 py-3">
-                      <img
-                        src={product.image_url || 'https://placehold.co/80x80?text=SP'}
-                        alt={product.name}
-                        className="h-12 w-12 rounded-lg object-cover"
-                      />
+                      <div className="h-12 w-12 overflow-hidden rounded-lg border border-[#d7eef3]">
+                        <ProductImage product={product} iconSize={22} compact />
+                      </div>
                     </td>
                     <td className="px-4 py-3 font-medium text-gray-950">{product.name}</td>
+                    <td className="px-4 py-3 text-gray-600">
+                      <div className="font-semibold text-gray-800">{getDeviceFamilyLabel(product.device_family)}</div>
+                      <div className="text-xs text-gray-500">{product.device_model}</div>
+                    </td>
                     <td className="px-4 py-3 text-gray-600">{product.category_name}</td>
                     <td className="px-4 py-3 text-gray-950">{formatCurrency(product.price)}</td>
                     <td className="px-4 py-3">
@@ -233,11 +284,44 @@ export default function Products() {
             />
           </label>
           <label>
+            <span className="mb-1 block text-sm font-medium text-gray-700">Dòng máy</span>
+            <select
+              value={form.device_family}
+              onChange={(event) => handleFamilyChange(event.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-brand"
+              required
+            >
+              <option value="">Chọn dòng máy</option>
+              {deviceFamilyOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span className="mb-1 block text-sm font-medium text-gray-700">Model</span>
+            <select
+              value={form.device_model_id}
+              onChange={(event) => setForm({ ...form, device_model_id: event.target.value })}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-brand"
+              required
+            >
+              <option value="">Chọn model</option>
+              {formDeviceModels.map((model) => (
+                <option key={model.id} value={model.id}>
+                  {model.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
             <span className="mb-1 block text-sm font-medium text-gray-700">Danh mục</span>
             <select
               value={form.category_id}
               onChange={(event) => setForm({ ...form, category_id: event.target.value })}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-brand"
+              required
             >
               <option value="">Chưa chọn</option>
               {categories.map((category) => (
@@ -251,7 +335,7 @@ export default function Products() {
             <span className="mb-1 block text-sm font-medium text-gray-700">Giá bán</span>
             <input
               type="number"
-              min="0"
+              min="1"
               value={form.price}
               onChange={(event) => setForm({ ...form, price: event.target.value })}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-brand"

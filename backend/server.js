@@ -3,11 +3,13 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import authRoutes from './routes/auth.js';
 import productRoutes from './routes/products.js';
+import deviceModelRoutes from './routes/deviceModels.js';
 import categoryRoutes from './routes/categories.js';
 import customerRoutes from './routes/customers.js';
 import orderRoutes from './routes/orders.js';
 import inventoryRoutes from './routes/inventory.js';
 import dashboardRoutes from './routes/dashboard.js';
+import reportRoutes from './routes/reports.js';
 
 dotenv.config();
 
@@ -84,11 +86,13 @@ app.get('/api/health', (req, res) => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
+app.use('/api/device-models', deviceModelRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/customers', customerRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/reports', reportRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ message: 'Không tìm thấy API' });

@@ -14,8 +14,7 @@ const paymentLabels = {
 export default function Orders() {
   const [orders, setOrders] = useState([]);
   const [search, setSearch] = useState('');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  const [orderDate, setOrderDate] = useState('');
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [editingOrder, setEditingOrder] = useState(null);
   const [form, setForm] = useState({ status: 'completed', payment_method: 'cash', note: '' });
@@ -23,8 +22,10 @@ export default function Orders() {
   async function loadOrders() {
     const params = new URLSearchParams();
 
-    if (dateFrom) params.set('date_from', dateFrom);
-    if (dateTo) params.set('date_to', dateTo);
+    if (orderDate) {
+      params.set('date_from', orderDate);
+      params.set('date_to', orderDate);
+    }
 
     const response = await api.get(`/orders?${params.toString()}`);
     setOrders(response.data);
@@ -32,7 +33,7 @@ export default function Orders() {
 
   useEffect(() => {
     loadOrders();
-  }, [dateFrom, dateTo]);
+  }, [orderDate]);
 
   const filteredOrders = useMemo(() => {
     const keyword = search.toLowerCase();
@@ -101,7 +102,7 @@ export default function Orders() {
         <p className="mt-1 text-sm text-gray-500">Theo dõi giao dịch đã bán</p>
       </div>
 
-      <div className="grid gap-3 rounded-lg bg-white p-4 shadow-sm lg:grid-cols-[1fr_180px_180px]">
+      <div className="grid gap-3 rounded-lg bg-white p-4 shadow-sm lg:grid-cols-[1fr_180px]">
         <div className="flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2">
           <Search size={18} className="text-gray-400" />
           <input
@@ -113,14 +114,8 @@ export default function Orders() {
         </div>
         <input
           type="date"
-          value={dateFrom}
-          onChange={(event) => setDateFrom(event.target.value)}
-          className="rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-brand"
-        />
-        <input
-          type="date"
-          value={dateTo}
-          onChange={(event) => setDateTo(event.target.value)}
+          value={orderDate}
+          onChange={(event) => setOrderDate(event.target.value)}
           className="rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-brand"
         />
       </div>

@@ -19,7 +19,7 @@ export default function Login() {
 
     try {
       const response = await api.post('/auth/login', form);
-      saveAuth(response.data.user, response.data.token);
+      saveAuth(response.data.user, response.data.token, remember);
       toast.success('Đăng nhập thành công');
       navigate('/');
     } catch (error) {

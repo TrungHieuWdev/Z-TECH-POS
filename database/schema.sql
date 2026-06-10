@@ -4,6 +4,7 @@ DROP TABLE IF EXISTS inventory_logs;
 DROP TABLE IF EXISTS order_items;
 DROP TABLE IF EXISTS orders;
 DROP TABLE IF EXISTS products;
+DROP TABLE IF EXISTS device_models;
 DROP TABLE IF EXISTS customers;
 DROP TABLE IF EXISTS categories;
 DROP TABLE IF EXISTS users;
@@ -24,9 +25,22 @@ CREATE TABLE categories (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE device_models (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  family ENUM('apple', 'samsung', 'vivo', 'oppo', 'xiaomi') NOT NULL,
+  name VARCHAR(100) NOT NULL,
+  series VARCHAR(50),
+  release_year SMALLINT,
+  notes VARCHAR(255),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_device_models_family_name (family, name),
+  INDEX idx_device_models_family (family)
+);
+
 CREATE TABLE products (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  category_id INT,
+  category_id INT NOT NULL,
+  device_model_id INT NOT NULL,
   name VARCHAR(200) NOT NULL,
   description TEXT,
   price DECIMAL(15,0) NOT NULL,
@@ -37,7 +51,15 @@ CREATE TABLE products (
   is_active BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  FOREIGN KEY (category_id) REFERENCES categories(id)
+  INDEX idx_products_category (category_id),
+  INDEX idx_products_device_model (device_model_id),
+  INDEX idx_products_active (is_active),
+  CHECK (price >= 0),
+  CHECK (cost_price IS NULL OR cost_price >= 0),
+  CHECK (stock_quantity >= 0),
+  CHECK (min_stock >= 0),
+  FOREIGN KEY (category_id) REFERENCES categories(id),
+  FOREIGN KEY (device_model_id) REFERENCES device_models(id)
 );
 
 CREATE TABLE customers (

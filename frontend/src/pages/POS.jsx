@@ -5,7 +5,6 @@ import {
   Banknote,
   CreditCard,
   Minus,
-  Package,
   Plus,
   Search,
   Smartphone,
@@ -14,6 +13,7 @@ import {
   X
 } from 'lucide-react';
 import api from '../api/axios';
+import ProductImage from '../components/ProductImage';
 import { formatCurrency } from '../utils/format';
 
 const paymentOptions = [
@@ -243,13 +243,7 @@ export default function POS() {
                   className="overflow-hidden rounded-xl border border-[#c3c6d7] bg-white text-left disabled:opacity-70"
                 >
                   <div className="relative aspect-square bg-[#f2f4f6]">
-                    {product.image_url ? (
-                      <img src={product.image_url} alt={product.name} className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="grid h-full w-full place-items-center text-[#737686]">
-                        <Package size={36} />
-                      </div>
-                    )}
+                    <ProductImage product={product} />
                     <span
                       className={`absolute right-2 top-2 rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wide ${getStockTone(stock)}`}
                     >
@@ -321,13 +315,7 @@ export default function POS() {
               cart.map((item) => (
                 <div key={item.id} className="flex gap-3">
                   <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-[#c3c6d7] bg-[#f2f4f6]">
-                    {item.image_url ? (
-                      <img src={item.image_url} alt={item.name} className="h-full w-full object-cover" />
-                    ) : (
-                      <div className="grid h-full w-full place-items-center text-[#737686]">
-                        <Package size={22} />
-                      </div>
-                    )}
+                    <ProductImage product={item} iconSize={24} />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">

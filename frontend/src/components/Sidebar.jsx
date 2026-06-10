@@ -25,10 +25,10 @@ const navItems = [
   { to: '/orders', label: 'Hóa đơn', icon: ReceiptText },
   { to: '/inventory', label: 'Kho hàng', icon: Boxes },
   { to: '/customers', label: 'Khách hàng', icon: Users },
-  { label: 'Nhà cung cấp', icon: Truck },
-  { label: 'Nhân viên', icon: BadgeCheck },
-  { label: 'Ca làm', icon: CalendarClock },
-  { label: 'Báo cáo', icon: ChartNoAxesCombined },
+  { to: '/suppliers', label: 'Nhà cung cấp', icon: Truck },
+  { to: '/employees', label: 'Nhân viên', icon: BadgeCheck },
+  { to: '/shifts', label: 'Ca làm', icon: CalendarClock },
+  { to: '/reports', label: 'Báo cáo', icon: ChartNoAxesCombined },
   { label: 'AI gợi ý', icon: BrainCircuit }
 ];
 
@@ -47,7 +47,7 @@ export default function Sidebar() {
           </div>
           <div className="flex min-w-0 flex-col justify-center">
             <div className="whitespace-nowrap text-[22px] font-extrabold leading-7 text-brand">Z-TECH POS</div>
-            <div className="text-xs font-medium leading-4 text-[#73777d]">Hệ thống quản lý</div>
+            <div className="text-xs font-medium leading-4 text-[#73777d]">HỆ THỐNG QUẢN LÝ</div>
           </div>
         </div>
       </div>
@@ -62,7 +62,7 @@ export default function Sidebar() {
                 <button
                   key={item.label}
                   type="button"
-                  className="mx-2 flex min-h-10 w-[calc(100%-1rem)] items-center gap-3 rounded-full px-4 py-2 text-left text-[15px] font-semibold text-[#191c1d] outline-none transition-[background-color,color,box-shadow] duration-200 ease-out hover:bg-brand-surface hover:text-brand-ink focus-visible:ring-2 focus-visible:ring-brand-soft"
+                  className="mx-2 flex min-h-10 w-[calc(100%-1rem)] items-center gap-3 rounded-lg px-4 py-2 text-left text-[15px] font-semibold text-[#191c1d] outline-none transition-[background-color,color,box-shadow] duration-200 ease-out hover:bg-brand-surface hover:text-brand-ink focus-visible:ring-2 focus-visible:ring-brand-soft"
                 >
                   <Icon size={21} strokeWidth={2} />
                   <span className="truncate">{item.label}</span>
@@ -76,9 +76,9 @@ export default function Sidebar() {
                 to={item.to}
                 end={item.to === '/'}
                 className={({ isActive }) =>
-                  `mx-2 flex min-h-10 items-center gap-3 rounded-full px-4 py-2 text-[15px] font-semibold outline-none transition-[background-color,color,box-shadow] duration-200 ease-out focus-visible:ring-2 focus-visible:ring-brand-soft ${
+                  `mx-2 flex min-h-10 items-center gap-3 rounded-lg px-4 py-2 text-[15px] font-semibold outline-none transition-[background-color,color,box-shadow] duration-200 ease-out focus-visible:ring-2 focus-visible:ring-brand-soft ${
                     isActive
-                      ? 'bg-[#74B8E0] text-white'
+                      ? 'bg-brand text-white shadow-sm'
                       : 'text-[#191c1d] hover:bg-brand-surface hover:text-brand-ink'
                   }`
                 }
@@ -95,7 +95,7 @@ export default function Sidebar() {
         <button
           type="button"
           onClick={logout}
-          className="mx-2 flex min-h-10 w-[calc(100%-1rem)] items-center justify-center gap-3 rounded-full bg-brand-soft px-4 py-2 text-[15px] font-semibold text-brand-ink outline-none transition-[background-color,color,box-shadow] duration-200 ease-out hover:bg-red-600 hover:text-white active:bg-red-700 active:text-white focus-visible:ring-2 focus-visible:ring-red-200"
+          className="mx-2 flex min-h-10 w-[calc(100%-1rem)] items-center justify-center gap-3 rounded-lg bg-brand-soft px-4 py-2 text-[15px] font-semibold text-brand-ink outline-none transition-[background-color,color,box-shadow] duration-200 ease-out hover:bg-red-600 hover:text-white active:bg-red-700 active:text-white focus-visible:ring-2 focus-visible:ring-red-200"
         >
           <LogOut size={20} />
           <span>Đăng xuất</span>

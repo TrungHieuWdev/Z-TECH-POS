@@ -6,7 +6,9 @@
   "main": "server.js",
   "scripts": {
     "dev": "nodemon server.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "reset-db": "node scripts/resetDatabase.js",
+    "normalize-images": "node scripts/normalizeProductImages.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
