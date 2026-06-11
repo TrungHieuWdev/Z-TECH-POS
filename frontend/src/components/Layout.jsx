@@ -3,10 +3,11 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Bell, Search, Settings } from 'lucide-react';
 import Sidebar from './Sidebar';
 import SettingsModal from './SettingsModal';
-import { getUser } from '../utils/auth';
+import { getRoleLabel, getUser, isFullAccessRole } from '../utils/auth';
 
 export default function Layout() {
   const user = getUser();
+  const hasFullAccess = isFullAccessRole(user?.role);
   const navigate = useNavigate();
   const location = useLocation();
   const [quickSearch, setQuickSearch] = useState('');

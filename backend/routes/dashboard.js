@@ -1,5 +1,5 @@
 import express from 'express';
-import auth from '../middleware/auth.js';
+import auth, { requireFullAccess } from '../middleware/auth.js';
 import {
   getCategoryShare,
   getLowStock,
@@ -11,11 +11,11 @@ import {
 
 const router = express.Router();
 
-router.get('/summary', auth, getSummary);
-router.get('/revenue-chart', auth, getRevenueChart);
-router.get('/top-products', auth, getTopProducts);
-router.get('/low-stock', auth, getLowStock);
-router.get('/category-share', auth, getCategoryShare);
-router.get('/recent-orders', auth, getRecentOrders);
+router.get('/summary', auth, requireFullAccess, getSummary);
+router.get('/revenue-chart', auth, requireFullAccess, getRevenueChart);
+router.get('/top-products', auth, requireFullAccess, getTopProducts);
+router.get('/low-stock', auth, requireFullAccess, getLowStock);
+router.get('/category-share', auth, requireFullAccess, getCategoryShare);
+router.get('/recent-orders', auth, requireFullAccess, getRecentOrders);
 
 export default router;

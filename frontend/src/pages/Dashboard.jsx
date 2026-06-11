@@ -140,13 +140,7 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="w-full space-y-4">
-      <div>
-        <h1 className="text-xl font-semibold leading-7 text-[#191c1d]">Trang tổng quan</h1>
-        <p className="mt-0.5 text-xs font-medium text-[#73777d]">
-          Chào mừng quay trở lại, đây là hiệu suất cửa hàng hôm nay!
-        </p>
-      </div>
+    <div className="space-y-6">
 
       {error && (
         <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">

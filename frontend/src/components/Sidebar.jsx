@@ -17,7 +17,7 @@ import {
   Users
 } from 'lucide-react';
 import ztechLogo from '../assets/images/1111.png';
-import { logout } from '../utils/auth';
+import { getUser, isFullAccessRole, logout } from '../utils/auth';
 
 const navItems = [
   { to: '/', label: 'Tổng quan', icon: LayoutDashboard },
@@ -34,6 +34,8 @@ const navItems = [
   { to: '/activity-logs', label: 'Nhật ký hoạt động', icon: History },
   { label: 'AI gợi ý', icon: BrainCircuit }
 ];
+
+const employeeAllowedPaths = new Set(['/pos', '/orders', '/customers']);
 
 function isPathActive(pathname, to) {
   if (!to) return false;
@@ -74,6 +76,8 @@ function NavItemContent({ icon: Icon, label, isActive }) {
 
 export default function Sidebar() {
   const location = useLocation();
+  const user = getUser();
+  const hasFullAccess = isFullAccessRole(user?.role);
   const [pendingPath, setPendingPath] = useState('');
 
   useEffect(() => {
@@ -101,7 +105,9 @@ export default function Sidebar() {
 
       <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-2">
         <div className="space-y-1">
-          {navItems.map((item) => {
+          {navItems
+            .filter((item) => hasFullAccess || (item.to && employeeAllowedPaths.has(item.to)))
+            .map((item) => {
             const isActive = pendingPath
               ? pendingPath === item.to
               : isPathActive(location.pathname, item.to);

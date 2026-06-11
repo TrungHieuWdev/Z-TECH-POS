@@ -83,8 +83,8 @@ export default function Categories() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-950">Danh mục</h1>
-          <p className="mt-1 text-sm text-gray-500">Nhóm sản phẩm theo loại phụ kiện</p>
+          <h1 className="text-2xl font-bold text-gray-950">Nhóm sản phẩm theo loại phụ kiện</h1>
+          <p className="text-gray-600">Quản lý các nhóm sản phẩm để dễ dàng phân loại và tìm kiếm</p>
         </div>
         <button
           type="button"

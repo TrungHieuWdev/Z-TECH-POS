@@ -16,7 +16,14 @@ async function buildOrderNumber() {
 
 export async function create(req, res) {
   try {
-    const { customer_id = null, items = [], discount = 0, payment_method = 'cash', note = '' } = req.body;
+    const {
+      customer_id = null,
+      items = [],
+      discount = 0,
+      vat_percent = 0,
+      payment_method = 'cash',
+      note = ''
+    } = req.body;
 
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ message: 'Đơn hàng cần có ít nhất một sản phẩm' });
@@ -54,7 +61,10 @@ export async function create(req, res) {
     }
 
     const discountValue = Math.max(Number(discount) || 0, 0);
-    const total = Math.max(subtotal - discountValue, 0);
+    const vatPercentValue = Math.max(Number(vat_percent) || 0, 0);
+    const taxableTotal = Math.max(subtotal - discountValue, 0);
+    const vatAmount = Math.round((taxableTotal * vatPercentValue) / 100);
+    const total = taxableTotal + vatAmount;
     const orderNumber = await buildOrderNumber();
 
     const orderResult = await query(

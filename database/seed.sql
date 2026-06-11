@@ -1,8 +1,8 @@
 SET NAMES utf8mb4;
 
 INSERT INTO users (id, name, email, password, role) VALUES
-(1, 'Admin', 'admin@pos.com', '$2b$10$Vt7krIvjNgyN67LXqly0uOcTpN0LI55cYRbcKC71pUDAP0nJ7RPa.', 'admin'),
-(2, 'Thu ngân', 'cashier@pos.com', '$2a$10$wtJie2Wc93SqCCri5u/f4uZX7ATSSyMxlrCTEkPmNHLl9Oa0QdLim', 'cashier');
+(1, 'Chủ cửa hàng', 'admin@pos.com', '$2b$10$Vt7krIvjNgyN67LXqly0uOcTpN0LI55cYRbcKC71pUDAP0nJ7RPa.', 'owner'),
+(2, 'Nhân viên', 'cashier@pos.com', '$2a$10$wtJie2Wc93SqCCri5u/f4uZX7ATSSyMxlrCTEkPmNHLl9Oa0QdLim', 'employee');
 
 INSERT INTO categories (id, name, description) VALUES
 (1, 'Ốp lưng', 'Ốp lưng theo đúng model máy'),

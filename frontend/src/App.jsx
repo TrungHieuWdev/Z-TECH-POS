@@ -14,11 +14,18 @@ import Employees from './pages/Employees';
 import Shifts from './pages/Shifts';
 import Reports from './pages/Reports';
 import ActivityLogs from './pages/ActivityLogs';
-import { getToken } from './utils/auth';
+import { canAccessPath, getToken, getUser } from './utils/auth';
 
 function ProtectedRoute() {
   const token = getToken();
   return token ? <Outlet /> : <Navigate to="/login" replace />;
+}
+
+function PermissionRoute() {
+  const user = getUser();
+  const pathname = window.location.pathname;
+
+  return canAccessPath(pathname, user) ? <Outlet /> : <Navigate to="/pos" replace />;
 }
 
 export default function App() {
@@ -29,6 +36,7 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route element={<ProtectedRoute />}>
           <Route element={<Layout />}>
+            <Route element={<PermissionRoute />}>
             <Route path="/" element={<Dashboard />} />
             <Route path="/pos" element={<POS />} />
             <Route path="/products" element={<Products />} />
@@ -41,6 +49,7 @@ export default function App() {
             <Route path="/inventory" element={<Inventory />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/activity-logs" element={<ActivityLogs />} />
+            </Route>
           </Route>
         </Route>
       </Routes>

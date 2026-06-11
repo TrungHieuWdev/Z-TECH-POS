@@ -1,5 +1,7 @@
 import jwt from 'jsonwebtoken';
 
+const fullAccessRoles = new Set(['admin', 'owner', 'manager']);
+
 export default function auth(req, res, next) {
   const authHeader = req.headers.authorization;
 
@@ -19,4 +21,16 @@ export default function auth(req, res, next) {
   } catch (error) {
     return res.status(401).json({ message: 'Phiên đăng nhập đã hết hạn hoặc không hợp lệ' });
   }
+}
+
+export function hasFullAccess(user) {
+  return fullAccessRoles.has(String(user?.role || '').toLowerCase());
+}
+
+export function requireFullAccess(req, res, next) {
+  if (hasFullAccess(req.user)) {
+    return next();
+  }
+
+  return res.status(403).json({ message: 'Bạn không có quyền thực hiện thao tác này' });
 }

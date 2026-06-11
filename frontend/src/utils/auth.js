@@ -17,6 +17,28 @@ export function getUser() {
   return rawUser ? JSON.parse(rawUser) : null;
 }
 
+export function isFullAccessRole(role) {
+  return ['admin', 'owner', 'manager'].includes(String(role || '').toLowerCase());
+}
+
+export function getRoleLabel(role) {
+  const roleKey = String(role || '').toLowerCase();
+
+  if (isFullAccessRole(roleKey)) return 'Chủ cửa hàng / Quản lý';
+  if (['cashier', 'employee', 'staff'].includes(roleKey)) return 'Nhân viên';
+
+  return role || 'Nhân viên';
+}
+
+export function canAccessPath(pathname, user = getUser()) {
+  if (!user) return false;
+  if (isFullAccessRole(user.role)) return true;
+
+  return ['/pos', '/orders', '/customers'].some(
+    (path) => pathname === path || pathname.startsWith(`${path}/`)
+  );
+}
+
 export function logout() {
   localStorage.removeItem('token');
   localStorage.removeItem('user');
