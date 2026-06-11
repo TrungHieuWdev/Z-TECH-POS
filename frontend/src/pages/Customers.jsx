@@ -120,6 +120,7 @@ export default function Customers() {
                 <th className="px-4 py-3 font-semibold">Điện thoại</th>
                 <th className="px-4 py-3 font-semibold">Email</th>
                 <th className="px-4 py-3 font-semibold">Địa chỉ</th>
+                <th className="px-4 py-3 font-semibold text-right">Điểm</th>
                 <th className="px-4 py-3 font-semibold">Ngày tạo</th>
                 <th className="px-4 py-3 font-semibold text-right">Thao tác</th>
               </tr>
@@ -131,6 +132,9 @@ export default function Customers() {
                   <td className="px-4 py-3 text-gray-600">{customer.phone}</td>
                   <td className="px-4 py-3 text-gray-600">{customer.email}</td>
                   <td className="px-4 py-3 text-gray-600">{customer.address}</td>
+                  <td className="px-4 py-3 text-right font-bold text-brand-strong">
+                    {Number(customer.points || 0).toLocaleString('vi-VN')}
+                  </td>
                   <td className="px-4 py-3 text-gray-600">{formatDate(customer.created_at)}</td>
                   <td className="px-4 py-3">
                     <div className="flex justify-end gap-2">

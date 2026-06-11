@@ -47,7 +47,7 @@ CREATE TABLE products (
   cost_price DECIMAL(15,0),
   stock_quantity INT DEFAULT 0,
   min_stock INT DEFAULT 5,
-  image_url VARCHAR(500),
+  image_url TEXT,
   is_active BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

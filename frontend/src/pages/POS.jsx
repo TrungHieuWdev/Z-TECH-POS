@@ -44,6 +44,8 @@ const deviceFamilyOptions = [
   { value: 'xiaomi', label: 'Phụ kiện Xiaomi' }
 ];
 
+const initialCustomerForm = { name: '', phone: '', email: '', address: '' };
+
 function toMoneyAmount(value) {
   return Math.max(Number(value || 0), 0);
 }
@@ -156,6 +158,7 @@ export default function POS() {
   const routeSearch = searchParams.get('search') || '';
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [customers, setCustomers] = useState([]);
   const [cart, setCart] = useState([]);
   const [search, setSearch] = useState(routeSearch);
   const [categoryId, setCategoryId] = useState('');
@@ -164,8 +167,14 @@ export default function POS() {
   const [customerPaid, setCustomerPaid] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [customerName, setCustomerName] = useState('Khách lẻ');
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [customerLookup, setCustomerLookup] = useState('');
+  const [customerForm, setCustomerForm] = useState(initialCustomerForm);
   const [loading, setLoading] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [isClearCartOpen, setIsClearCartOpen] = useState(false);
+  const [isCustomerPickerOpen, setIsCustomerPickerOpen] = useState(false);
+  const [isCustomerFormOpen, setIsCustomerFormOpen] = useState(false);
   const [receipt, setReceipt] = useState(null);
   const [transferMemo, setTransferMemo] = useState('');
   const [bankTransfer, setBankTransfer] = useState(getBankTransferSettings);
@@ -183,8 +192,17 @@ export default function POS() {
     setProducts(response.data);
   }
 
+  async function loadCustomers(searchValue = customerLookup) {
+    const params = new URLSearchParams();
+    if (searchValue) params.set('search', searchValue);
+
+    const response = await api.get(`/customers?${params.toString()}`);
+    setCustomers(response.data);
+  }
+
   useEffect(() => {
     api.get('/categories').then((response) => setCategories(response.data));
+    loadCustomers('');
   }, []);
 
   useEffect(() => {
@@ -198,6 +216,10 @@ export default function POS() {
     loadProducts();
   }, [search, categoryId, deviceFamily]);
 
+  useEffect(() => {
+    loadCustomers(customerLookup);
+  }, [customerLookup]);
+
   const subtotal = useMemo(
     () => cart.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0),
     [cart]
@@ -205,9 +227,11 @@ export default function POS() {
 
   const discountValue = toMoneyAmount(discount);
   const total = Math.max(subtotal - discountValue, 0);
+  const hasCustomerPaid = String(customerPaid).trim() !== '';
   const customerPaidValue = toMoneyAmount(customerPaid);
   const changeDue = paymentMethod === 'cash' ? Math.max(customerPaidValue - total, 0) : 0;
-  const amountMissing = paymentMethod === 'cash' ? Math.max(total - customerPaidValue, 0) : 0;
+  const amountMissing =
+    paymentMethod === 'cash' && hasCustomerPaid ? Math.max(total - customerPaidValue, 0) : 0;
 
   const toggleDeviceFamily = (value) => {
     // Tim nhanh theo dong may tach rieng voi loc danh muc san pham chung.
@@ -258,16 +282,56 @@ export default function POS() {
     setCart([]);
     setDiscount(0);
     setCustomerPaid('');
+    setIsClearCartOpen(false);
   };
 
-  const openCheckoutConfirm = () => {
+  const requestClearCart = () => {
     if (cart.length === 0) {
       toast.error('Giỏ hàng đang trống');
       return;
     }
 
-    if (paymentMethod === 'cash' && customerPaidValue < total) {
-      toast.error(`Tiền khách đưa còn thiếu ${formatCurrency(amountMissing)}`);
+    setIsClearCartOpen(true);
+  };
+
+  const selectWalkInCustomer = () => {
+    setSelectedCustomer(null);
+    setCustomerName('Khách lẻ');
+    setIsCustomerPickerOpen(false);
+  };
+
+  const selectCustomer = (customer) => {
+    setSelectedCustomer(customer);
+    setCustomerName(customer.name || 'Khách lẻ');
+    setIsCustomerPickerOpen(false);
+  };
+
+  const openCustomerForm = () => {
+    setCustomerForm(initialCustomerForm);
+    setIsCustomerPickerOpen(false);
+    setIsCustomerFormOpen(true);
+  };
+
+  const createCustomerFromPos = async (event) => {
+    event.preventDefault();
+
+    try {
+      const response = await api.post('/customers', customerForm);
+      const createdCustomer = response.data;
+
+      selectCustomer(createdCustomer);
+      setCustomerForm(initialCustomerForm);
+      setIsCustomerFormOpen(false);
+      await loadCustomers(customerLookup);
+      toast.success('Đã thêm khách hàng để tích điểm');
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Không thể thêm khách hàng');
+    }
+  };
+
+  const openCheckoutConfirm = () => {
+    if (cart.length === 0) {
+      toast.error('Giỏ hàng đang trống');
       return;
     }
 
@@ -317,6 +381,7 @@ export default function POS() {
 
     try {
       const response = await api.post('/orders', {
+        customer_id: selectedCustomer?.id || null,
         items: buildOrderItems(cart),
         discount: discountValue,
         payment_method: paymentMethod
@@ -330,13 +395,15 @@ export default function POS() {
         subtotal,
         discount: discountValue,
         total,
-        customerPaid: paymentMethod === 'cash' ? customerPaidValue : total,
+        customerPaid: paymentMethod === 'cash' && hasCustomerPaid ? customerPaidValue : total,
         changeDue,
         transferMemo: paymentMethod === 'transfer' ? transferMemo : ''
       });
       setIsConfirmOpen(false);
       setCheckoutStep('confirm');
       clearCart();
+      selectWalkInCustomer();
+      await loadCustomers(customerLookup);
       await loadProducts();
       toast.success('Thanh toán thành công');
     } catch (error) {
@@ -370,7 +437,7 @@ export default function POS() {
 
   return (
     <>
-    <div className="no-print grid h-[calc(100vh-6.5rem)] min-h-[720px] overflow-hidden rounded-xl border border-[#c3c6d7] bg-[#f7f9fb] lg:grid-cols-[minmax(0,1fr)_400px]">
+    <div className="no-print grid h-[calc(100vh-6.5rem)] min-h-[720px] overflow-hidden rounded-xl border border-[#c3c6d7] bg-[#f7f9fb] lg:grid-cols-[minmax(0,1fr)_420px] xl:grid-cols-[minmax(0,1fr)_440px]">
       <section className="flex min-w-0 flex-col overflow-hidden p-5">
         <div className="mb-3 grid gap-3 xl:grid-cols-[minmax(0,1fr)_260px]">
           <div className="relative">
@@ -464,48 +531,82 @@ export default function POS() {
       </section>
 
       <aside className="flex min-h-0 flex-col border-l border-[#c3c6d7] bg-white">
-        <div className="border-b border-[#c3c6d7] bg-white p-4">
-          <div className="mb-3 flex items-center justify-between">
+        <div className="border-b border-[#c3c6d7] bg-white p-3">
+          <div className="mb-2 flex items-center justify-between">
             <span className="text-sm font-bold text-[#191c1e]">Khách hàng</span>
-            <button type="button" className="text-xs font-bold text-brand-strong">
+            <button type="button" onClick={openCustomerForm} className="text-xs font-bold text-brand-strong">
               Thêm mới (+)
             </button>
           </div>
-          <div className="relative">
-            <UserSearch className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-[#737686]" />
-            <input
-              value={customerName}
-              onChange={(event) => setCustomerName(event.target.value)}
-              className="h-11 w-full rounded-lg border border-[#c3c6d7] bg-[#f7f9fb] pl-10 pr-4 text-sm font-bold text-[#191c1e] outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft"
-            />
+          <button
+            type="button"
+            onClick={() => setIsCustomerPickerOpen(true)}
+            className="flex w-full items-center gap-3 rounded-lg border border-[#c3c6d7] bg-[#f7f9fb] p-3 text-left outline-none transition focus:border-brand focus:ring-2 focus:ring-brand-soft"
+          >
+            <UserSearch className="h-5 w-5 shrink-0 text-[#737686]" />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-bold text-[#191c1e]">{customerName}</span>
+              {selectedCustomer ? (
+                <span className="mt-0.5 block truncate text-xs font-semibold text-[#737686]">
+                  {selectedCustomer.phone || 'Chưa có SĐT'} · {Number(selectedCustomer.points || 0).toLocaleString('vi-VN')} điểm
+                </span>
+              ) : (
+                <span className="mt-0.5 block text-xs font-semibold text-[#737686]">
+                  Không lưu thông tin, không tích điểm
+                </span>
+              )}
+            </span>
+            {selectedCustomer && (
+              <span className="rounded-full bg-brand-soft px-2.5 py-1 text-xs font-extrabold text-brand-strong">
+                {Number(selectedCustomer.points || 0).toLocaleString('vi-VN')} điểm
+              </span>
+            )}
+          </button>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={selectWalkInCustomer}
+              className={`h-8 rounded-lg border px-2 text-xs font-bold ${
+                selectedCustomer ? 'border-[#c3c6d7] bg-white text-[#434655]' : 'border-brand bg-brand-soft text-brand-strong'
+              }`}
+            >
+              Khách lẻ
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsCustomerPickerOpen(true)}
+              className="h-8 rounded-lg border border-[#c3c6d7] bg-white px-2 text-xs font-bold text-[#434655]"
+            >
+              Chọn khách cũ
+            </button>
           </div>
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-4">
-          <div className="mb-4 flex items-center justify-between">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-3">
+          <div className="mb-3 flex items-center justify-between">
             <div className="flex items-center gap-2 text-sm font-bold text-[#191c1e]">
               <Smartphone size={19} className="text-brand-strong" />
               <span>Giỏ hàng ({cart.length})</span>
             </div>
-            <button type="button" onClick={clearCart} className="rounded px-2 py-1 text-xs font-bold text-[#ba1a1a]">
+            <button type="button" onClick={requestClearCart} className="rounded px-2 py-1 text-xs font-bold text-[#ba1a1a]">
               Xóa hết
             </button>
           </div>
 
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto">
+          <div className="min-h-[190px] flex-1 space-y-3 overflow-y-auto pr-1">
             {cart.length === 0 ? (
               <div className="rounded-xl border border-dashed border-[#c3c6d7] bg-[#f7f9fb] p-6 text-center text-sm font-medium text-[#737686]">
                 Chưa có sản phẩm trong giỏ hàng
               </div>
             ) : (
               cart.map((item) => (
-                <div key={item.id} className="flex gap-3">
-                  <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-[#c3c6d7] bg-[#f2f4f6]">
+                <div key={item.id} className="flex gap-3 rounded-lg border border-[#e0e3e5] bg-white p-2">
+                  <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-[#c3c6d7] bg-[#f2f4f6]">
                     <ProductImage product={item} iconSize={24} />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
-                      <h4 className="truncate text-xs font-bold leading-4 text-[#191c1e]">{item.name}</h4>
+                      <h4 className="line-clamp-2 text-sm font-bold leading-5 text-[#191c1e]">{item.name}</h4>
                       <button
                         type="button"
                         onClick={() => removeItem(item.id)}
@@ -551,8 +652,8 @@ export default function POS() {
           </div>
         </div>
 
-        <div className="border-t border-[#c3c6d7] bg-[#f2f4f6] p-5">
-          <div className="mb-4 space-y-3">
+        <div className="border-t border-[#c3c6d7] bg-[#f2f4f6] p-4">
+          <div className="mb-3 space-y-2.5">
             <div className="flex justify-between text-sm text-[#434655]">
               <span>Tạm tính</span>
               <span>{formatCurrency(subtotal)}</span>
@@ -571,12 +672,8 @@ export default function POS() {
               <span>Thuế / phí</span>
               <span>{formatCurrency(0)}</span>
             </div>
-            <div className="flex items-center justify-between border-t border-[#c3c6d7] pt-3">
-              <span className="text-base font-bold uppercase text-[#191c1e]">Tổng cộng</span>
-              <span className="text-base font-extrabold text-brand-strong">{formatCurrency(total)}</span>
-            </div>
             {paymentMethod === 'cash' && (
-              <div className="rounded-xl border border-[#c3c6d7] bg-white p-3">
+              <>
                 <label className="flex items-center justify-between gap-3 text-sm text-[#434655]">
                   <span>Tiền khách đưa</span>
                   <input
@@ -588,19 +685,23 @@ export default function POS() {
                     placeholder="0"
                   />
                 </label>
-                <div className="mt-3 flex items-center justify-between border-t border-[#e0e3e5] pt-3 text-sm">
-                  <span className="font-semibold text-[#434655]">
+                <div className="flex items-center justify-between text-sm text-[#434655]">
+                  <span>
                     {amountMissing > 0 ? 'Còn thiếu' : 'Tiền thừa'}
                   </span>
-                  <span className={`font-extrabold ${amountMissing > 0 ? 'text-[#ba1a1a]' : 'text-[#008a45]'}`}>
+                  <span className={`font-bold ${amountMissing > 0 ? 'text-[#ba1a1a]' : 'text-[#008a45]'}`}>
                     {amountMissing > 0 ? formatCurrency(amountMissing) : formatCurrency(changeDue)}
                   </span>
                 </div>
-              </div>
+              </>
             )}
+            <div className="flex items-center justify-between border-t border-[#c3c6d7] pt-3">
+              <span className="text-base font-bold uppercase text-[#191c1e]">Tổng cộng</span>
+              <span className="text-base font-extrabold text-brand-strong">{formatCurrency(total)}</span>
+            </div>
           </div>
 
-          <div className="mb-4 grid grid-cols-2 gap-2">
+          <div className="mb-3 grid grid-cols-2 gap-2">
             {paymentOptions.map((option) => {
               const Icon = option.icon;
               const isSelected = paymentMethod === option.value;
@@ -610,7 +711,7 @@ export default function POS() {
                   key={option.value}
                   type="button"
                   onClick={() => setPaymentMethod(option.value)}
-                  className={`flex min-h-[68px] flex-col items-center justify-center rounded-xl border px-2 py-3 ${
+                  className={`flex min-h-[56px] flex-col items-center justify-center rounded-lg border px-2 py-2 ${
                     isSelected
                       ? 'border-2 border-brand bg-brand-soft text-brand-strong'
                       : 'border-[#c3c6d7] bg-white text-[#434655]'
@@ -629,7 +730,7 @@ export default function POS() {
             type="button"
             onClick={openCheckoutConfirm}
             disabled={loading}
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#74B8E0] px-4 text-sm font-bold uppercase text-white shadow-[0_8px_20px_rgba(116,184,224,0.22)] disabled:opacity-70"
+            className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-[#74B8E0] px-4 text-sm font-bold uppercase text-white shadow-[0_8px_20px_rgba(116,184,224,0.22)] disabled:opacity-70"
           >
             <ReceiptText size={18} />
             <span>Thanh toán</span>
@@ -638,6 +739,167 @@ export default function POS() {
       </aside>
     </div>
     <div className="no-print">
+    <Modal
+      isOpen={isClearCartOpen}
+      onClose={() => setIsClearCartOpen(false)}
+      title="Xác nhận xóa giỏ hàng"
+      maxWidth="max-w-md"
+    >
+      <div className="space-y-5">
+        <p className="text-sm font-medium leading-6 text-[#434655]">
+          Bạn có chắc muốn xóa tất cả sản phẩm trong giỏ hàng hiện tại không?
+        </p>
+        <div className="flex justify-end gap-3">
+          <button
+            type="button"
+            onClick={() => setIsClearCartOpen(false)}
+            className="rounded-lg border border-[#c3c6d7] px-4 py-2 font-semibold text-[#434655]"
+          >
+            Giữ lại
+          </button>
+          <button
+            type="button"
+            onClick={clearCart}
+            className="rounded-lg bg-[#ba1a1a] px-4 py-2 font-bold text-white"
+          >
+            Xóa giỏ hàng
+          </button>
+        </div>
+      </div>
+    </Modal>
+
+    <Modal
+      isOpen={isCustomerPickerOpen}
+      onClose={() => setIsCustomerPickerOpen(false)}
+      title="Chọn khách hàng"
+      maxWidth="max-w-2xl"
+    >
+      <div className="space-y-4">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-[#737686]" />
+          <input
+            value={customerLookup}
+            onChange={(event) => setCustomerLookup(event.target.value)}
+            className="h-11 w-full rounded-lg border border-[#c3c6d7] bg-white pl-10 pr-4 text-sm font-semibold text-[#191c1e] outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft"
+            placeholder="Tìm tên hoặc số điện thoại"
+          />
+        </div>
+
+        <button
+          type="button"
+          onClick={selectWalkInCustomer}
+          className="flex w-full items-center justify-between rounded-lg border border-[#c3c6d7] bg-[#f7f9fb] p-3 text-left"
+        >
+          <span>
+            <span className="block text-sm font-bold text-[#191c1e]">Khách lẻ</span>
+            <span className="text-xs font-semibold text-[#737686]">Không lưu thông tin và không tích điểm</span>
+          </span>
+          <span className="text-xs font-extrabold text-[#737686]">0 điểm</span>
+        </button>
+
+        <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
+          {customers.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-[#c3c6d7] p-5 text-center text-sm font-semibold text-[#737686]">
+              Chưa tìm thấy khách hàng
+            </div>
+          ) : (
+            customers.map((customer) => (
+              <button
+                key={customer.id}
+                type="button"
+                onClick={() => selectCustomer(customer)}
+                className="flex w-full items-center justify-between gap-3 rounded-lg border border-[#e0e3e5] bg-white p-3 text-left hover:border-brand hover:bg-brand-surface"
+              >
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-bold text-[#191c1e]">{customer.name}</span>
+                  <span className="mt-0.5 block truncate text-xs font-semibold text-[#737686]">
+                    {customer.phone || 'Chưa có SĐT'}{customer.email ? ` · ${customer.email}` : ''}
+                  </span>
+                </span>
+                <span className="shrink-0 rounded-full bg-brand-soft px-3 py-1 text-xs font-extrabold text-brand-strong">
+                  {Number(customer.points || 0).toLocaleString('vi-VN')} điểm
+                </span>
+              </button>
+            ))
+          )}
+        </div>
+
+        <div className="flex justify-between gap-3 border-t border-[#e0e3e5] pt-4">
+          <button
+            type="button"
+            onClick={openCustomerForm}
+            className="rounded-lg bg-brand px-4 py-2 font-bold text-brand-ink"
+          >
+            Thêm mới (+)
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsCustomerPickerOpen(false)}
+            className="rounded-lg border border-[#c3c6d7] px-4 py-2 font-semibold text-[#434655]"
+          >
+            Đóng
+          </button>
+        </div>
+      </div>
+    </Modal>
+
+    <Modal
+      isOpen={isCustomerFormOpen}
+      onClose={() => setIsCustomerFormOpen(false)}
+      title="Thêm khách hàng tích điểm"
+      maxWidth="max-w-xl"
+    >
+      <form onSubmit={createCustomerFromPos} className="grid gap-4 md:grid-cols-2">
+        <label className="md:col-span-2">
+          <span className="mb-1 block text-sm font-semibold text-[#434655]">Tên khách hàng</span>
+          <input
+            value={customerForm.name}
+            onChange={(event) => setCustomerForm({ ...customerForm, name: event.target.value })}
+            className="h-10 w-full rounded-lg border border-[#c3c6d7] px-3 outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft"
+            required
+          />
+        </label>
+        <label>
+          <span className="mb-1 block text-sm font-semibold text-[#434655]">Số điện thoại</span>
+          <input
+            value={customerForm.phone}
+            onChange={(event) => setCustomerForm({ ...customerForm, phone: event.target.value })}
+            className="h-10 w-full rounded-lg border border-[#c3c6d7] px-3 outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft"
+            required
+          />
+        </label>
+        <label>
+          <span className="mb-1 block text-sm font-semibold text-[#434655]">Email</span>
+          <input
+            type="email"
+            value={customerForm.email}
+            onChange={(event) => setCustomerForm({ ...customerForm, email: event.target.value })}
+            className="h-10 w-full rounded-lg border border-[#c3c6d7] px-3 outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft"
+          />
+        </label>
+        <label className="md:col-span-2">
+          <span className="mb-1 block text-sm font-semibold text-[#434655]">Địa chỉ</span>
+          <input
+            value={customerForm.address}
+            onChange={(event) => setCustomerForm({ ...customerForm, address: event.target.value })}
+            className="h-10 w-full rounded-lg border border-[#c3c6d7] px-3 outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft"
+          />
+        </label>
+        <div className="flex justify-end gap-3 md:col-span-2">
+          <button
+            type="button"
+            onClick={() => setIsCustomerFormOpen(false)}
+            className="rounded-lg border border-[#c3c6d7] px-4 py-2 font-semibold text-[#434655]"
+          >
+            Hủy
+          </button>
+          <button type="submit" className="rounded-lg bg-brand px-4 py-2 font-bold text-brand-ink">
+            Lưu và chọn khách
+          </button>
+        </div>
+      </form>
+    </Modal>
+
     <Modal
       isOpen={isConfirmOpen}
       onClose={closeCheckoutConfirm}

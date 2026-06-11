@@ -4,14 +4,23 @@ export async function getAll(req, res) {
   try {
     const { search } = req.query;
     const params = [];
-    let sql = 'SELECT * FROM customers WHERE 1 = 1';
+    let sql = `
+      SELECT
+        c.*,
+        COALESCE(SUM(CASE WHEN o.status = 'completed' THEN o.total ELSE 0 END), 0) AS total_spent,
+        COUNT(CASE WHEN o.status = 'completed' THEN o.id END) AS order_count,
+        FLOOR(COALESCE(SUM(CASE WHEN o.status = 'completed' THEN o.total ELSE 0 END), 0) / 10000) AS points
+      FROM customers c
+      LEFT JOIN orders o ON o.customer_id = c.id
+      WHERE 1 = 1
+    `;
 
     if (search) {
-      sql += ' AND (name LIKE ? OR phone LIKE ?)';
+      sql += ' AND (c.name LIKE ? OR c.phone LIKE ?)';
       params.push(`%${search}%`, `%${search}%`);
     }
 
-    sql += ' ORDER BY created_at DESC';
+    sql += ' GROUP BY c.id ORDER BY c.created_at DESC';
 
     const customers = await query(sql, params);
     res.json(customers);
@@ -22,7 +31,18 @@ export async function getAll(req, res) {
 
 export async function getById(req, res) {
   try {
-    const customers = await query('SELECT * FROM customers WHERE id = ?', [req.params.id]);
+    const customers = await query(
+      `SELECT
+        c.*,
+        COALESCE(SUM(CASE WHEN o.status = 'completed' THEN o.total ELSE 0 END), 0) AS total_spent,
+        COUNT(CASE WHEN o.status = 'completed' THEN o.id END) AS order_count,
+        FLOOR(COALESCE(SUM(CASE WHEN o.status = 'completed' THEN o.total ELSE 0 END), 0) / 10000) AS points
+       FROM customers c
+       LEFT JOIN orders o ON o.customer_id = c.id
+       WHERE c.id = ?
+       GROUP BY c.id`,
+      [req.params.id]
+    );
 
     if (!customers[0]) {
       return res.status(404).json({ message: 'Không tìm thấy khách hàng' });

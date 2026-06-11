@@ -1,4 +1,5 @@
 import { query } from '../config/db.js';
+import XLSX from 'xlsx';
 
 const DEVICE_FAMILIES = new Set(['apple', 'samsung', 'vivo', 'oppo', 'xiaomi']);
 
@@ -76,6 +77,54 @@ function normalizeProductBody(body, existing = {}) {
     min_stock: toPositiveNumber(body.min_stock, existing.min_stock ?? 5),
     image_url: body.image_url?.trim() ?? existing.image_url ?? ''
   };
+}
+
+function normalizeHeader(value = '') {
+  return String(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+function getCell(row, keys) {
+  for (const key of keys) {
+    if (row[key] !== undefined && row[key] !== null && String(row[key]).trim() !== '') {
+      return String(row[key]).trim();
+    }
+  }
+
+  return '';
+}
+
+function parseProductImageRows(file) {
+  const workbook = XLSX.read(file.buffer, { type: 'buffer' });
+  const sheetName = workbook.SheetNames[0];
+  const sheet = workbook.Sheets[sheetName];
+
+  if (!sheet) {
+    return [];
+  }
+
+  const rows = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false });
+
+  return rows.map((row) => {
+    const normalized = {};
+
+    for (const [key, value] of Object.entries(row)) {
+      normalized[normalizeHeader(key)] = value;
+    }
+
+    return normalized;
+  });
+}
+
+function parseProductId(value = '') {
+  const text = String(value).trim();
+  const match = text.match(/(\d+)/);
+  return match ? Number(match[1]) : 0;
 }
 
 async function validateProduct(product) {
@@ -250,5 +299,71 @@ export async function remove(req, res) {
     res.json({ message: 'Đã xóa sản phẩm' });
   } catch (error) {
     res.status(500).json({ message: 'Không thể xóa sản phẩm', error: error.message });
+  }
+}
+
+export async function importImages(req, res) {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'Vui lòng chọn file CSV hoặc Excel' });
+    }
+
+    const rows = parseProductImageRows(req.file);
+
+    if (rows.length === 0) {
+      return res.status(400).json({ message: 'File không có dữ liệu import' });
+    }
+
+    const errors = [];
+    let updated = 0;
+    let skipped = 0;
+
+    for (const [index, row] of rows.entries()) {
+      const rowNumber = index + 2;
+      const imageUrl = getCell(row, ['image_url', 'image', 'url', 'link_anh', 'anh', 'hinh_anh']);
+      const productId = parseProductId(getCell(row, ['id', 'product_id', 'ma_san_pham', 'sku']));
+      const productName = getCell(row, ['name', 'ten', 'ten_san_pham', 'product_name']);
+
+      if (!imageUrl) {
+        skipped += 1;
+        errors.push({ row: rowNumber, message: 'Thiếu image_url' });
+        continue;
+      }
+
+      let result;
+
+      if (productId > 0) {
+        result = await query(
+          'UPDATE products SET image_url = ? WHERE id = ? AND is_active = 1',
+          [imageUrl, productId]
+        );
+      } else if (productName) {
+        result = await query(
+          'UPDATE products SET image_url = ? WHERE name = ? AND is_active = 1',
+          [imageUrl, productName]
+        );
+      } else {
+        skipped += 1;
+        errors.push({ row: rowNumber, message: 'Thiếu id, sku hoặc tên sản phẩm' });
+        continue;
+      }
+
+      if (result.affectedRows === 0) {
+        skipped += 1;
+        errors.push({ row: rowNumber, message: 'Không tìm thấy sản phẩm phù hợp' });
+        continue;
+      }
+
+      updated += result.affectedRows;
+    }
+
+    res.json({
+      message: `Đã cập nhật ${updated} ảnh sản phẩm`,
+      updated,
+      skipped,
+      errors: errors.slice(0, 30)
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Không thể import ảnh sản phẩm', error: error.message });
   }
 }
