@@ -20,8 +20,8 @@ import ztechLogo from '../assets/images/1111.png';
 import { logout } from '../utils/auth';
 
 const navItems = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/pos', label: 'Bán hàng (POS)', icon: ShoppingCart },
+  { to: '/', label: 'Tổng quan', icon: LayoutDashboard },
+  { to: '/pos', label: 'Bán hàng POS', icon: ShoppingCart },
   { to: '/products', label: 'Sản phẩm', icon: Package },
   { to: '/categories', label: 'Danh mục', icon: Tags },
   { to: '/orders', label: 'Hóa đơn', icon: ReceiptText },
@@ -31,7 +31,7 @@ const navItems = [
   { to: '/employees', label: 'Nhân viên', icon: BadgeCheck },
   { to: '/shifts', label: 'Ca làm', icon: CalendarClock },
   { to: '/reports', label: 'Báo cáo', icon: ChartNoAxesCombined },
-  { to: '/activity-logs', label: 'Nhật ký', icon: History },
+  { to: '/activity-logs', label: 'Nhật ký hoạt động', icon: History },
   { label: 'AI gợi ý', icon: BrainCircuit }
 ];
 
