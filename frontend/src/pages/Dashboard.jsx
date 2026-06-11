@@ -140,10 +140,10 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="w-full space-y-5">
+    <div className="w-full space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold leading-8 text-[#191c1d]">Trang tổng quan</h1>
-        <p className="mt-1 text-sm font-medium text-[#73777d]">
+        <h1 className="text-xl font-semibold leading-7 text-[#191c1d]">Trang tổng quan</h1>
+        <p className="mt-0.5 text-xs font-medium text-[#73777d]">
           Chào mừng quay trở lại, đây là hiệu suất cửa hàng hôm nay!
         </p>
       </div>
@@ -154,25 +154,25 @@ export default function Dashboard() {
         </div>
       )}
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {cards.map((card) => {
           const Icon = card.icon;
 
           return (
             <article
               key={card.label}
-              className="rounded-xl border border-[#e1e3e4] bg-white p-5 shadow-[0_1px_3px_rgba(25,28,29,0.08)]"
+              className="rounded-lg border border-[#e1e3e4] bg-white p-4 shadow-[0_1px_3px_rgba(25,28,29,0.08)]"
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-xs font-semibold text-[#73777d]">{card.label}</p>
-                  <p className="mt-5 text-[22px] font-bold leading-7 text-[#191c1d]">
+                  <p className="mt-3 text-xl font-bold leading-6 text-[#191c1d]">
                     {isLoading ? '...' : card.value}
                   </p>
-                  <p className="mt-2 text-xs font-medium text-[#43474d]">{card.caption}</p>
+                  <p className="mt-1.5 text-xs font-medium text-[#43474d]">{card.caption}</p>
                 </div>
-                <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-lg ${cardTones[card.tone]}`}>
-                  <Icon size={20} />
+                <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${cardTones[card.tone]}`}>
+                  <Icon size={18} />
                 </div>
               </div>
             </article>
@@ -180,32 +180,32 @@ export default function Dashboard() {
         })}
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.75fr)]">
-        <article className="rounded-xl border border-[#e1e3e4] bg-white p-5 shadow-[0_1px_3px_rgba(25,28,29,0.08)]">
-          <div className="mb-5 flex items-start justify-between gap-4">
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.75fr)]">
+        <article className="rounded-lg border border-[#e1e3e4] bg-white p-4 shadow-[0_1px_3px_rgba(25,28,29,0.08)]">
+          <div className="mb-3 flex items-start justify-between gap-4">
             <div>
-              <h2 className="text-xl font-semibold leading-7 text-[#191c1d]">Cơ cấu doanh thu</h2>
-              <p className="mt-1 text-sm font-medium text-[#73777d]">Phân bổ theo nhóm sản phẩm</p>
+              <h2 className="text-lg font-semibold leading-6 text-[#191c1d]">Cơ cấu doanh thu</h2>
+              <p className="mt-0.5 text-xs font-medium text-[#73777d]">Phân bổ theo nhóm sản phẩm</p>
             </div>
             <button
               type="button"
-              className="flex h-9 items-center gap-2 rounded-lg bg-brand-surface px-3 text-sm font-semibold text-brand-ink transition hover:bg-brand-soft"
+              className="flex h-8 items-center gap-2 rounded-lg bg-brand-surface px-3 text-xs font-semibold text-brand-ink transition hover:bg-brand-soft"
             >
               Tháng này
               <ChevronDown size={16} />
             </button>
           </div>
 
-          <div className="grid min-h-[300px] items-center gap-8 md:grid-cols-[minmax(220px,0.9fr)_minmax(240px,1fr)]">
+          <div className="grid min-h-[230px] items-center gap-6 md:grid-cols-[minmax(190px,0.85fr)_minmax(240px,1fr)]">
             <div className="flex justify-center">
               <div
-                className="relative grid h-56 w-56 place-items-center rounded-full"
+                className="relative grid h-44 w-44 place-items-center rounded-full"
                 style={{ background: donutBackground }}
                 aria-label="Cơ cấu doanh thu theo danh mục"
               >
-                <div className="grid h-32 w-32 place-items-center rounded-full bg-white shadow-[inset_0_0_0_1px_rgba(225,227,228,0.8)]">
+                <div className="grid h-24 w-24 place-items-center rounded-full bg-white shadow-[inset_0_0_0_1px_rgba(225,227,228,0.8)]">
                   <div className="text-center">
-                    <div className="text-2xl font-bold leading-7 text-[#191c1d]">
+                    <div className="text-xl font-bold leading-6 text-[#191c1d]">
                       {categoryShare.length > 0 ? '100%' : '0%'}
                     </div>
                     <div className="mt-1 text-xs font-medium text-[#73777d]">Tổng cộng</div>
@@ -214,7 +214,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-2">
               {categoryShare.length === 0 && (
                 <p className="text-sm font-medium text-[#73777d]">Chưa có doanh thu trong tháng này.</p>
               )}
@@ -225,10 +225,10 @@ export default function Dashboard() {
                       className="h-3 w-3 shrink-0 rounded-full"
                       style={{ backgroundColor: chartColors[index % chartColors.length] }}
                     />
-                    <span className="truncate text-sm font-semibold text-[#43474d]">{item.name}</span>
+                    <span className="truncate text-xs font-semibold text-[#43474d]">{item.name}</span>
                   </div>
                   <div className="shrink-0 text-right">
-                    <div className="text-sm font-bold text-[#191c1d]">{item.percentage}%</div>
+                    <div className="text-xs font-bold text-[#191c1d]">{item.percentage}%</div>
                     <div className="text-[11px] font-medium text-[#73777d]">{formatCurrency(item.revenue)}</div>
                   </div>
                 </div>
@@ -237,19 +237,19 @@ export default function Dashboard() {
           </div>
         </article>
 
-        <article className="rounded-xl border border-[#e1e3e4] bg-white p-5 shadow-[0_1px_3px_rgba(25,28,29,0.08)]">
-          <div className="mb-5 flex items-center justify-between gap-4">
-            <h2 className="text-xl font-semibold leading-7 text-[#191c1d]">Top sản phẩm</h2>
+        <article className="rounded-lg border border-[#e1e3e4] bg-white p-4 shadow-[0_1px_3px_rgba(25,28,29,0.08)]">
+          <div className="mb-3 flex items-center justify-between gap-4">
+            <h2 className="text-lg font-semibold leading-6 text-[#191c1d]">Top sản phẩm</h2>
             <Link to="/products" className="text-sm font-semibold text-brand-strong transition hover:text-brand-deep">
               Tất cả
             </Link>
           </div>
 
-          <div className="space-y-5">
+          <div className="space-y-3">
             {topProducts.length === 0 && (
               <p className="text-sm font-medium text-[#73777d]">Chưa có sản phẩm bán chạy trong 30 ngày gần đây.</p>
             )}
-            {topProducts.map((product) => (
+            {topProducts.slice(0, 5).map((product) => (
               <div key={product.product_id} className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold leading-5 text-[#191c1d]">{product.name}</p>
@@ -267,12 +267,12 @@ export default function Dashboard() {
         </article>
       </section>
 
-      <section className="rounded-xl border border-[#e1e3e4] bg-white shadow-[0_1px_3px_rgba(25,28,29,0.08)]">
-        <div className="flex items-center justify-between gap-4 border-b border-[#e1e3e4] px-5 py-4">
-          <h2 className="text-xl font-semibold leading-7 text-[#191c1d]">Đơn hàng gần đây</h2>
+      <section className="rounded-lg border border-[#e1e3e4] bg-white shadow-[0_1px_3px_rgba(25,28,29,0.08)]">
+        <div className="flex items-center justify-between gap-4 border-b border-[#e1e3e4] px-4 py-3">
+          <h2 className="text-lg font-semibold leading-6 text-[#191c1d]">Đơn hàng gần đây</h2>
           <Link
             to="/orders"
-            className="rounded-lg px-3 py-2 text-sm font-semibold text-brand-strong transition hover:bg-brand-surface"
+            className="rounded-lg px-3 py-1.5 text-sm font-semibold text-brand-strong transition hover:bg-brand-surface"
           >
             Xem tất cả
           </Link>
@@ -282,41 +282,41 @@ export default function Dashboard() {
           <table className="w-full min-w-[920px] text-left">
             <thead className="text-[11px] font-bold uppercase tracking-wide text-[#73777d]">
               <tr>
-                <th className="px-5 py-3 font-bold">Mã đơn</th>
-                <th className="px-5 py-3 font-bold">Khách hàng</th>
-                <th className="px-5 py-3 font-bold">Ngày tạo</th>
-                <th className="px-5 py-3 font-bold text-right">Tổng tiền</th>
-                <th className="px-5 py-3 font-bold text-center">Trạng thái</th>
-                <th className="px-5 py-3 font-bold text-right">Hành động</th>
+                <th className="px-4 py-2.5 font-bold">Mã đơn</th>
+                <th className="px-4 py-2.5 font-bold">Khách hàng</th>
+                <th className="px-4 py-2.5 font-bold">Ngày tạo</th>
+                <th className="px-4 py-2.5 font-bold text-right">Tổng tiền</th>
+                <th className="px-4 py-2.5 font-bold text-center">Trạng thái</th>
+                <th className="px-4 py-2.5 font-bold text-right">Hành động</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#e1e3e4]">
               {recentOrders.length === 0 && (
                 <tr>
-                  <td colSpan="6" className="px-5 py-10 text-center text-sm font-medium text-[#73777d]">
+                  <td colSpan="6" className="px-4 py-8 text-center text-sm font-medium text-[#73777d]">
                     Chưa có đơn hàng gần đây.
                   </td>
                 </tr>
               )}
-              {recentOrders.map((order) => (
+              {recentOrders.slice(0, 4).map((order) => (
                 <tr key={order.id} className="text-sm transition hover:bg-[#f8f9fa]">
-                  <td className="px-5 py-4 align-middle font-bold text-[#191c1d]">{order.order_number}</td>
-                  <td className="px-5 py-4 align-middle">
+                  <td className="px-4 py-2.5 align-middle font-bold text-[#191c1d]">{order.order_number}</td>
+                  <td className="px-4 py-2.5 align-middle">
                     <div className="flex items-center gap-3">
-                      <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-soft text-[11px] font-bold text-brand-ink">
+                      <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-brand-soft text-[10px] font-bold text-brand-ink">
                         {getInitials(order.customer_name)}
                       </div>
                       <span className="font-medium text-[#43474d]">{order.customer_name}</span>
                     </div>
                   </td>
-                  <td className="px-5 py-4 align-middle text-[#43474d]">
+                  <td className="px-4 py-2.5 align-middle text-[#43474d]">
                     <span className="font-medium">{formatTime(order.created_at)}</span>
                     <span className="ml-1 text-xs text-[#73777d]">{formatDate(order.created_at)}</span>
                   </td>
-                  <td className="px-5 py-4 align-middle text-right font-bold text-[#191c1d]">
+                  <td className="px-4 py-2.5 align-middle text-right font-bold text-[#191c1d]">
                     {formatCurrency(order.total)}
                   </td>
-                  <td className="px-5 py-4 align-middle text-center">
+                  <td className="px-4 py-2.5 align-middle text-center">
                     <span
                       className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ring-1 ${
                         statusStyles[order.status] || statusStyles.cancelled
@@ -325,10 +325,10 @@ export default function Dashboard() {
                       {statusLabels[order.status] || order.status}
                     </span>
                   </td>
-                  <td className="px-5 py-4 align-middle">
+                  <td className="px-4 py-2.5 align-middle">
                     <button
                       type="button"
-                      className="ml-auto grid h-8 w-8 place-items-center rounded-full text-[#73777d] transition hover:bg-brand-surface hover:text-brand-strong"
+                      className="ml-auto grid h-7 w-7 place-items-center rounded-full text-[#73777d] transition hover:bg-brand-surface hover:text-brand-strong"
                       title="Thao tác"
                       aria-label="Thao tác"
                     >

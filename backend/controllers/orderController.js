@@ -1,9 +1,16 @@
 import { query } from '../config/db.js';
 
 async function buildOrderNumber() {
-  const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-  const rows = await query('SELECT COUNT(*) AS count FROM orders WHERE DATE(created_at) = CURDATE()');
-  const nextNumber = Number(rows[0].count || 0) + 1;
+  const rows = await query(`
+    SELECT
+      DATE_FORMAT(NOW(), '%Y%m%d') AS date_part,
+      COALESCE(MAX(CAST(SUBSTRING_INDEX(order_number, '-', -1) AS UNSIGNED)), 0) AS max_number
+    FROM orders
+    WHERE order_number LIKE CONCAT('ORD-', DATE_FORMAT(NOW(), '%Y%m%d'), '-%')
+  `);
+  const datePart = rows[0].date_part;
+  const nextNumber = Number(rows[0].max_number || 0) + 1;
+
   return `ORD-${datePart}-${String(nextNumber).padStart(4, '0')}`;
 }
 

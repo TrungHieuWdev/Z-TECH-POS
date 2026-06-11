@@ -2,6 +2,30 @@ import { query } from '../config/db.js';
 
 const DEVICE_FAMILIES = new Set(['apple', 'samsung', 'vivo', 'oppo', 'xiaomi']);
 
+const searchAliasSql = `
+  CONCAT_WS(' ',
+    dm.family,
+    dm.name,
+    dm.series,
+    CASE dm.family
+      WHEN 'apple' THEN 'apple iphone ios'
+      WHEN 'samsung' THEN 'samsung galaxy'
+      WHEN 'vivo' THEN 'vivo'
+      WHEN 'oppo' THEN 'oppo'
+      WHEN 'xiaomi' THEN 'xiaomi redmi poco mi'
+      ELSE ''
+    END,
+    CASE p.category_id
+      WHEN 1 THEN 'op lung case cover'
+      WHEN 2 THEN 'sac cap charger cable cu sac bo sac'
+      WHEN 3 THEN 'tai nghe am thanh bluetooth earphone headphone'
+      WHEN 4 THEN 'kinh cuong luc kinh camera glass lens'
+      WHEN 5 THEN 'gia do dan lung tien ich utility'
+      ELSE ''
+    END
+  )
+`;
+
 function getSearchTokens(search = '') {
   return search.trim().split(/\s+/).filter(Boolean);
 }
@@ -10,8 +34,26 @@ function appendTextSearch(sql, params, tokens) {
   let nextSql = sql;
 
   for (const token of tokens) {
-    nextSql += ' AND (p.name LIKE ? OR p.description LIKE ? OR dm.name LIKE ? OR c.name LIKE ?)';
-    params.push(`%${token}%`, `%${token}%`, `%${token}%`, `%${token}%`);
+    nextSql += `
+      AND (
+        p.name LIKE ?
+        OR p.description LIKE ?
+        OR dm.name LIKE ?
+        OR dm.series LIKE ?
+        OR dm.family LIKE ?
+        OR c.name LIKE ?
+        OR ${searchAliasSql} LIKE ?
+      )
+    `;
+    params.push(
+      `%${token}%`,
+      `%${token}%`,
+      `%${token}%`,
+      `%${token}%`,
+      `%${token}%`,
+      `%${token}%`,
+      `%${token}%`
+    );
   }
 
   return nextSql;

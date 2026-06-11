@@ -13,6 +13,7 @@ import Suppliers from './pages/Suppliers';
 import Employees from './pages/Employees';
 import Shifts from './pages/Shifts';
 import Reports from './pages/Reports';
+import ActivityLogs from './pages/ActivityLogs';
 import { getToken } from './utils/auth';
 
 function ProtectedRoute() {
@@ -39,6 +40,7 @@ export default function App() {
             <Route path="/orders" element={<Orders />} />
             <Route path="/inventory" element={<Inventory />} />
             <Route path="/reports" element={<Reports />} />
+            <Route path="/activity-logs" element={<ActivityLogs />} />
           </Route>
         </Route>
       </Routes>

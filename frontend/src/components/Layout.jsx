@@ -30,7 +30,7 @@ export default function Layout() {
     <div className="min-h-screen bg-[#f8f9fa] font-sans text-[#191c1d]">
       <Sidebar />
       <div className="min-h-screen lg:pl-[260px]">
-        <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-[#c3c7cd] bg-white px-4 shadow-sm md:px-6 lg:px-8 xl:px-10">
+        <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-[#c3c7cd] bg-white px-4 shadow-sm md:px-5 lg:px-6 xl:px-8">
           <form onSubmit={handleQuickSearch} className="relative w-full max-w-[260px]">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-[#73777d]" />
             <input
@@ -38,14 +38,14 @@ export default function Layout() {
               value={quickSearch}
               onChange={(event) => setQuickSearch(event.target.value)}
               placeholder="Tìm kiếm nhanh..."
-              className="h-10 w-full rounded-lg border-0 bg-[#f3f4f5] pl-10 pr-3 text-sm font-medium text-[#191c1d] outline-none ring-1 ring-transparent transition placeholder:text-[#73777d] focus:bg-white focus:ring-2 focus:ring-brand-soft"
+              className="h-9 w-full rounded-lg border-0 bg-[#f3f4f5] pl-10 pr-3 text-sm font-medium text-[#191c1d] outline-none ring-1 ring-transparent transition placeholder:text-[#73777d] focus:bg-white focus:ring-2 focus:ring-brand-soft"
             />
           </form>
 
           <div className="flex items-center gap-3">
             <button
               type="button"
-              className="hidden h-10 w-10 items-center justify-center rounded-full text-[#43474d] transition hover:bg-brand-surface hover:text-brand-strong sm:flex"
+              className="hidden h-9 w-9 items-center justify-center rounded-full text-[#43474d] transition hover:bg-brand-surface hover:text-brand-strong sm:flex"
               title="Thông báo"
               aria-label="Thông báo"
             >
@@ -54,7 +54,7 @@ export default function Layout() {
             <button
               type="button"
               onClick={() => setIsSettingsOpen(true)}
-              className="hidden h-10 w-10 items-center justify-center rounded-full text-[#43474d] transition hover:bg-brand-surface hover:text-brand-strong sm:flex"
+              className="hidden h-9 w-9 items-center justify-center rounded-full text-[#43474d] transition hover:bg-brand-surface hover:text-brand-strong sm:flex"
               title="Cài đặt"
               aria-label="Cài đặt"
             >
@@ -67,14 +67,14 @@ export default function Layout() {
                   {user?.role || 'Manager'}
                 </p>
               </div>
-              <div className="grid h-10 w-10 place-items-center rounded-full bg-brand-soft text-sm font-bold text-brand-ink ring-2 ring-white">
+              <div className="grid h-9 w-9 place-items-center rounded-full bg-brand-soft text-sm font-bold text-brand-ink ring-2 ring-white">
                 {(user?.name || 'Admin').slice(0, 1).toUpperCase()}
               </div>
             </div>
           </div>
         </header>
 
-        <main className="min-w-0 px-4 py-4 md:px-6 lg:px-8 lg:py-5 xl:px-10">
+        <main className="min-w-0 px-4 py-3 md:px-5 lg:px-6 lg:py-4 xl:px-8">
           <Outlet />
         </main>
       </div>
