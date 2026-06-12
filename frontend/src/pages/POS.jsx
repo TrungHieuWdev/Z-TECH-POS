@@ -582,14 +582,14 @@ export default function POS() {
                 selectedCustomer ? 'border-[#c3c6d7] bg-white text-[#434655]' : 'border-brand bg-brand-soft text-brand-strong'
               }`}
             >
-              Khách lẻ
+              Khách chưa đăng ký
             </button>
             <button
               type="button"
               onClick={() => setIsCustomerPickerOpen(true)}
               className="h-7 rounded-lg border border-[#c3c6d7] bg-white px-2 text-xs font-bold text-[#434655]"
             >
-              Chọn khách cũ
+              Chọn khách đã đăng ký 
             </button>
           </div>
         </div>

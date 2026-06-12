@@ -53,5 +53,6 @@ Frontend chạy tại `http://localhost:5173`.
 
 ## Tài khoản test
 
-- Admin: `admin@pos.com` / `admin123`
-- Cashier: `cashier@pos.com` / `123456`
+- Chủ cửa hàng: `owner@pos.com` / `admin123`
+- Quản lý: `manager@pos.com` / `admin123`
+- Nhân viên: `employee@pos.com` / `123456`

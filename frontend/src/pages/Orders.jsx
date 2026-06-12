@@ -4,6 +4,7 @@ import { Edit, Eye, Search, XCircle } from 'lucide-react';
 import api from '../api/axios';
 import Modal from '../components/Modal';
 import { formatCurrency, formatDate } from '../utils/format';
+import { getUser, isFullAccessRole } from '../utils/auth';
 
 const paymentLabels = {
   cash: 'Tiền mặt',
@@ -12,6 +13,7 @@ const paymentLabels = {
 };
 
 export default function Orders() {
+  const hasFullAccess = isFullAccessRole(getUser()?.role);
   const [orders, setOrders] = useState([]);
   const [search, setSearch] = useState('');
   const [orderDate, setOrderDate] = useState('');
@@ -169,6 +171,7 @@ export default function Orders() {
                       <button
                         type="button"
                         onClick={() => openEdit(order)}
+                        style={{ display: hasFullAccess ? undefined : 'none' }}
                         className="rounded-lg p-2 text-gray-500 transition hover:bg-brand-surface hover:text-brand-strong"
                         title="Sửa"
                         aria-label="Sửa"
@@ -178,6 +181,7 @@ export default function Orders() {
                       <button
                         type="button"
                         onClick={() => cancelOrder(order)}
+                        style={{ display: hasFullAccess ? undefined : 'none' }}
                         className="rounded-lg p-2 text-gray-500 transition hover:bg-red-50 hover:text-red-600"
                         title="Hủy"
                         aria-label="Hủy"

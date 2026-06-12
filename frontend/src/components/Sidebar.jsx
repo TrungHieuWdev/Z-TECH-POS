@@ -35,7 +35,7 @@ const navItems = [
   { label: 'AI gợi ý', icon: BrainCircuit }
 ];
 
-const employeeAllowedPaths = new Set(['/pos', '/orders', '/customers']);
+const employeeAllowedPaths = new Set(['/pos', '/orders', '/products', '/inventory', '/customers', '/shifts']);
 
 function isPathActive(pathname, to) {
   if (!to) return false;
@@ -98,7 +98,8 @@ export default function Sidebar() {
           </div>
           <div className="flex min-w-0 flex-col justify-center">
             <div className="whitespace-nowrap text-xl font-extrabold leading-6 text-brand">Z-TECH POS</div>
-            <div className="text-xs font-medium leading-4 text-[#73777d]">HỆ THỐNG QUẢN LÝ</div>
+            <p className="hidden text-sm text-gray-500 sm:block">Quản lý bán hàng</p>
+           
           </div>
         </div>
       </div>

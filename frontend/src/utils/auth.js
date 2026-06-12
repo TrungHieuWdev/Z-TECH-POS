@@ -24,7 +24,8 @@ export function isFullAccessRole(role) {
 export function getRoleLabel(role) {
   const roleKey = String(role || '').toLowerCase();
 
-  if (isFullAccessRole(roleKey)) return 'Chủ cửa hàng / Quản lý';
+  if (roleKey === 'owner' || roleKey === 'admin') return 'Chủ cửa hàng';
+  if (roleKey === 'manager') return 'Quản lý';
   if (['cashier', 'employee', 'staff'].includes(roleKey)) return 'Nhân viên';
 
   return role || 'Nhân viên';
@@ -34,7 +35,7 @@ export function canAccessPath(pathname, user = getUser()) {
   if (!user) return false;
   if (isFullAccessRole(user.role)) return true;
 
-  return ['/pos', '/orders', '/customers'].some(
+  return ['/pos', '/orders', '/products', '/inventory', '/customers', '/shifts'].some(
     (path) => pathname === path || pathname.startsWith(`${path}/`)
   );
 }

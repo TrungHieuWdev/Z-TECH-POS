@@ -4,10 +4,12 @@ import { Edit, Plus, Search, Trash2 } from 'lucide-react';
 import api from '../api/axios';
 import Modal from '../components/Modal';
 import { formatDate } from '../utils/format';
+import { getUser, isFullAccessRole } from '../utils/auth';
 
 const initialForm = { name: '', phone: '', email: '', address: '' };
 
 export default function Customers() {
+  const hasFullAccess = isFullAccessRole(getUser()?.role);
   const [customers, setCustomers] = useState([]);
   const [search, setSearch] = useState('');
   const [form, setForm] = useState(initialForm);
@@ -150,6 +152,7 @@ export default function Customers() {
                       <button
                         type="button"
                         onClick={() => handleDelete(customer)}
+                        style={{ display: hasFullAccess ? undefined : 'none' }}
                         className="rounded-lg p-2 text-gray-500 transition hover:bg-red-50 hover:text-red-600"
                         title="Xóa"
                         aria-label="Xóa"

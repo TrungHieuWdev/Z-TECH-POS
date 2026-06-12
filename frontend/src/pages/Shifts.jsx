@@ -15,9 +15,10 @@ import {
   Users
 } from 'lucide-react';
 import Modal from '../components/Modal';
+import { getUser, isFullAccessRole } from '../utils/auth';
 
 const STORAGE_KEY = 'ztech-shifts';
-const TODAY = '2026-06-10';
+const TODAY = new Date().toISOString().slice(0, 10);
 
 const periodOptions = [
   { value: 'today', label: 'Hôm nay' },
@@ -151,6 +152,10 @@ function formatDate(value) {
   return `${day}/${month}/${year}`;
 }
 
+function getCurrentTime() {
+  return new Date().toTimeString().slice(0, 5);
+}
+
 function getDateRange(period) {
   if (period === 'today') {
     return { from: TODAY, to: TODAY };
@@ -187,6 +192,9 @@ function getShiftStats(shifts) {
 }
 
 export default function Shifts() {
+  const user = getUser();
+  const hasFullAccess = isFullAccessRole(user?.role);
+  const currentEmployeeName = user?.name || 'Nhân viên';
   const [shifts, setShifts] = useState(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
     return saved ? JSON.parse(saved) : initialShifts;
@@ -210,20 +218,48 @@ export default function Shifts() {
     const dateRange = getDateRange(period);
 
     return shifts.filter((shift) => {
+      const matchesEmployee = hasFullAccess || shift.employee === currentEmployeeName;
       const matchesPeriod = isDateInRange(shift.workDate, dateRange);
       const matchesStatus = statusFilter === 'all' || shift.status === statusFilter;
       const matchesKeyword = [shift.code, shift.name, shift.employee, shift.note]
         .filter(Boolean)
         .some((value) => value.toLowerCase().includes(keyword));
 
-      return matchesPeriod && matchesStatus && matchesKeyword;
+      return matchesEmployee && matchesPeriod && matchesStatus && matchesKeyword;
     });
-  }, [shifts, search, period, statusFilter]);
+  }, [shifts, search, period, statusFilter, hasFullAccess, currentEmployeeName]);
 
   const openCreate = () => {
     setEditingShift(null);
-    setForm(emptyForm);
+    setForm({ ...emptyForm, employee: hasFullAccess ? emptyForm.employee : currentEmployeeName });
     setIsFormOpen(true);
+  };
+
+  const startMyShift = () => {
+    const activeShift = shifts.find(
+      (shift) => shift.employee === currentEmployeeName && shift.workDate === TODAY && shift.status === 'active'
+    );
+
+    if (activeShift) {
+      toast.error('Bạn đang có một ca làm đang mở');
+      return;
+    }
+
+    const now = getCurrentTime();
+    const nextShift = {
+      id: Date.now(),
+      code: getNextShiftCode(shifts),
+      name: 'Ca của tôi',
+      employee: currentEmployeeName,
+      startTime: now,
+      endTime: '23:59',
+      workDate: TODAY,
+      status: 'active',
+      note: 'Nhân viên tự mở ca'
+    };
+
+    setShifts((current) => [nextShift, ...current]);
+    toast.success('Đã mở ca làm của bạn');
   };
 
   const openEdit = (shift) => {
@@ -248,6 +284,11 @@ export default function Shifts() {
 
   const handleSubmit = (event) => {
     event.preventDefault();
+
+    if (!hasFullAccess) {
+      toast.error('Nhân viên chỉ có thể tự mở hoặc kết thúc ca của mình');
+      return;
+    }
 
     const nextShift = {
       ...form,
@@ -275,7 +316,11 @@ export default function Shifts() {
 
   const updateShiftStatus = (shift, status) => {
     setShifts((current) =>
-      current.map((item) => (item.id === shift.id ? { ...item, status } : item))
+      current.map((item) =>
+        item.id === shift.id
+          ? { ...item, status, endTime: status === 'completed' ? getCurrentTime() : item.endTime }
+          : item
+      )
     );
 
     toast.success(getStatusMeta(status).label);
@@ -370,11 +415,11 @@ export default function Shifts() {
         </div>
         <button
           type="button"
-          onClick={openCreate}
+          onClick={hasFullAccess ? openCreate : startMyShift}
           className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-[#c0edf7] px-5 font-semibold text-[#0f3b46] transition hover:bg-[#a9e3ef]"
         >
           <PlusCircle size={19} />
-          <span>Thêm ca làm</span>
+          <span>{hasFullAccess ? 'Thêm ca làm' : 'Mở ca của tôi'}</span>
         </button>
       </section>
 
@@ -437,6 +482,7 @@ export default function Shifts() {
                         <button
                           type="button"
                           onClick={() => openEdit(shift)}
+                          style={{ display: hasFullAccess ? undefined : 'none' }}
                           disabled={shift.status === 'completed'}
                           className="rounded-lg p-2 text-gray-500 transition hover:bg-[#c0edf7] hover:text-[#0f3b46] disabled:cursor-not-allowed disabled:opacity-40"
                           title="Chỉnh sửa"

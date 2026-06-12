@@ -5,6 +5,7 @@ import api from '../api/axios';
 import Modal from '../components/Modal';
 import ProductImage from '../components/ProductImage';
 import { formatCurrency } from '../utils/format';
+import { getUser, isFullAccessRole } from '../utils/auth';
 
 const deviceFamilyOptions = [
   { value: 'apple', label: 'Apple' },
@@ -32,6 +33,7 @@ function getDeviceFamilyLabel(value) {
 }
 
 export default function Products() {
+  const hasFullAccess = isFullAccessRole(getUser()?.role);
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [deviceModels, setDeviceModels] = useState([]);
@@ -153,11 +155,12 @@ export default function Products() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-950">Sản phẩm</h1>
-          <p className="mt-1 text-sm text-gray-500">Quản lý hàng hóa theo danh mục và model máy chuẩn</p>
+          <p className="mt-1 text-sm text-gray-500">Quản lý hàng hóa theo danh mục và model máy</p>
         </div>
         <button
           type="button"
           onClick={openCreate}
+          style={{ display: hasFullAccess ? undefined : 'none' }}
           className="flex items-center gap-2 rounded-lg bg-[#74B8E0] px-4 py-2.5 font-semibold text-white transition hover:bg-[#74B8E0] active:bg-[#74B8E0]"
         >
           <Plus size={18} />
@@ -247,6 +250,7 @@ export default function Products() {
                         <button
                           type="button"
                           onClick={() => openEdit(product)}
+                          style={{ display: hasFullAccess ? undefined : 'none' }}
                           className="rounded-lg p-2 text-gray-500 transition hover:bg-brand-surface hover:text-brand-strong"
                           title="Sửa"
                           aria-label="Sửa"
@@ -256,6 +260,7 @@ export default function Products() {
                         <button
                           type="button"
                           onClick={() => handleDelete(product)}
+                          style={{ display: hasFullAccess ? undefined : 'none' }}
                           className="rounded-lg p-2 text-gray-500 transition hover:bg-red-50 hover:text-red-600"
                           title="Xóa"
                           aria-label="Xóa"

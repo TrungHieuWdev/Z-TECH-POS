@@ -55,6 +55,7 @@ export default function Layout() {
             <button
               type="button"
               onClick={() => setIsSettingsOpen(true)}
+              style={{ display: hasFullAccess ? undefined : 'none' }}
               className="hidden h-9 w-9 items-center justify-center rounded-full text-[#43474d] transition hover:bg-brand-surface hover:text-brand-strong sm:flex"
               title="Cài đặt"
               aria-label="Cài đặt"
@@ -65,7 +66,7 @@ export default function Layout() {
               <div className="hidden text-right sm:block">
                 <p className="text-xs font-semibold leading-none text-[#191c1d]">{user?.name || 'Admin'}</p>
                 <p className="mt-1 text-[10px] font-bold uppercase tracking-wider text-[#73777d]">
-                  {user?.role || 'Manager'}
+                  {getRoleLabel(user?.role)}
                 </p>
               </div>
               <div className="grid h-9 w-9 place-items-center rounded-full bg-brand-soft text-sm font-bold text-brand-ink ring-2 ring-white">
