@@ -589,7 +589,7 @@ export default function POS() {
               onClick={() => setIsCustomerPickerOpen(true)}
               className="h-7 rounded-lg border border-[#c3c6d7] bg-white px-2 text-xs font-bold text-[#434655]"
             >
-              Chọn khách đã đăng ký 
+              Thành viên
             </button>
           </div>
         </div>
