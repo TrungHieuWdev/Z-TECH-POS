@@ -65,6 +65,63 @@ function toPositiveNumber(value, fallback = 0) {
   return Number.isFinite(number) && number >= 0 ? number : fallback;
 }
 
+function isBlank(value) {
+  return value === null || value === undefined || String(value).trim() === '';
+}
+
+function fillMissing(current, incoming) {
+  return isBlank(current) && !isBlank(incoming) ? incoming : current;
+}
+
+function inferDeviceFamily(name = '') {
+  const text = normalizeHeader(name);
+
+  if (text.includes('samsung') || text.includes('galaxy')) return 'samsung';
+  if (text.includes('vivo')) return 'vivo';
+  if (text.includes('oppo')) return 'oppo';
+  if (text.includes('xiaomi') || text.includes('redmi') || text.includes('poco')) return 'xiaomi';
+  return 'apple';
+}
+
+async function resolveImportCategory(item) {
+  if (item.category_id) return Number(item.category_id);
+
+  const categoryName = String(item.category_name || item.category || item.danh_muc || 'Khác').trim() || 'Khác';
+  const existing = await query('SELECT id FROM categories WHERE LOWER(name) = LOWER(?) LIMIT 1', [categoryName]);
+
+  if (existing[0]) return existing[0].id;
+
+  const result = await query('INSERT INTO categories (name, description) VALUES (?, ?)', [
+    categoryName,
+    `Tự tạo khi import Excel: ${categoryName}`
+  ]);
+
+  return result.insertId;
+}
+
+async function resolveImportDeviceModel(item) {
+  if (item.device_model_id) return Number(item.device_model_id);
+
+  const modelName = String(item.device_model_name || item.device_model || item.dong_may || 'Phụ kiện chung').trim() || 'Phụ kiện chung';
+  const existing = await query('SELECT id FROM device_models WHERE LOWER(name) = LOWER(?) LIMIT 1', [modelName]);
+
+  if (existing[0]) return existing[0].id;
+
+  const isGenericAccessory = normalizeHeader(modelName).includes('phu_kien') || normalizeHeader(modelName).includes('phu_kien_chung');
+  const result = await query(
+    'INSERT INTO device_models (family, name, series, release_year, notes) VALUES (?, ?, ?, ?, ?)',
+    [
+      inferDeviceFamily(modelName),
+      modelName,
+      isGenericAccessory ? 'Phụ kiện chung' : 'Import Excel',
+      null,
+      `Tự tạo khi import Excel: ${modelName}`
+    ]
+  );
+
+  return result.insertId;
+}
+
 function normalizeProductBody(body, existing = {}) {
   return {
     category_id: body.category_id === '' ? null : Number(body.category_id ?? existing.category_id ?? 0),
@@ -244,6 +301,121 @@ export async function create(req, res) {
     res.status(201).json(created[0]);
   } catch (error) {
     res.status(500).json({ message: 'Không thể tạo sản phẩm', error: error.message });
+  }
+}
+
+export async function importProducts(req, res) {
+  try {
+    const products = Array.isArray(req.body) ? req.body : req.body?.products;
+
+    if (!Array.isArray(products) || products.length === 0) {
+      return res.status(400).json({ message: 'Danh sách sản phẩm import không hợp lệ' });
+    }
+
+    const created = [];
+    const updated = [];
+    let skipped = 0;
+
+    for (const item of products) {
+      const product = normalizeProductBody({
+        ...item,
+        category_id: await resolveImportCategory(item),
+        device_model_id: await resolveImportDeviceModel(item)
+      });
+      const validationMessage = await validateProduct(product);
+
+      if (validationMessage) {
+        return res.status(400).json({ message: validationMessage });
+      }
+
+      const existingProducts = await query(
+        'SELECT * FROM products WHERE LOWER(name) = LOWER(?) AND device_model_id = ? AND is_active = 1 LIMIT 1',
+        [product.name, product.device_model_id]
+      );
+      const existing = existingProducts[0];
+
+      if (existing) {
+        const next = {
+          category_id: existing.category_id || product.category_id,
+          device_model_id: existing.device_model_id || product.device_model_id,
+          name: fillMissing(existing.name, product.name),
+          description: fillMissing(existing.description, product.description),
+          price: Number(existing.price) > 0 ? existing.price : product.price,
+          cost_price: existing.cost_price ?? product.cost_price,
+          stock_quantity: existing.stock_quantity ?? product.stock_quantity,
+          min_stock: existing.min_stock ?? product.min_stock,
+          image_url: fillMissing(existing.image_url, product.image_url)
+        };
+
+        const hasMissingField =
+          next.category_id !== existing.category_id ||
+          next.device_model_id !== existing.device_model_id ||
+          next.name !== existing.name ||
+          next.description !== existing.description ||
+          Number(next.price) !== Number(existing.price) ||
+          next.cost_price !== existing.cost_price ||
+          next.stock_quantity !== existing.stock_quantity ||
+          next.min_stock !== existing.min_stock ||
+          next.image_url !== existing.image_url;
+
+        if (!hasMissingField) {
+          skipped += 1;
+          continue;
+        }
+
+        await query(
+          `UPDATE products
+           SET category_id = ?, device_model_id = ?, name = ?, description = ?, price = ?, cost_price = ?,
+               stock_quantity = ?, min_stock = ?, image_url = ?
+           WHERE id = ?`,
+          [
+            next.category_id,
+            next.device_model_id,
+            next.name,
+            next.description,
+            next.price,
+            next.cost_price,
+            next.stock_quantity,
+            next.min_stock,
+            next.image_url,
+            existing.id
+          ]
+        );
+
+        updated.push(existing.id);
+        continue;
+      }
+
+      const result = await query(
+        `INSERT INTO products
+          (category_id, device_model_id, name, description, price, cost_price, stock_quantity, min_stock, image_url)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          product.category_id,
+          product.device_model_id,
+          product.name,
+          product.description,
+          product.price,
+          product.cost_price,
+          product.stock_quantity,
+          product.min_stock,
+          product.image_url
+        ]
+      );
+
+      created.push(result.insertId);
+    }
+
+    res.status(201).json({
+      message: `Đã import ${created.length} sản phẩm`,
+      imported: created.length,
+      updated: updated.length,
+      skipped,
+      ids: created,
+      updatedIds: updated
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Không thể import sản phẩm', error: error.message });
   }
 }
 
