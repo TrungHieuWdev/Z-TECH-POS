@@ -22,7 +22,7 @@ export async function login(req, res) {
     }
 
     const users = await query(
-      `SELECT id, name, email, employee_code, password, role
+      `SELECT id, name, email, employee_code, password, role, status
        FROM users
        WHERE employee_code = ? OR email = ?
        LIMIT 1`,
@@ -32,6 +32,10 @@ export async function login(req, res) {
 
     if (!user) {
       return res.status(401).json({ message: 'Mã nhân viên hoặc mật khẩu không đúng' });
+    }
+
+    if (String(user.status || 'active').toLowerCase() !== 'active') {
+      return res.status(403).json({ message: 'Tài khoản nhân viên đang bị khóa' });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
@@ -53,6 +57,8 @@ export async function login(req, res) {
       process.env.JWT_SECRET || 'pos_secret_key_2024',
       { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     );
+
+    await query('UPDATE users SET last_login_at = NOW() WHERE id = ?', [user.id]).catch(() => {});
 
     res.json({ token, user: safeUser });
   } catch (error) {

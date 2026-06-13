@@ -11,6 +11,7 @@ import inventoryRoutes from './routes/inventory.js';
 import dashboardRoutes from './routes/dashboard.js';
 import reportRoutes from './routes/reports.js';
 import activityLogRoutes from './routes/activityLogs.js';
+import employeeRoutes from './routes/employees.js';
 
 dotenv.config();
 
@@ -95,6 +96,7 @@ app.use('/api/inventory', inventoryRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/activity-logs', activityLogRoutes);
+app.use('/api/employees', employeeRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ message: 'Không tìm thấy API' });
