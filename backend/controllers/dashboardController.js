@@ -13,6 +13,26 @@ function getPercentChange(current, previous) {
   return Number((((currentValue - previousValue) / previousValue) * 100).toFixed(1));
 }
 
+function getCategorySharePeriod(value = 'month') {
+  return ['today', 'week', 'month', 'year', 'all'].includes(value) ? value : 'month';
+}
+
+function getCategoryShareDateFilter(period = 'month') {
+  switch (period) {
+    case 'today':
+      return 'AND DATE(o.created_at) = CURDATE()';
+    case 'week':
+      return 'AND o.created_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)';
+    case 'year':
+      return 'AND YEAR(o.created_at) = YEAR(CURDATE())';
+    case 'all':
+      return '';
+    case 'month':
+    default:
+      return "AND o.created_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')";
+  }
+}
+
 export async function getSummary(req, res) {
   try {
     const [
@@ -139,6 +159,8 @@ export async function getLowStock(req, res) {
 
 export async function getCategoryShare(req, res) {
   try {
+    const period = getCategorySharePeriod(req.query.period);
+    const dateFilter = getCategoryShareDateFilter(period);
     const rows = await query(
       `SELECT
          COALESCE(c.name, 'Chưa phân loại') AS name,
@@ -149,7 +171,7 @@ export async function getCategoryShare(req, res) {
        JOIN products p ON oi.product_id = p.id
        LEFT JOIN categories c ON p.category_id = c.id
        WHERE o.status = 'completed'
-         AND o.created_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
+         ${dateFilter}
        GROUP BY c.id, c.name
        ORDER BY revenue DESC`
     );

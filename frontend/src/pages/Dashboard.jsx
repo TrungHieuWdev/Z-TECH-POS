@@ -13,6 +13,14 @@ import { formatCurrency, formatDate, formatTime } from '../utils/format';
 
 const chartColors = ['#74B8E0', '#BFE3F5', '#3F90BD', '#DFF2FB', '#9FD4EE'];
 
+const categoryPeriodOptions = [
+  { value: 'today', label: 'Hôm nay' },
+  { value: 'week', label: '7 ngày' },
+  { value: 'month', label: 'Tháng này' },
+  { value: 'year', label: 'Năm nay' },
+  { value: 'all', label: 'Tất cả' }
+];
+
 const cardTones = {
   blue: 'bg-brand-soft text-brand-ink',
   gray: 'bg-brand-surface text-brand-strong',
@@ -60,6 +68,7 @@ export default function Dashboard() {
   const [categoryShare, setCategoryShare] = useState([]);
   const [topProducts, setTopProducts] = useState([]);
   const [recentOrders, setRecentOrders] = useState([]);
+  const [categoryPeriod, setCategoryPeriod] = useState('month');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -68,7 +77,7 @@ export default function Dashboard() {
       try {
         const [summaryRes, categoryRes, topRes, recentRes] = await Promise.all([
           api.get('/dashboard/summary'),
-          api.get('/dashboard/category-share'),
+          api.get('/dashboard/category-share', { params: { period: categoryPeriod } }),
           api.get('/dashboard/top-products'),
           api.get('/dashboard/recent-orders')
         ]);
@@ -87,6 +96,22 @@ export default function Dashboard() {
 
     fetchDashboard();
   }, []);
+
+  useEffect(() => {
+    if (isLoading) {
+      return;
+    }
+
+    api
+      .get('/dashboard/category-share', { params: { period: categoryPeriod } })
+      .then((response) => {
+        setCategoryShare(response.data);
+        setError('');
+      })
+      .catch((requestError) => {
+        setError(requestError.response?.data?.message || 'KhÃ´ng thá»ƒ táº£i dá»¯ liá»‡u dashboard');
+      });
+  }, [categoryPeriod, isLoading]);
 
   const donutBackground = useMemo(() => {
     if (categoryShare.length === 0) {
@@ -107,6 +132,20 @@ export default function Dashboard() {
 
     return `conic-gradient(${segments.join(', ')})`;
   }, [categoryShare]);
+
+  const categoryRevenueTotal = useMemo(() => {
+    return categoryShare.reduce((sum, item) => sum + Number(item.revenue || 0), 0);
+  }, [categoryShare]);
+
+  const revenueSparkline = {
+    hasData: false,
+    total: 0,
+    bars: []
+  };
+
+  const categoryPeriodLabel = useMemo(() => {
+    return categoryPeriodOptions.find((option) => option.value === categoryPeriod)?.label || 'Tháng này';
+  }, [categoryPeriod]);
 
   const cards = [
     {
@@ -159,11 +198,11 @@ export default function Dashboard() {
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-xs font-semibold text-[#73777d]">{card.label}</p>
+                  <p className="text-sm font-semibold text-[#73777d]">{card.label}</p>
                   <p className="mt-3 text-xl font-bold leading-6 text-[#191c1d]">
                     {isLoading ? '...' : card.value}
                   </p>
-                  <p className="mt-1.5 text-xs font-medium text-[#43474d]">{card.caption}</p>
+                  <p className="mt-1.5 text-sm font-medium text-[#43474d]">{card.caption}</p>
                 </div>
                 <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${cardTones[card.tone]}`}>
                   <Icon size={18} />
@@ -181,49 +220,100 @@ export default function Dashboard() {
               <h2 className="text-lg font-semibold leading-6 text-[#191c1d]">Cơ cấu doanh thu</h2>
               <p className="mt-0.5 text-xs font-medium text-[#73777d]">Phân bổ theo nhóm sản phẩm</p>
             </div>
+            <label className="relative">
+              <span className="sr-only">Lọc thời gian cơ cấu doanh thu</span>
+              <select
+                value={categoryPeriod}
+                onChange={(event) => setCategoryPeriod(event.target.value)}
+                className="h-9 appearance-none rounded-lg bg-brand-surface pl-3 pr-8 text-base font-semibold text-brand-ink outline-none transition hover:bg-brand-soft focus:ring-2 focus:ring-brand-soft"
+              >
+                {categoryPeriodOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-brand-ink" size={16} />
+            </label>
             <button
               type="button"
-              className="flex h-8 items-center gap-2 rounded-lg bg-brand-surface px-3 text-xs font-semibold text-brand-ink transition hover:bg-brand-soft"
+              className="hidden h-8 items-center gap-2 rounded-lg bg-brand-surface px-3 text-xs font-semibold text-brand-ink transition hover:bg-brand-soft"
             >
               Tháng này
               <ChevronDown size={16} />
             </button>
           </div>
 
-          <div className="grid min-h-[230px] items-center gap-6 md:grid-cols-[minmax(190px,0.85fr)_minmax(240px,1fr)]">
+          <div className="grid min-h-[230px] items-center gap-8 md:grid-cols-[minmax(240px,0.95fr)_minmax(260px,0.72fr)]">
             <div className="flex justify-center">
               <div
-                className="relative grid h-44 w-44 place-items-center rounded-full"
+                className="relative grid h-48 w-48 place-items-center rounded-full"
                 style={{ background: donutBackground }}
                 aria-label="Cơ cấu doanh thu theo danh mục"
               >
-                <div className="grid h-24 w-24 place-items-center rounded-full bg-white shadow-[inset_0_0_0_1px_rgba(225,227,228,0.8)]">
-                  <div className="text-center">
-                    <div className="text-xl font-bold leading-6 text-[#191c1d]">
-                      {categoryShare.length > 0 ? '100%' : '0%'}
+                <div className="grid h-28 w-28 place-items-center rounded-full bg-white shadow-[inset_0_0_0_1px_rgba(225,227,228,0.8)]">
+                  <div className="text-center [&>div:last-child]:hidden">
+                    <div className="px-2 text-[13px] font-bold leading-tight text-[#191c1d]">
+                      {categoryRevenueTotal > 0 ? formatCurrency(categoryRevenueTotal) : '0 đ'}
                     </div>
+                    <div className="mt-1 text-xs font-medium text-[#73777d]">{categoryPeriodLabel}</div>
                     <div className="mt-1 text-xs font-medium text-[#73777d]">Tổng cộng</div>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="space-y-2">
+            <div className="hidden mx-auto w-full max-w-[170px]">
+              <div className="mb-2 flex items-end justify-between gap-3">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase text-[#73777d]">Xu hướng</p>
+                  <p className="mt-0.5 text-xs font-bold text-[#191c1d]">
+                    {revenueSparkline.hasData ? formatCurrency(revenueSparkline.total) : '0 đ'}
+                  </p>
+                </div>
+              </div>
+              <svg
+                viewBox="0 0 132 46"
+                className="h-[46px] w-full overflow-visible"
+                role="img"
+                aria-label="Biểu đồ nhỏ doanh thu theo danh mục"
+              >
+                <line x1="5" y1="41" x2="127" y2="41" stroke="#e1e3e4" strokeWidth="1" />
+                {revenueSparkline.hasData ? (
+                  <>
+                    {revenueSparkline.bars.map((bar, index) => {
+                      const barWidth = 12;
+                      const gap = revenueSparkline.bars.length > 1 ? (122 - barWidth * revenueSparkline.bars.length) / (revenueSparkline.bars.length - 1) : 0;
+                      const x = 5 + index * (barWidth + Math.max(gap, 6));
+                      const y = 41 - bar.height;
+
+                      return <rect key={`${bar.value}-${index}`} x={x} y={y} width={barWidth} height={bar.height} rx="4" fill={bar.color} />;
+                    })}
+                  </>
+                ) : (
+                  [0, 1, 2, 3].map((item) => (
+                    <rect key={item} x={10 + item * 28} y="30" width="12" height="11" rx="4" fill="#dfe3e6" />
+                  ))
+                )}
+              </svg>
+            </div>
+
+            <div className="ml-auto w-full max-w-[320px] space-y-1.5">
               {categoryShare.length === 0 && (
                 <p className="text-sm font-medium text-[#73777d]">Chưa có doanh thu trong tháng này.</p>
               )}
               {categoryShare.map((item, index) => (
-                <div key={item.name} className="flex items-center justify-between gap-4">
+                <div key={item.name} className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-0.5 py-1">
                   <div className="flex min-w-0 items-center gap-3">
                     <span
                       className="h-3 w-3 shrink-0 rounded-full"
                       style={{ backgroundColor: chartColors[index % chartColors.length] }}
                     />
-                    <span className="truncate text-xs font-semibold text-[#43474d]">{item.name}</span>
+                    <span className="truncate text-sm font-semibold text-[#43474d]">{item.name}</span>
                   </div>
-                  <div className="shrink-0 text-right">
-                    <div className="text-xs font-bold text-[#191c1d]">{item.percentage}%</div>
-                    <div className="text-[11px] font-medium text-[#73777d]">{formatCurrency(item.revenue)}</div>
+                  <div className="shrink-0 text-right leading-tight">
+                    <div className="text-sm font-bold text-[#191c1d]">{item.percentage}%</div>
+                    <div className="mt-0.5 text-xs font-medium text-[#73777d]">{formatCurrency(item.revenue)}</div>
                   </div>
                 </div>
               ))}
@@ -247,13 +337,13 @@ export default function Dashboard() {
               <div key={product.product_id} className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold leading-5 text-[#191c1d]">{product.name}</p>
-                  <p className="mt-1 text-xs font-medium text-[#73777d]">
+                  <p className="mt-1 text-sm font-medium text-[#73777d]">
                     {product.category_name} - SL {Number(product.quantity || 0).toLocaleString('vi-VN')}
                   </p>
                 </div>
                 <div className="shrink-0 text-right">
-                  <p className="text-sm font-bold text-[#191c1d]">{formatCurrency(product.revenue)}</p>
-                  <p className="mt-1 text-xs font-medium text-[#73777d]">giá {formatCurrency(product.price)}</p>
+                  <p className="text-base font-bold text-[#191c1d]">{formatCurrency(product.revenue)}</p>
+                  <p className="mt-1 text-sm font-medium text-[#73777d]">giá {formatCurrency(product.price)}</p>
                 </div>
               </div>
             ))}
@@ -274,7 +364,7 @@ export default function Dashboard() {
 
         <div className="overflow-x-auto">
           <table className="w-full min-w-[920px] text-left">
-            <thead className="text-[11px] font-bold uppercase tracking-wide text-[#73777d]">
+            <thead className="text-sm font-bold uppercase tracking-wide text-[#73777d]">
               <tr>
                 <th className="px-4 py-2.5 font-bold">Mã đơn</th>
                 <th className="px-4 py-2.5 font-bold">Khách hàng</th>
@@ -293,7 +383,7 @@ export default function Dashboard() {
                 </tr>
               )}
               {recentOrders.slice(0, 4).map((order) => (
-                <tr key={order.id} className="text-sm transition hover:bg-[#f8f9fa]">
+                <tr key={order.id} className="text-base transition hover:bg-[#f8f9fa]">
                   <td className="px-4 py-2.5 align-middle font-bold text-[#191c1d]">{order.order_number}</td>
                   <td className="px-4 py-2.5 align-middle">
                     <div className="flex items-center gap-3">
