@@ -185,6 +185,8 @@ export default function POS() {
   const [bankTransfer, setBankTransfer] = useState(getBankTransferSettings);
   const [vietQrDataUrl, setVietQrDataUrl] = useState('');
   const [checkoutStep, setCheckoutStep] = useState('confirm');
+  const [pageError, setPageError] = useState('');
+  const [isPageLoading, setIsPageLoading] = useState(true);
 
   async function loadProducts() {
     const params = new URLSearchParams();
@@ -194,7 +196,7 @@ export default function POS() {
     if (deviceFamily) params.set('device_family', deviceFamily);
 
     const response = await api.get(`/products?${params.toString()}`);
-    setProducts(response.data);
+    setProducts(Array.isArray(response.data) ? response.data : []);
   }
 
   async function loadCustomers(searchValue = customerLookup) {
@@ -202,12 +204,49 @@ export default function POS() {
     if (searchValue) params.set('search', searchValue);
 
     const response = await api.get(`/customers?${params.toString()}`);
-    setCustomers(response.data);
+    setCustomers(Array.isArray(response.data) ? response.data : []);
   }
 
   useEffect(() => {
-    api.get('/categories').then((response) => setCategories(response.data));
-    loadCustomers('');
+    let isMounted = true;
+
+    async function loadInitialData() {
+      setIsPageLoading(true);
+      setPageError('');
+
+      try {
+        const [categoriesResponse] = await Promise.all([
+          api.get('/categories'),
+          loadCustomers(''),
+          loadProducts()
+        ]);
+
+        if (!isMounted) {
+          return;
+        }
+
+        setCategories(Array.isArray(categoriesResponse.data) ? categoriesResponse.data : []);
+      } catch (error) {
+        if (!isMounted) {
+          return;
+        }
+
+        setCategories([]);
+        setProducts([]);
+        setCustomers([]);
+        setPageError(error.response?.data?.message || 'Không thể tải dữ liệu bán hàng');
+      } finally {
+        if (isMounted) {
+          setIsPageLoading(false);
+        }
+      }
+    }
+
+    loadInitialData();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -218,11 +257,37 @@ export default function POS() {
   }, [routeSearch]);
 
   useEffect(() => {
-    loadProducts();
+    let isMounted = true;
+
+    loadProducts().catch((error) => {
+      if (!isMounted) {
+        return;
+      }
+
+      setProducts([]);
+      setPageError(error.response?.data?.message || 'Không thể tải sản phẩm cho POS');
+    });
+
+    return () => {
+      isMounted = false;
+    };
   }, [search, categoryId, deviceFamily]);
 
   useEffect(() => {
-    loadCustomers(customerLookup);
+    let isMounted = true;
+
+    loadCustomers(customerLookup).catch((error) => {
+      if (!isMounted) {
+        return;
+      }
+
+      setCustomers([]);
+      setPageError(error.response?.data?.message || 'Không thể tải danh sách khách hàng');
+    });
+
+    return () => {
+      isMounted = false;
+    };
   }, [customerLookup]);
 
   const subtotal = useMemo(
@@ -449,6 +514,11 @@ export default function POS() {
 
   return (
     <>
+    {pageError && (
+      <div className="no-print mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+        {pageError}
+      </div>
+    )}
     <div className="no-print grid h-[calc(100vh-6.5rem)] min-h-[720px] overflow-hidden rounded-xl border border-[#c3c6d7] bg-[#f7f9fb] lg:grid-cols-[minmax(0,1fr)_420px] xl:grid-cols-[minmax(0,1fr)_440px]">
       <section className="flex min-w-0 flex-col overflow-hidden p-5">
         <div className="mb-3 grid gap-3 xl:grid-cols-[minmax(0,1fr)_260px]">
@@ -494,51 +564,74 @@ export default function POS() {
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-          <div className="grid grid-cols-2 gap-4 pb-5 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+          {isPageLoading ? (
+            <div className="grid grid-cols-2 gap-4 pb-5 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+              {Array.from({ length: 8 }).map((_, index) => (
+                <div key={index} className="overflow-hidden rounded-xl border border-[#c3c6d7] bg-white">
+                  <div className="aspect-square animate-pulse bg-[#eef2f4]" />
+                  <div className="space-y-3 p-4">
+                    <div className="h-4 animate-pulse rounded bg-[#eef2f4]" />
+                    <div className="h-3 w-2/3 animate-pulse rounded bg-[#eef2f4]" />
+                    <div className="mt-4 flex items-center justify-between gap-3">
+                      <div className="h-5 w-20 animate-pulse rounded bg-[#eef2f4]" />
+                      <div className="h-8 w-8 animate-pulse rounded-lg bg-[#eef2f4]" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : products.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-[#c3c6d7] bg-white p-8 text-center text-sm font-semibold text-[#737686]">
+              Chưa có sản phẩm nào để hiển thị. Bạn có thể thử đổi từ khóa tìm kiếm hoặc bộ lọc.
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-4 pb-5 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
             {products.map((product) => {
               const stock = Number(product.stock_quantity || 0);
               const isOutOfStock = stock <= 0;
 
               return (
-                <button
+                <div
                   key={product.id}
-                  type="button"
-                  onClick={() => addToCart(product)}
-                  disabled={isOutOfStock}
-                  className="overflow-hidden rounded-xl border border-[#c3c6d7] bg-white text-left disabled:opacity-70"
+                  className="flex min-h-[360px] flex-col overflow-hidden rounded-xl border border-[#c3c6d7] bg-white text-left"
                 >
-                  <div className="relative aspect-square bg-[#f2f4f6]">
-                    <ProductImage product={product} />
+                  <div className="relative h-[180px] shrink-0 overflow-hidden bg-[#f2f4f6]">
+                    <ProductImage product={product} className="h-full w-full" />
                     <span
                       className={`absolute right-2 top-2 rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wide ${getStockTone(stock)}`}
                     >
                       {isOutOfStock ? 'Hết hàng' : `Còn ${stock}`}
                     </span>
                   </div>
-                  <div className="p-4">
-                    <h3 className="min-h-10 overflow-hidden text-sm font-bold leading-5 text-[#191c1e]">
+                  <div className="flex flex-1 flex-col px-4 pb-5 pt-4">
+                    <h3 className="min-h-[60px] overflow-hidden text-sm font-bold leading-5 text-[#191c1e] [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:3]">
                       {product.name}
                     </h3>
                     <p className="mt-1 text-[11px] font-semibold uppercase tracking-tight text-[#737686]">
                       {getProductSku(product)}
                     </p>
-                    <div className="mt-4 flex items-center justify-between gap-3">
-                      <span className="text-lg font-bold leading-6 text-brand-strong">
-                        {formatCurrency(product.price)}
-                      </span>
-                      <span
-                        className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${
-                          isOutOfStock ? 'bg-[#eceef0] text-[#737686]' : 'bg-brand-soft text-brand-strong'
-                        }`}
-                      >
-                        {isOutOfStock ? <X size={18} /> : <Plus size={18} />}
-                      </span>
-                    </div>
+                    <span className="mt-auto pt-4 text-lg font-bold leading-6 text-brand-strong">
+                      {formatCurrency(product.price)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => addToCart(product)}
+                      disabled={isOutOfStock}
+                      className={`mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg border text-sm font-bold transition ${
+                        isOutOfStock
+                          ? 'cursor-not-allowed border-[#d7dbe0] bg-[#eceef0] text-[#737686]'
+                          : 'border-[#74B8E0] bg-[#f8fdfe] text-[#2f8dc5] hover:bg-[#edf7fd]'
+                      }`}
+                    >
+                      {isOutOfStock ? <X size={18} /> : <Plus size={18} />}
+                      <span>{isOutOfStock ? 'Hết hàng' : 'Thêm vào giỏ'}</span>
+                    </button>
                   </div>
-                </button>
+                </div>
               );
             })}
           </div>
+          )}
         </div>
       </section>
 

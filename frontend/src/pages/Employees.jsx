@@ -1,20 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
-  BadgeCheck,
-  CalendarDays,
   Download,
   Edit,
   Eye,
   Filter,
+  KeyRound,
   Lock,
-  Mail,
   Phone,
   Search,
   ShieldCheck,
   Unlock,
   UserCheck,
   UserPlus,
+  UserSquare2,
   UserX,
   Users
 } from 'lucide-react';
@@ -41,7 +40,7 @@ const initialEmployees = [
     code: 'NV001',
     name: 'Nguyễn Văn Minh',
     phone: '0901 234 567',
-    email: 'minh@gmail.com',
+    password: 'Minh@123',
     role: 'manager',
     status: 'active',
     createdAt: '2026-06-10',
@@ -52,7 +51,7 @@ const initialEmployees = [
     code: 'NV002',
     name: 'Trần Thị Hạnh',
     phone: '0912 888 999',
-    email: 'hanh@gmail.com',
+    password: 'Hanh@123',
     role: 'cashier',
     status: 'active',
     createdAt: '2026-06-10',
@@ -63,7 +62,7 @@ const initialEmployees = [
     code: 'NV003',
     name: 'Lê Quốc Khoa',
     phone: '0987 456 123',
-    email: 'khoa@gmail.com',
+    password: 'Khoa@123',
     role: 'warehouse',
     status: 'active',
     createdAt: '2026-06-09',
@@ -74,7 +73,7 @@ const initialEmployees = [
     code: 'NV004',
     name: 'Phạm Gia Bảo',
     phone: '0933 222 111',
-    email: 'bao@gmail.com',
+    password: 'Bao@123',
     role: 'cashier',
     status: 'inactive',
     createdAt: '2026-06-08',
@@ -85,7 +84,7 @@ const initialEmployees = [
 const emptyForm = {
   name: '',
   phone: '',
-  email: '',
+  password: '',
   role: 'cashier',
   status: 'active',
   createdAt: new Date().toISOString().slice(0, 10),
@@ -94,37 +93,18 @@ const emptyForm = {
 
 function getRoleMeta(role) {
   const roleMap = {
-    manager: {
-      label: 'Quản lý',
-      badgeClass: 'bg-[#c0edf7] text-[#0f3b46]'
-    },
-    cashier: {
-      label: 'Nhân viên bán hàng',
-      badgeClass: 'bg-emerald-50 text-emerald-700'
-    },
-    warehouse: {
-      label: 'Nhân viên kho',
-      badgeClass: 'bg-amber-50 text-amber-700'
-    }
+    manager: { label: 'Quản lý', badgeClass: 'bg-[#c0edf7] text-[#0f3b46]' },
+    cashier: { label: 'Nhân viên bán hàng', badgeClass: 'bg-emerald-50 text-emerald-700' },
+    warehouse: { label: 'Nhân viên kho', badgeClass: 'bg-amber-50 text-amber-700' }
   };
 
   return roleMap[role] || roleMap.cashier;
 }
 
 function getStatusMeta(status) {
-  if (status === 'active') {
-    return {
-      label: 'Đang hoạt động',
-      badgeClass: 'bg-[#c0edf7] text-[#0f3b46]',
-      dotClass: 'bg-[#0f3b46]'
-    };
-  }
-
-  return {
-    label: 'Ngừng hoạt động',
-    badgeClass: 'bg-slate-100 text-slate-600',
-    dotClass: 'bg-slate-400'
-  };
+  return status === 'active'
+    ? { label: 'Đang hoạt động', badgeClass: 'bg-[#c0edf7] text-[#0f3b46]', dotClass: 'bg-[#0f3b46]' }
+    : { label: 'Ngừng hoạt động', badgeClass: 'bg-slate-100 text-slate-600', dotClass: 'bg-slate-400' };
 }
 
 function getInitials(name) {
@@ -148,7 +128,6 @@ function getNextEmployeeCode(employees) {
 
 function formatDate(value) {
   if (!value) return '';
-
   const [year, month, day] = value.slice(0, 10).split('-');
   return `${day}/${month}/${year}`;
 }
@@ -166,12 +145,12 @@ function getEmployeeStats(employees) {
 }
 
 function buildCsv(employees) {
-  const headers = ['Ma NV', 'Ho ten', 'Dien thoai', 'Email', 'Vai tro', 'Trang thai', 'Ngay tao'];
+  const headers = ['Ma NV', 'Ho ten', 'Dien thoai', 'Mat khau', 'Vai tro', 'Trang thai', 'Ngay tao'];
   const rows = employees.map((employee) => [
     employee.code,
     employee.name,
     employee.phone,
-    employee.email,
+    employee.password,
     getRoleMeta(employee.role).label,
     getStatusMeta(employee.status).label,
     formatDate(employee.createdAt)
@@ -180,6 +159,10 @@ function buildCsv(employees) {
   return [headers, ...rows]
     .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
     .join('\n');
+}
+
+function maskPassword(password = '') {
+  return password ? '•'.repeat(Math.max(6, password.length)) : 'Chưa tạo';
 }
 
 export default function Employees() {
@@ -207,7 +190,7 @@ export default function Employees() {
     return employees.filter((employee) => {
       const matchesRole = roleFilter === 'all' || employee.role === roleFilter;
       const matchesStatus = statusFilter === 'all' || employee.status === statusFilter;
-      const matchesKeyword = [employee.code, employee.name, employee.phone, employee.email]
+      const matchesKeyword = [employee.code, employee.name, employee.phone]
         .filter(Boolean)
         .some((value) => value.toLowerCase().includes(keyword));
 
@@ -226,7 +209,7 @@ export default function Employees() {
     setForm({
       name: employee.name,
       phone: employee.phone,
-      email: employee.email,
+      password: employee.password || '',
       role: employee.role,
       status: employee.status,
       createdAt: employee.createdAt,
@@ -244,13 +227,18 @@ export default function Employees() {
   const handleSubmit = (event) => {
     event.preventDefault();
 
+    if (!form.password.trim()) {
+      toast.error('Vui lòng tạo mật khẩu cho nhân viên');
+      return;
+    }
+
     const nextEmployee = {
       ...form,
       id: editingEmployee?.id ?? Date.now(),
       code: editingEmployee?.code ?? getNextEmployeeCode(employees),
       name: form.name.trim(),
       phone: form.phone.trim(),
-      email: form.email.trim(),
+      password: form.password.trim(),
       note: form.note.trim()
     };
 
@@ -258,10 +246,10 @@ export default function Employees() {
       setEmployees((current) =>
         current.map((employee) => (employee.id === editingEmployee.id ? nextEmployee : employee))
       );
-      toast.success('Đã cập nhật nhân viên');
+      toast.success('Đã cập nhật tài khoản nhân viên');
     } else {
       setEmployees((current) => [nextEmployee, ...current]);
-      toast.success('Đã thêm nhân viên');
+      toast.success('Đã thêm nhân viên mới');
     }
 
     closeForm();
@@ -269,18 +257,24 @@ export default function Employees() {
 
   const toggleStatus = (employee) => {
     const nextStatus = employee.status === 'active' ? 'inactive' : 'active';
-
     setEmployees((current) =>
       current.map((item) => (item.id === employee.id ? { ...item, status: nextStatus } : item))
     );
     toast.success(nextStatus === 'active' ? 'Đã mở khóa tài khoản' : 'Đã khóa tài khoản');
   };
 
+  const resetPassword = (employee) => {
+    const nextPassword = `${employee.code}@123`;
+    setEmployees((current) =>
+      current.map((item) => (item.id === employee.id ? { ...item, password: nextPassword } : item))
+    );
+    toast.success(`Đã đặt lại mật khẩu cho ${employee.code}: ${nextPassword}`);
+  };
+
   const exportCsv = () => {
     const blob = new Blob([`\ufeff${buildCsv(filteredEmployees)}`], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-
     link.href = url;
     link.download = 'nhan-vien-ztech.csv';
     link.click();
@@ -293,7 +287,7 @@ export default function Employees() {
         <div>
           <h1 className="text-2xl font-bold text-gray-950">Quản lý nhân viên</h1>
           <p className="mt-1 text-sm text-gray-500">
-            Quản lý thông tin nhân viên, tài khoản đăng nhập và vai trò trong hệ thống.
+            Chủ cửa hàng tạo mã NV và mật khẩu riêng cho từng nhân viên để đăng nhập hệ thống.
           </p>
         </div>
         <button
@@ -371,7 +365,7 @@ export default function Employees() {
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             className="h-11 w-full rounded-lg border border-transparent bg-[#f4fcfe] pl-10 pr-4 outline-none focus:border-[#7ed5e6] focus:ring-2 focus:ring-[#c0edf7]"
-            placeholder="Tìm kiếm nhân viên..."
+            placeholder="Tìm theo mã NV, tên hoặc số điện thoại..."
           />
         </div>
         <label className="min-w-[180px]">
@@ -402,20 +396,13 @@ export default function Employees() {
             ))}
           </select>
         </label>
-        <button
-          type="button"
-          className="grid h-11 w-11 place-items-center rounded-lg bg-[#c0edf7] text-[#0f3b46] transition hover:bg-[#a9e3ef]"
-          title="Lọc"
-          aria-label="Lọc"
-        >
+        <button type="button" className="grid h-11 w-11 place-items-center rounded-lg bg-[#c0edf7] text-[#0f3b46]">
           <Filter size={19} />
         </button>
         <button
           type="button"
           onClick={exportCsv}
           className="grid h-11 w-11 place-items-center rounded-lg bg-white text-gray-600 ring-1 ring-[#d7eef3] transition hover:bg-[#c0edf7] hover:text-[#0f3b46]"
-          title="Xuất CSV"
-          aria-label="Xuất CSV"
         >
           <Download size={19} />
         </button>
@@ -423,12 +410,12 @@ export default function Employees() {
 
       <section className="overflow-hidden rounded-lg border border-[#d7eef3] bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1080px] text-left text-sm">
+          <table className="w-full min-w-[1180px] text-left text-sm">
             <thead className="bg-[#f4fcfe] text-gray-500">
               <tr>
                 <th className="px-5 py-4 text-xs font-bold uppercase tracking-wide">Mã NV</th>
                 <th className="px-5 py-4 text-xs font-bold uppercase tracking-wide">Họ tên</th>
-                <th className="px-5 py-4 text-xs font-bold uppercase tracking-wide">Thông tin liên hệ</th>
+                <th className="px-5 py-4 text-xs font-bold uppercase tracking-wide">Thông tin đăng nhập</th>
                 <th className="px-5 py-4 text-xs font-bold uppercase tracking-wide">Vai trò</th>
                 <th className="px-5 py-4 text-xs font-bold uppercase tracking-wide">Trạng thái</th>
                 <th className="px-5 py-4 text-xs font-bold uppercase tracking-wide">Ngày tạo</th>
@@ -449,17 +436,23 @@ export default function Employees() {
                         <div className="grid h-10 w-10 place-items-center rounded-full bg-[#c0edf7] font-bold text-[#0f3b46]">
                           {getInitials(employee.name)}
                         </div>
-                        <div className="font-semibold text-gray-950">{employee.name}</div>
+                        <div>
+                          <div className="font-semibold text-gray-950">{employee.name}</div>
+                          <div className="mt-1 flex items-center gap-2 text-gray-500">
+                            <Phone size={15} className="text-gray-400" />
+                            <span>{employee.phone}</span>
+                          </div>
+                        </div>
                       </div>
                     </td>
                     <td className="px-5 py-4 text-gray-600">
                       <div className="mb-1 flex items-center gap-2">
-                        <Phone size={15} className="text-gray-400" />
-                        <span>{employee.phone}</span>
+                        <UserSquare2 size={15} className="text-gray-400" />
+                        <span>Mã đăng nhập: {employee.code}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Mail size={15} className="text-gray-400" />
-                        <span>{employee.email}</span>
+                        <KeyRound size={15} className="text-gray-400" />
+                        <span>Mật khẩu: {maskPassword(employee.password)}</span>
                       </div>
                     </td>
                     <td className="px-5 py-4">
@@ -480,8 +473,6 @@ export default function Employees() {
                           type="button"
                           onClick={() => setViewingEmployee(employee)}
                           className="rounded-lg p-2 text-gray-500 transition hover:bg-[#c0edf7] hover:text-[#0f3b46]"
-                          title="Xem chi tiết"
-                          aria-label="Xem chi tiết"
                         >
                           <Eye size={18} />
                         </button>
@@ -489,17 +480,20 @@ export default function Employees() {
                           type="button"
                           onClick={() => openEdit(employee)}
                           className="rounded-lg p-2 text-gray-500 transition hover:bg-[#c0edf7] hover:text-[#0f3b46]"
-                          title="Chỉnh sửa"
-                          aria-label="Chỉnh sửa"
                         >
                           <Edit size={18} />
                         </button>
                         <button
                           type="button"
+                          onClick={() => resetPassword(employee)}
+                          className="rounded-lg p-2 text-gray-500 transition hover:bg-amber-50 hover:text-amber-700"
+                        >
+                          <KeyRound size={18} />
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => toggleStatus(employee)}
                           className="rounded-lg p-2 text-gray-500 transition hover:bg-red-50 hover:text-red-600"
-                          title={employee.status === 'active' ? 'Khóa tài khoản' : 'Mở khóa tài khoản'}
-                          aria-label={employee.status === 'active' ? 'Khóa tài khoản' : 'Mở khóa tài khoản'}
                         >
                           <ToggleIcon size={18} />
                         </button>
@@ -542,12 +536,13 @@ export default function Employees() {
             />
           </label>
           <label>
-            <span className="mb-1 block text-sm font-medium text-gray-700">Email</span>
+            <span className="mb-1 block text-sm font-medium text-gray-700">Mật khẩu đăng nhập</span>
             <input
-              type="email"
-              value={form.email}
-              onChange={(event) => setForm({ ...form, email: event.target.value })}
+              type="text"
+              value={form.password}
+              onChange={(event) => setForm({ ...form, password: event.target.value })}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-[#7ed5e6] focus:ring-2 focus:ring-[#c0edf7]"
+              placeholder="VD: NV001@123"
               required
             />
           </label>
@@ -558,13 +553,11 @@ export default function Employees() {
               onChange={(event) => setForm({ ...form, role: event.target.value })}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-[#7ed5e6] focus:ring-2 focus:ring-[#c0edf7]"
             >
-              {roleOptions
-                .filter((option) => option.value !== 'all')
-                .map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
+              {roleOptions.filter((option) => option.value !== 'all').map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </label>
           <label>
@@ -574,13 +567,11 @@ export default function Employees() {
               onChange={(event) => setForm({ ...form, status: event.target.value })}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-[#7ed5e6] focus:ring-2 focus:ring-[#c0edf7]"
             >
-              {statusOptions
-                .filter((option) => option.value !== 'all')
-                .map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
+              {statusOptions.filter((option) => option.value !== 'all').map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </label>
           <label>
@@ -601,6 +592,9 @@ export default function Employees() {
               className="min-h-24 w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-[#7ed5e6] focus:ring-2 focus:ring-[#c0edf7]"
             />
           </label>
+          <div className="md:col-span-2 rounded-lg bg-[#f4fcfe] p-3 text-sm text-[#0f3b46]">
+            Mã đăng nhập sẽ tự tạo theo dạng `NV001`, `NV002`... Chủ cửa hàng có thể sửa thông tin và đặt lại mật khẩu bất kỳ lúc nào.
+          </div>
           <div className="flex justify-end gap-3 md:col-span-2">
             <button type="button" onClick={closeForm} className="rounded-lg border border-gray-300 px-4 py-2 font-medium">
               Hủy
@@ -630,8 +624,8 @@ export default function Employees() {
                 <p className="font-semibold text-gray-950">{viewingEmployee.phone}</p>
               </div>
               <div>
-                <span className="text-gray-500">Email</span>
-                <p className="font-semibold text-gray-950">{viewingEmployee.email}</p>
+                <span className="text-gray-500">Mật khẩu hiện tại</span>
+                <p className="font-semibold text-gray-950">{viewingEmployee.password}</p>
               </div>
               <div>
                 <span className="text-gray-500">Vai trò</span>

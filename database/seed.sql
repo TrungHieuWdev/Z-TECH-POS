@@ -1,9 +1,9 @@
 SET NAMES utf8mb4;
 
-INSERT INTO users (id, name, email, password, role) VALUES
-(1, 'Chủ cửa hàng', 'owner@pos.com', '$2a$10$zJ0vlNynsAv7pjIDZJnD2.wctQCc5BglAf3qlasqs1YWNuaWoV5ii', 'owner'),
-(2, 'Quản lý', 'manager@pos.com', '$2a$10$zJ0vlNynsAv7pjIDZJnD2.wctQCc5BglAf3qlasqs1YWNuaWoV5ii', 'manager'),
-(3, 'Nhân viên', 'employee@pos.com', '$2a$10$gP1nmk.Bvd80W7hfPCJuD.5RZ6qwwCZPG4TEuEde013Z3Nz6CH5FC', 'employee');
+INSERT INTO users (id, name, employee_code, email, password, role) VALUES
+(1, 'Chủ cửa hàng', 'CH001', 'owner@pos.com', '$2a$10$zJ0vlNynsAv7pjIDZJnD2.wctQCc5BglAf3qlasqs1YWNuaWoV5ii', 'owner'),
+(2, 'Quản lý', 'QL001', 'manager@pos.com', '$2a$10$zJ0vlNynsAv7pjIDZJnD2.wctQCc5BglAf3qlasqs1YWNuaWoV5ii', 'manager'),
+(3, 'Nhân viên', 'NV001', 'employee@pos.com', '$2a$10$gP1nmk.Bvd80W7hfPCJuD.5RZ6qwwCZPG4TEuEde013Z3Nz6CH5FC', 'employee');
 
 INSERT INTO categories (id, name, description) VALUES
 (1, 'Ốp lưng', 'Ốp lưng theo đúng model máy'),
@@ -11,6 +11,19 @@ INSERT INTO categories (id, name, description) VALUES
 (3, 'Tai nghe & âm thanh', 'Tai nghe dây, Bluetooth và phụ kiện âm thanh'),
 (4, 'Kính cường lực', 'Kính màn hình và kính camera theo từng model'),
 (5, 'Phụ kiện tiện ích', 'Giá đỡ, dán lưng, túi chống nước và phụ kiện hỗ trợ');
+
+DROP TEMPORARY TABLE IF EXISTS product_templates;
+CREATE TEMPORARY TABLE product_templates (
+  id INT PRIMARY KEY,
+  category_id INT NOT NULL,
+  template_name VARCHAR(80) NOT NULL,
+  description_template VARCHAR(255) NOT NULL,
+  price DECIMAL(15,0) NOT NULL,
+  cost_price DECIMAL(15,0) NOT NULL,
+  stock_quantity INT NOT NULL,
+  min_stock INT NOT NULL,
+  image_label VARCHAR(40) NOT NULL
+);
 
 INSERT INTO device_models (id, family, name, series, release_year, notes) VALUES
 (1, 'apple', 'iPhone 11', 'iPhone', 2019, 'Đời iPhone 11'),
@@ -63,19 +76,6 @@ INSERT INTO device_models (id, family, name, series, release_year, notes) VALUES
 (48, 'xiaomi', 'Xiaomi 14', 'Xiaomi', 2024, 'Xiaomi flagship 2024'),
 (49, 'xiaomi', 'Redmi Note 14 Pro+ 5G', 'Redmi Note', 2025, 'Redmi Note 2025'),
 (50, 'xiaomi', 'Xiaomi 15', 'Xiaomi', 2025, 'Xiaomi flagship dùng cho giai đoạn bán 2025-2026');
-
-DROP TEMPORARY TABLE IF EXISTS product_templates;
-CREATE TEMPORARY TABLE product_templates (
-  id INT PRIMARY KEY,
-  category_id INT NOT NULL,
-  template_name VARCHAR(80) NOT NULL,
-  description_template VARCHAR(255) NOT NULL,
-  price DECIMAL(15,0) NOT NULL,
-  cost_price DECIMAL(15,0) NOT NULL,
-  stock_quantity INT NOT NULL,
-  min_stock INT NOT NULL,
-  image_label VARCHAR(40) NOT NULL
-);
 
 INSERT INTO product_templates VALUES
 (1, 1, 'Ốp lưng chống sốc', 'Ốp lưng bảo vệ bốn góc, ôm sát model máy, phù hợp bán tại quầy.', 129000, 62000, 28, 6, 'Case'),

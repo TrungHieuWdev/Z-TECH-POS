@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Check, Eye, EyeOff, LockKeyhole, LogIn, User } from 'lucide-react';
+import { Check, Eye, EyeOff, LockKeyhole, LogIn, UserSquare2 } from 'lucide-react';
 import api from '../api/axios';
 import ztechLogo from '../assets/images/1111.png';
-import { saveAuth } from '../utils/auth';
+import { isFullAccessRole, saveAuth } from '../utils/auth';
 
 export default function Login() {
   const navigate = useNavigate();
-  const [form, setForm] = useState({ email: '', password: '' });
+  const [form, setForm] = useState({ employeeCode: '', password: '' });
   const [loading, setLoading] = useState(false);
   const [remember, setRemember] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -18,10 +18,14 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const response = await api.post('/auth/login', form);
-      saveAuth(response.data.user, response.data.token, remember);
+      const response = await api.post('/auth/login', {
+        employeeCode: form.employeeCode.trim().toUpperCase(),
+        password: form.password
+      });
+      const user = response.data.user;
+      saveAuth(user, response.data.token, remember);
       toast.success('Đăng nhập thành công');
-      navigate('/');
+      navigate(isFullAccessRole(user?.role) ? '/' : '/pos');
     } catch (error) {
       const message = error.response?.data?.error || error.response?.data?.message || 'Không thể đăng nhập';
       toast.error(message);
@@ -44,8 +48,8 @@ export default function Login() {
             />
           </div>
           <h1 className="text-[40px] font-bold leading-[48px] text-brand">Z-TECH POS</h1>
-          <p className="mt-4 max-w-[430px] text-lg font-normal leading-[26px] text-brand-ink">
-            Giải pháp quản lý bán hàng thông minh, tối ưu hóa quy trình vận hành cho doanh nghiệp của bạn.
+          <p className="mt-4 max-w-[430px] text-lg leading-[26px] text-brand-ink">
+            Giải pháp quản lý bán hàng thông minh, giúp chủ cửa hàng quản lý nhân viên bằng mã đăng nhập riêng.
           </p>
         </div>
       </section>
@@ -66,25 +70,22 @@ export default function Login() {
 
           <div className="mb-8">
             <h2 className="text-[32px] font-semibold leading-10 text-[#191c1d]">Đăng nhập hệ thống</h2>
-            <p className="mt-1 text-base font-normal leading-6 text-[#43474d]">
-              Vui lòng điền thông tin để bắt đầu
+            <p className="mt-1 text-base leading-6 text-[#43474d]">
+              CHÀO MỪNG BẠN ĐẾN VỚI Z-TECH POS
             </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <label className="block">
-              <span className="mb-1 block text-sm font-semibold leading-5 text-[#43474d]">
-                Tên đăng nhập hoặc Email
-              </span>
+              <span className="mb-1 block text-sm font-semibold leading-5 text-[#43474d]">Email hoặc mã</span>
               <div className="group relative">
-                <User className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#73777d] transition-colors group-focus-within:text-brand-strong" />
+                <UserSquare2 className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#73777d] transition-colors group-focus-within:text-brand-strong" />
                 <input
-                  type="email"
-                  value={form.email}
-                  onChange={(event) => setForm({ ...form, email: event.target.value })}
-                  autoComplete="email"
+                  value={form.employeeCode}
+                  onChange={(event) => setForm({ ...form, employeeCode: event.target.value.toUpperCase() })}
+                  autoComplete="username"
                   className="h-12 w-full rounded-lg border border-[#c3c7cd] bg-[#f3f4f5] pl-11 pr-4 text-base leading-6 text-[#191c1d] outline-none transition-all placeholder:text-[#73777d] focus:border-brand focus:ring-2 focus:ring-brand-soft"
-                  placeholder="admin@pos.com"
+                  placeholder="Nhập email hoặc mã"
                   required
                 />
               </div>
@@ -100,7 +101,7 @@ export default function Login() {
                   onChange={(event) => setForm({ ...form, password: event.target.value })}
                   autoComplete="current-password"
                   className="h-12 w-full rounded-lg border border-[#c3c7cd] bg-[#f3f4f5] pl-11 pr-12 text-base leading-6 text-[#191c1d] outline-none transition-all placeholder:text-[#73777d] focus:border-brand focus:ring-2 focus:ring-brand-soft"
-                  placeholder="••••••••"
+                  placeholder="Nhập mật khẩu"
                   required
                 />
                 <button
@@ -134,12 +135,9 @@ export default function Login() {
                   Ghi nhớ đăng nhập
                 </span>
               </label>
-              <button
-                type="button"
-                className="shrink-0 text-sm font-semibold leading-5 text-brand-strong transition hover:underline"
-              >
-                Quên mật khẩu?
-              </button>
+              <span className="shrink-0 text-sm font-semibold leading-5 text-brand-strong">
+                Quên mật khẩu ?
+              </span>
             </div>
 
             <button
