@@ -44,6 +44,54 @@ function formatPercent(value) {
   return `${prefix}${numberValue.toLocaleString('vi-VN')}%`;
 }
 
+function formatDeltaCount(value, noun) {
+  return `${Math.abs(Number(value || 0)).toLocaleString('vi-VN')} ${noun}`;
+}
+
+function getRevenueCaption(todayRevenue, revenueGrowth) {
+  if (Number(todayRevenue || 0) <= 0) {
+    return 'Chưa có đơn hàng hôm nay';
+  }
+
+  return `${formatPercent(revenueGrowth)} so với hôm qua`;
+}
+
+function getOrderCaption(todayOrders, orderGrowth) {
+  const growth = Number(orderGrowth || 0);
+
+  if (Number(todayOrders || 0) <= 0) {
+    return 'Chưa có đơn hàng mới hôm nay';
+  }
+
+  if (growth > 0) {
+    return `+${formatDeltaCount(growth, 'đơn')} so với hôm qua`;
+  }
+
+  if (growth < 0) {
+    return `Giảm ${formatDeltaCount(growth, 'đơn')} so với hôm qua`;
+  }
+
+  return 'Bằng hôm qua';
+}
+
+function getCustomerCaption(newCustomers, customerGrowth) {
+  const growth = Number(customerGrowth || 0);
+
+  if (Number(newCustomers || 0) <= 0) {
+    return 'Chưa có khách mới hôm nay';
+  }
+
+  if (growth > 0) {
+    return `+${formatDeltaCount(growth, 'khách')} so với hôm qua`;
+  }
+
+  if (growth < 0) {
+    return `Giảm ${formatDeltaCount(growth, 'khách')} so với hôm qua`;
+  }
+
+  return 'Bằng hôm qua';
+}
+
 function getInitials(name = '') {
   const words = name.trim().split(/\s+/).filter(Boolean);
 
@@ -178,6 +226,38 @@ export default function Dashboard() {
     }
   ];
 
+  const dashboardCards = cards.map((card, index) => {
+    if (index === 0) {
+      return {
+        ...card,
+        caption: getRevenueCaption(summary.todayRevenue, summary.revenueGrowth)
+      };
+    }
+
+    if (index === 1) {
+      return {
+        ...card,
+        caption: getOrderCaption(summary.todayOrders, summary.orderGrowth)
+      };
+    }
+
+    if (index === 2) {
+      return {
+        ...card,
+        to: '/products?lowStock=1'
+      };
+    }
+
+    if (index === 3) {
+      return {
+        ...card,
+        caption: getCustomerCaption(summary.newCustomers, summary.customerGrowth)
+      };
+    }
+
+    return card;
+  });
+
   return (
     <div className="space-y-6">
 
@@ -188,13 +268,17 @@ export default function Dashboard() {
       )}
 
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        {cards.map((card) => {
+        {dashboardCards.map((card) => {
           const Icon = card.icon;
+          const CardWrapper = card.to ? Link : 'article';
 
           return (
-            <article
+            <CardWrapper
               key={card.label}
-              className="rounded-lg border border-[#e1e3e4] bg-white p-4 shadow-[0_1px_3px_rgba(25,28,29,0.08)]"
+              to={card.to}
+              className={`rounded-lg border border-[#e1e3e4] bg-white p-4 shadow-[0_1px_3px_rgba(25,28,29,0.08)] ${
+                card.to ? 'block transition hover:border-[#c8dff0] hover:shadow-[0_8px_24px_rgba(116,184,224,0.18)]' : ''
+              }`}
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -208,7 +292,7 @@ export default function Dashboard() {
                   <Icon size={18} />
                 </div>
               </div>
-            </article>
+            </CardWrapper>
           );
         })}
       </section>

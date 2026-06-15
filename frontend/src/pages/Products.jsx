@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import * as XLSX from 'xlsx';
 import { Download, Edit, FileSpreadsheet, Plus, Search, Trash2, Upload } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import api from '../api/axios';
 import Modal from '../components/Modal';
 import ProductImage from '../components/ProductImage';
@@ -100,6 +101,7 @@ function getDeviceFamilyLabel(value) {
 }
 
 export default function Products() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const hasFullAccess = isFullAccessRole(getUser()?.role);
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -115,6 +117,7 @@ export default function Products() {
   const [importRows, setImportRows] = useState([]);
   const [importFileName, setImportFileName] = useState('');
   const [isImporting, setIsImporting] = useState(false);
+  const lowStockOnly = searchParams.get('lowStock') === '1';
 
   const formDeviceModels = useMemo(() => {
     if (!form.device_family) return deviceModels;
@@ -280,7 +283,12 @@ export default function Products() {
     if (deviceFamily) params.set('device_family', deviceFamily);
 
     const response = await api.get(`/products?${params.toString()}`);
-    setProducts(response.data);
+    const allProducts = Array.isArray(response.data) ? response.data : [];
+    setProducts(
+      lowStockOnly
+        ? allProducts.filter((product) => Number(product.stock_quantity || 0) <= Number(product.min_stock || 0))
+        : allProducts
+    );
   }
 
   useEffect(() => {
@@ -295,7 +303,7 @@ export default function Products() {
 
   useEffect(() => {
     loadProducts();
-  }, [search, categoryId, deviceFamily]);
+  }, [search, categoryId, deviceFamily, lowStockOnly]);
 
   const openCreate = () => {
     setEditingProduct(null);
@@ -436,6 +444,21 @@ export default function Products() {
           ))}
         </select>
       </div>
+
+      {lowStockOnly && (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+          <p className="text-sm font-medium text-amber-800">
+            Đang lọc các sản phẩm có tồn kho nhỏ hơn hoặc bằng mức tồn tối thiểu.
+          </p>
+          <button
+            type="button"
+            onClick={() => setSearchParams({})}
+            className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm font-semibold text-amber-800 transition hover:bg-amber-100"
+          >
+            Xóa bộ lọc
+          </button>
+        </div>
+      )}
 
       <section className="rounded-lg bg-white shadow-sm">
         <div className="overflow-x-auto">
