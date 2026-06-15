@@ -10,10 +10,10 @@ import {
   PlayCircle,
   PlusCircle,
   Search,
-  Square,
   StopCircle,
   Users
 } from 'lucide-react';
+import api from '../api/axios';
 import Modal from '../components/Modal';
 import { getUser, isFullAccessRole } from '../utils/auth';
 
@@ -202,6 +202,7 @@ export default function Shifts() {
   const [search, setSearch] = useState('');
   const [period, setPeriod] = useState('today');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [employeeChoices, setEmployeeChoices] = useState(employeeOptions);
   const [form, setForm] = useState(emptyForm);
   const [editingShift, setEditingShift] = useState(null);
   const [viewingShift, setViewingShift] = useState(null);
@@ -210,6 +211,22 @@ export default function Shifts() {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(shifts));
   }, [shifts]);
+
+  useEffect(() => {
+    if (!hasFullAccess) {
+      return;
+    }
+
+    api
+      .get('/employees')
+      .then((response) => {
+        const names = response.data.map((employee) => employee.name).filter(Boolean);
+        setEmployeeChoices(Array.from(new Set([...employeeOptions, ...names])));
+      })
+      .catch(() => {
+        setEmployeeChoices(employeeOptions);
+      });
+  }, [hasFullAccess]);
 
   const stats = useMemo(() => getShiftStats(shifts), [shifts]);
 
@@ -230,39 +247,22 @@ export default function Shifts() {
   }, [shifts, search, period, statusFilter, hasFullAccess, currentEmployeeName]);
 
   const openCreate = () => {
-    setEditingShift(null);
-    setForm({ ...emptyForm, employee: hasFullAccess ? emptyForm.employee : currentEmployeeName });
-    setIsFormOpen(true);
-  };
-
-  const startMyShift = () => {
-    const activeShift = shifts.find(
-      (shift) => shift.employee === currentEmployeeName && shift.workDate === TODAY && shift.status === 'active'
-    );
-
-    if (activeShift) {
-      toast.error('Bạn đang có một ca làm đang mở');
+    if (!hasFullAccess) {
+      toast.error('Chỉ quản lý mới được mở ca cho nhân viên');
       return;
     }
 
-    const now = getCurrentTime();
-    const nextShift = {
-      id: Date.now(),
-      code: getNextShiftCode(shifts),
-      name: 'Ca của tôi',
-      employee: currentEmployeeName,
-      startTime: now,
-      endTime: '23:59',
-      workDate: TODAY,
-      status: 'active',
-      note: 'Nhân viên tự mở ca'
-    };
-
-    setShifts((current) => [nextShift, ...current]);
-    toast.success('Đã mở ca làm của bạn');
+    setEditingShift(null);
+    setForm({ ...emptyForm, employee: employeeChoices[0] || emptyForm.employee });
+    setIsFormOpen(true);
   };
 
   const openEdit = (shift) => {
+    if (!hasFullAccess) {
+      toast.error('Chỉ quản lý mới được chỉnh sửa ca làm');
+      return;
+    }
+
     setEditingShift(shift);
     setForm({
       name: shift.name,
@@ -286,7 +286,7 @@ export default function Shifts() {
     event.preventDefault();
 
     if (!hasFullAccess) {
-      toast.error('Nhân viên chỉ có thể tự mở hoặc kết thúc ca của mình');
+      toast.error('Chỉ quản lý mới được mở hoặc cập nhật ca làm');
       return;
     }
 
@@ -315,10 +315,22 @@ export default function Shifts() {
   };
 
   const updateShiftStatus = (shift, status) => {
+    if (!hasFullAccess) {
+      toast.error('Chỉ quản lý mới được mở hoặc kết thúc ca làm');
+      return;
+    }
+
+    const now = getCurrentTime();
+
     setShifts((current) =>
       current.map((item) =>
         item.id === shift.id
-          ? { ...item, status, endTime: status === 'completed' ? getCurrentTime() : item.endTime }
+          ? {
+              ...item,
+              status,
+              startTime: status === 'active' ? now : item.startTime,
+              endTime: status === 'completed' || status === 'active' ? now : item.endTime
+            }
           : item
       )
     );
@@ -413,14 +425,20 @@ export default function Shifts() {
             ))}
           </select>
         </div>
-        <button
-          type="button"
-          onClick={hasFullAccess ? openCreate : startMyShift}
-          className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-[#c0edf7] px-5 font-semibold text-[#0f3b46] transition hover:bg-[#a9e3ef]"
-        >
-          <PlusCircle size={19} />
-          <span>{hasFullAccess ? 'Thêm ca làm' : 'Mở ca của tôi'}</span>
-        </button>
+        {hasFullAccess ? (
+          <button
+            type="button"
+            onClick={openCreate}
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-[#c0edf7] px-5 font-semibold text-[#0f3b46] transition hover:bg-[#a9e3ef]"
+          >
+            <PlusCircle size={19} />
+            <span>Thêm ca làm</span>
+          </button>
+        ) : (
+          <div className="rounded-lg border border-[#d7eef3] bg-[#f4fcfe] px-4 py-3 text-sm font-semibold text-[#0f3b46]">
+            Ca làm của bạn sẽ do quản lý mở trước khi bắt đầu làm việc.
+          </div>
+        )}
       </section>
 
       <section className="overflow-hidden rounded-lg border border-[#d7eef3] bg-white shadow-sm">
@@ -490,7 +508,7 @@ export default function Shifts() {
                         >
                           <Edit size={18} />
                         </button>
-                        {shift.status === 'scheduled' && (
+                        {hasFullAccess && shift.status === 'scheduled' && (
                           <button
                             type="button"
                             onClick={() => updateShiftStatus(shift, 'active')}
@@ -501,7 +519,7 @@ export default function Shifts() {
                             <PlayCircle size={18} />
                           </button>
                         )}
-                        {shift.status === 'active' && (
+                        {hasFullAccess && shift.status === 'active' && (
                           <button
                             type="button"
                             onClick={() => updateShiftStatus(shift, 'completed')}
@@ -512,14 +530,15 @@ export default function Shifts() {
                             <StopCircle size={18} />
                           </button>
                         )}
-                        {shift.status === 'completed' && (
+                        {hasFullAccess && shift.status === 'completed' && (
                           <button
                             type="button"
-                            className="rounded-lg p-2 text-gray-500 transition hover:bg-[#f4fcfe]"
-                            title="Đã kết thúc"
-                            aria-label="Đã kết thúc"
+                            onClick={() => updateShiftStatus(shift, 'active')}
+                            className="rounded-lg p-2 text-emerald-600 transition hover:bg-emerald-50"
+                            title="Mở lại ca"
+                            aria-label="Mở lại ca"
                           >
-                            <Square size={18} />
+                            <PlayCircle size={18} />
                           </button>
                         )}
                       </div>
@@ -529,14 +548,6 @@ export default function Shifts() {
               })}
             </tbody>
           </table>
-        </div>
-
-        <div className="flex items-center justify-between border-t border-[#edf7f9] px-5 py-4 text-sm text-gray-500">
-          <span>
-            Hiển thị <strong className="text-gray-950">{filteredShifts.length}</strong> của{' '}
-            <strong className="text-gray-950">{shifts.length}</strong> ca làm
-          </span>
-          <div className="grid h-9 w-9 place-items-center rounded-lg bg-[#c0edf7] font-bold text-[#0f3b46]">1</div>
         </div>
       </section>
 
@@ -559,7 +570,7 @@ export default function Shifts() {
               onChange={(event) => setForm({ ...form, employee: event.target.value })}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-[#7ed5e6] focus:ring-2 focus:ring-[#c0edf7]"
             >
-              {employeeOptions.map((employee) => (
+              {employeeChoices.map((employee) => (
                 <option key={employee} value={employee}>
                   {employee}
                 </option>

@@ -1,10 +1,25 @@
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Edit, Eye, Search, XCircle } from 'lucide-react';
+import {
+  CheckCircle2,
+  ChevronDown,
+  ChevronsLeft,
+  ChevronsRight,
+  Edit,
+  Eye,
+  ReceiptText,
+  RefreshCw,
+  Search,
+  User,
+  Wallet,
+  XCircle
+} from 'lucide-react';
 import api from '../api/axios';
 import Modal from '../components/Modal';
-import { formatCurrency, formatDate } from '../utils/format';
+import { formatCurrency, formatDate, formatTime } from '../utils/format';
 import { getUser, isFullAccessRole } from '../utils/auth';
+
+const PAGE_SIZE = 5;
 
 const paymentLabels = {
   cash: 'Tiền mặt',
@@ -12,11 +27,240 @@ const paymentLabels = {
   transfer: 'Chuyển khoản'
 };
 
+const statusLabels = {
+  completed: 'Đã thanh toán',
+  cancelled: 'Đã hủy'
+};
+
+const filterOptions = [
+  { value: 'all', label: 'Tất cả hóa đơn' },
+  { value: 'completed', label: 'Đã thanh toán' },
+  { value: 'cancelled', label: 'Đã hủy' },
+  { value: 'cash', label: 'Tiền mặt' },
+  { value: 'transfer', label: 'Chuyển khoản' }
+];
+
+const paymentBadgeClasses = {
+  cash: 'bg-brand-soft text-brand-ink',
+  card: 'bg-violet-100 text-violet-700',
+  transfer: 'bg-blue-100 text-blue-700'
+};
+
+const statusBadgeClasses = {
+  completed: 'bg-emerald-100 text-emerald-700',
+  cancelled: 'bg-red-100 text-red-700'
+};
+
+function getSalesType(order) {
+  return order.payment_method === 'transfer' ? 'Đặt hàng Online' : 'Bán hàng trực tiếp';
+}
+
+function getCustomerName(order) {
+  return order.customer_name || 'Khách lẻ';
+}
+
+function SummaryCard({ icon: Icon, label, value, toneClassName }) {
+  return (
+    <article className="flex h-[92px] items-center gap-4 rounded-lg border border-gray-300 bg-white px-5 shadow-sm shadow-gray-100">
+      <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-md ${toneClassName}`}>
+        <Icon size={19} />
+      </div>
+      <div className="min-w-0">
+        <p className="truncate text-sm font-medium text-gray-700">{label}</p>
+        <p className="mt-1 text-2xl font-bold leading-none text-gray-950">{value}</p>
+      </div>
+    </article>
+  );
+}
+
+function FilterBar({
+  search,
+  setSearch,
+  filterType,
+  setFilterType,
+  dateFrom,
+  setDateFrom,
+  dateTo,
+  setDateTo,
+  onReset
+}) {
+  return (
+    <section className="rounded-lg border border-gray-300 bg-white px-4 py-3 shadow-sm shadow-gray-100">
+      <div className="grid items-center gap-3 lg:grid-cols-[minmax(320px,1fr)_190px_170px_28px_170px_auto]">
+        <div className="relative min-w-0">
+          <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            className="h-9 w-full rounded-md border border-gray-300 bg-white pl-9 pr-3 text-sm outline-none transition placeholder:text-gray-500 focus:border-brand"
+            placeholder="Tìm mã hóa đơn, tên khách hàng..."
+          />
+        </div>
+
+        <div className="relative min-w-0">
+          <select
+            value={filterType}
+            onChange={(event) => setFilterType(event.target.value)}
+            className="h-9 w-full appearance-none truncate rounded-md border border-gray-300 bg-white pl-3 pr-8 text-sm outline-none transition focus:border-brand"
+          >
+            {filterOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <ChevronDown size={15} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-600" />
+        </div>
+
+        <input
+          type="date"
+          value={dateFrom}
+          max={dateTo || undefined}
+          onChange={(event) => setDateFrom(event.target.value)}
+          className="h-9 min-w-0 rounded-md border border-gray-300 px-3 text-sm outline-none transition focus:border-brand"
+        />
+
+        <span className="hidden text-center text-sm text-gray-600 xl:block">đến</span>
+
+        <input
+          type="date"
+          value={dateTo}
+          min={dateFrom || undefined}
+          onChange={(event) => setDateTo(event.target.value)}
+          className="h-9 min-w-0 rounded-md border border-gray-300 px-3 text-sm outline-none transition focus:border-brand"
+        />
+
+        <button
+          type="button"
+          onClick={onReset}
+          className="h-9 whitespace-nowrap rounded-md px-3 text-sm font-semibold text-gray-700 transition hover:bg-brand-surface hover:text-brand-deep"
+        >
+          Xóa lọc
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function InvoiceRow({ order, onView }) {
+  const paymentClassName = paymentBadgeClasses[order.payment_method] || 'bg-gray-100 text-gray-700';
+  const statusClassName = statusBadgeClasses[order.status] || 'bg-gray-100 text-gray-700';
+
+  return (
+    <article
+      className="grid min-h-[92px] min-w-[980px] cursor-pointer grid-cols-[minmax(320px,1.35fr)_minmax(170px,0.75fr)_minmax(170px,0.7fr)_150px] items-center gap-5 border-b border-gray-200 px-5 py-4 transition hover:bg-[#f8fdfe] last:border-b-0"
+      onClick={() => onView(order)}
+    >
+      <div className="flex min-w-0 items-center gap-4">
+        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-brand-surface text-brand-deep">
+          <ReceiptText size={18} />
+        </div>
+
+        <div className="min-w-0">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="truncate text-sm font-bold text-gray-950">{order.order_number}</span>
+            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${paymentClassName}`}>
+              {paymentLabels[order.payment_method] || order.payment_method}
+            </span>
+          </div>
+          <p className="mt-2 truncate text-xs text-gray-700">{getCustomerName(order)}</p>
+          <p className="mt-1 flex items-center gap-1 text-xs text-gray-600">
+            <ReceiptText size={12} />
+            <span className="truncate">{getSalesType(order)}</span>
+          </p>
+        </div>
+      </div>
+
+      <div className="flex min-w-0 items-center gap-2 text-xs text-gray-700">
+        <User size={13} className="shrink-0" />
+        <span className="truncate">{order.cashier_name || 'Không rõ'}</span>
+      </div>
+
+      <div className="text-right">
+        <p className="text-sm font-bold text-gray-950">{formatCurrency(order.total)}</p>
+        <p className="mt-1 text-xs text-gray-700">
+          {formatTime(order.created_at)} - {formatDate(order.created_at)}
+        </p>
+      </div>
+
+      <div className="text-right">
+        <span className={`inline-flex rounded-full px-3 py-1 text-[11px] font-bold ${statusClassName}`}>
+          {statusLabels[order.status] || order.status}
+        </span>
+      </div>
+    </article>
+  );
+}
+
+function Pagination({ currentPage, totalPages, setCurrentPage }) {
+  const pages = [1, 2, 3].filter((page) => page <= totalPages);
+  const showLastPage = totalPages > 3;
+
+  return (
+    <div className="flex items-center gap-2 border-t border-gray-200 bg-gray-50 px-5 py-4">
+      <button
+        type="button"
+        disabled={currentPage === 1}
+        onClick={() => setCurrentPage((page) => Math.max(page - 1, 1))}
+        className="grid h-8 w-8 place-items-center border border-gray-300 bg-white text-gray-600 disabled:opacity-40"
+        aria-label="Trang trước"
+      >
+        <ChevronsLeft size={15} />
+      </button>
+
+      {pages.map((page) => (
+        <button
+          type="button"
+          key={page}
+          onClick={() => setCurrentPage(page)}
+          className={`h-8 min-w-8 border px-3 text-sm font-semibold ${
+            currentPage === page
+              ? 'border-brand-strong bg-brand-strong text-white'
+              : 'border-gray-300 bg-white text-gray-700 hover:bg-brand-surface'
+          }`}
+        >
+          {page}
+        </button>
+      ))}
+
+      {showLastPage && (
+        <>
+          <span className="px-1 text-sm text-gray-500">...</span>
+          <button
+            type="button"
+            onClick={() => setCurrentPage(totalPages)}
+            className={`h-8 min-w-8 border px-3 text-sm font-semibold ${
+              currentPage === totalPages
+                ? 'border-brand-strong bg-brand-strong text-white'
+                : 'border-gray-300 bg-white text-gray-700 hover:bg-brand-surface'
+            }`}
+          >
+            {totalPages}
+          </button>
+        </>
+      )}
+
+      <button
+        type="button"
+        disabled={currentPage === totalPages}
+        onClick={() => setCurrentPage((page) => Math.min(page + 1, totalPages))}
+        className="grid h-8 w-8 place-items-center border border-gray-300 bg-white text-gray-600 disabled:opacity-40"
+        aria-label="Trang sau"
+      >
+        <ChevronsRight size={15} />
+      </button>
+    </div>
+  );
+}
+
 export default function Orders() {
   const hasFullAccess = isFullAccessRole(getUser()?.role);
   const [orders, setOrders] = useState([]);
   const [search, setSearch] = useState('');
-  const [orderDate, setOrderDate] = useState('');
+  const [filterType, setFilterType] = useState('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [editingOrder, setEditingOrder] = useState(null);
   const [form, setForm] = useState({ status: 'completed', payment_method: 'cash', note: '' });
@@ -24,28 +268,109 @@ export default function Orders() {
   async function loadOrders() {
     const params = new URLSearchParams();
 
-    if (orderDate) {
-      params.set('date_from', orderDate);
-      params.set('date_to', orderDate);
+    if (dateFrom) {
+      params.set('date_from', dateFrom);
     }
 
-    const response = await api.get(`/orders?${params.toString()}`);
+    if (dateTo) {
+      params.set('date_to', dateTo);
+    }
+
+    const queryString = params.toString();
+    const response = await api.get(queryString ? `/orders?${queryString}` : '/orders');
     setOrders(response.data);
   }
 
   useEffect(() => {
     loadOrders();
-  }, [orderDate]);
+  }, [dateFrom, dateTo]);
 
   const filteredOrders = useMemo(() => {
-    const keyword = search.toLowerCase();
+    const keyword = search.trim().toLowerCase();
 
-    return orders.filter((order) =>
-      [order.order_number, order.customer_name, order.cashier_name]
-        .filter(Boolean)
-        .some((value) => value.toLowerCase().includes(keyword))
+    return orders.filter((order) => {
+      const matchesKeyword =
+        !keyword ||
+        [order.order_number, order.customer_name, order.cashier_name]
+          .filter(Boolean)
+          .some((value) => value.toLowerCase().includes(keyword));
+
+      const matchesFilter =
+        filterType === 'all' ||
+        order.status === filterType ||
+        order.payment_method === filterType;
+
+      return matchesKeyword && matchesFilter;
+    });
+  }, [orders, search, filterType]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, filterType, dateFrom, dateTo]);
+
+  const summary = useMemo(() => {
+    return filteredOrders.reduce(
+      (totals, order) => {
+        totals.total += 1;
+
+        if (order.payment_method === 'cash') {
+          totals.cash += 1;
+        }
+
+        if (order.payment_method === 'transfer') {
+          totals.transfer += 1;
+        }
+
+        if (order.status === 'cancelled') {
+          totals.cancelled += 1;
+        }
+
+        return totals;
+      },
+      { total: 0, cash: 0, transfer: 0, cancelled: 0 }
     );
-  }, [orders, search]);
+  }, [filteredOrders]);
+
+  const totalPages = Math.max(Math.ceil(filteredOrders.length / PAGE_SIZE), 1);
+  const visibleOrders = filteredOrders.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  const summaryCards = [
+    {
+      key: 'total',
+      label: 'Tổng hóa đơn',
+      value: summary.total.toLocaleString('vi-VN'),
+      icon: ReceiptText,
+      toneClassName: 'bg-brand-surface text-brand-deep'
+    },
+    {
+      key: 'cash',
+      label: 'Thanh toán bằng tiền mặt',
+      value: summary.cash.toLocaleString('vi-VN'),
+      icon: CheckCircle2,
+      toneClassName: 'bg-emerald-100 text-emerald-700'
+    },
+    {
+      key: 'transfer',
+      label: 'Thanh toán bằng chuyển khoản',
+      value: summary.transfer.toLocaleString('vi-VN'),
+      icon: Wallet,
+      toneClassName: 'bg-orange-100 text-orange-700'
+    },
+    {
+      key: 'cancelled',
+      label: 'Đã hủy',
+      value: summary.cancelled.toLocaleString('vi-VN'),
+      icon: XCircle,
+      toneClassName: 'bg-red-100 text-red-700'
+    }
+  ];
+
+  const resetFilters = () => {
+    setSearch('');
+    setFilterType('all');
+    setDateFrom('');
+    setDateTo('');
+  };
 
   const viewOrder = async (order) => {
     try {
@@ -98,103 +423,74 @@ export default function Orders() {
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-950">Đơn hàng</h1>
-        <p className="mt-1 text-sm text-gray-500">Theo dõi giao dịch đã bán</p>
-      </div>
-
-      <div className="grid gap-3 rounded-lg bg-white p-4 shadow-sm lg:grid-cols-[1fr_180px]">
-        <div className="flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2">
-          <Search size={18} className="text-gray-400" />
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            className="w-full outline-none"
-            placeholder="Tìm mã đơn, khách hàng, thu ngân"
-          />
+    <div className="w-full space-y-5">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold text-gray-950">Hóa đơn</h1>
+          <p className="mt-2 text-sm text-gray-700">Quản lý và theo dõi lịch sử giao dịch bán hàng của cửa hàng.</p>
         </div>
-        <input
-          type="date"
-          value={orderDate}
-          onChange={(event) => setOrderDate(event.target.value)}
-          className="rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-brand"
-        />
+        <button
+          type="button"
+          onClick={loadOrders}
+          className="inline-flex h-9 items-center gap-2 rounded-md bg-brand-strong px-4 text-sm font-semibold text-white transition hover:bg-brand-deep"
+        >
+          <RefreshCw size={15} />
+          Làm mới
+        </button>
       </div>
 
-      <section className="rounded-lg bg-white shadow-sm">
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {summaryCards.map((card) => (
+          <SummaryCard key={card.key} {...card} />
+        ))}
+      </section>
+
+      <FilterBar
+        search={search}
+        setSearch={setSearch}
+        filterType={filterType}
+        setFilterType={setFilterType}
+        dateFrom={dateFrom}
+        setDateFrom={setDateFrom}
+        dateTo={dateTo}
+        setDateTo={setDateTo}
+        onReset={resetFilters}
+      />
+
+      <section className="overflow-hidden rounded-lg border border-gray-300 bg-white shadow-sm shadow-gray-100">
+        <div className="flex items-center justify-between border-b border-gray-300 px-5 py-4">
+          <h2 className="text-sm font-semibold text-gray-950">Dòng hóa đơn</h2>
+          <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-bold text-gray-800">
+            {filteredOrders.length.toLocaleString('vi-VN')} dòng
+          </span>
+        </div>
+
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[980px] text-left text-sm">
-            <thead className="bg-gray-50 text-gray-500">
-              <tr>
-                <th className="px-4 py-3 font-semibold">Mã đơn</th>
-                <th className="px-4 py-3 font-semibold">Khách hàng</th>
-                <th className="px-4 py-3 font-semibold">Thu ngân</th>
-                <th className="px-4 py-3 font-semibold">Tổng tiền</th>
-                <th className="px-4 py-3 font-semibold">Thanh toán</th>
-                <th className="px-4 py-3 font-semibold">Trạng thái</th>
-                <th className="px-4 py-3 font-semibold">Ngày tạo</th>
-                <th className="px-4 py-3 font-semibold text-right">Thao tác</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {filteredOrders.map((order) => (
-                <tr key={order.id}>
-                  <td className="px-4 py-3 font-medium text-gray-950">{order.order_number}</td>
-                  <td className="px-4 py-3 text-gray-600">{order.customer_name || 'Khách lẻ'}</td>
-                  <td className="px-4 py-3 text-gray-600">{order.cashier_name}</td>
-                  <td className="px-4 py-3 font-semibold text-gray-950">{formatCurrency(order.total)}</td>
-                  <td className="px-4 py-3 text-gray-600">{paymentLabels[order.payment_method]}</td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                        order.status === 'completed'
-                          ? 'bg-emerald-100 text-emerald-700'
-                          : 'bg-red-100 text-red-700'
-                      }`}
-                    >
-                      {order.status === 'completed' ? 'Hoàn tất' : 'Đã hủy'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-gray-600">{formatDate(order.created_at)}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={() => viewOrder(order)}
-                        className="rounded-lg p-2 text-gray-500 transition hover:bg-brand-surface hover:text-brand-strong"
-                        title="Xem"
-                        aria-label="Xem"
-                      >
-                        <Eye size={17} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => openEdit(order)}
-                        style={{ display: hasFullAccess ? undefined : 'none' }}
-                        className="rounded-lg p-2 text-gray-500 transition hover:bg-brand-surface hover:text-brand-strong"
-                        title="Sửa"
-                        aria-label="Sửa"
-                      >
-                        <Edit size={17} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => cancelOrder(order)}
-                        style={{ display: hasFullAccess ? undefined : 'none' }}
-                        className="rounded-lg p-2 text-gray-500 transition hover:bg-red-50 hover:text-red-600"
-                        title="Hủy"
-                        aria-label="Hủy"
-                      >
-                        <XCircle size={17} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="grid min-w-[980px] grid-cols-[minmax(320px,1.35fr)_minmax(170px,0.75fr)_minmax(170px,0.7fr)_150px] gap-5 border-b border-gray-200 bg-gray-50 px-5 py-3 text-[11px] font-bold uppercase text-gray-500">
+            <span>Hóa đơn</span>
+            <span>Thu ngân</span>
+            <span className="text-right">Tổng tiền</span>
+            <span className="text-right">Trạng thái</span>
+          </div>
+          {visibleOrders.map((order) => (
+            <InvoiceRow
+              key={order.id}
+              order={order}
+              hasFullAccess={hasFullAccess}
+              onView={viewOrder}
+              onEdit={openEdit}
+              onCancel={cancelOrder}
+            />
+          ))}
+
+          {visibleOrders.length === 0 && (
+            <div className="min-w-[980px] px-5 py-12 text-center text-sm font-medium text-gray-500">
+              Không có hóa đơn phù hợp với bộ lọc hiện tại.
+            </div>
+          )}
         </div>
+
+        <Pagination currentPage={currentPage} totalPages={totalPages} setCurrentPage={setCurrentPage} />
       </section>
 
       <Modal isOpen={Boolean(selectedOrder)} onClose={() => setSelectedOrder(null)} title="Chi tiết đơn hàng">
