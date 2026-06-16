@@ -45,7 +45,7 @@ function formatPercent(value) {
 }
 
 function formatDeltaCount(value, noun) {
-  return `${Math.abs(Number(value || 0)).toLocaleString('vi-VN')} ${noun}`;
+  return `${Math.round(Math.abs(Number(value || 0))).toLocaleString('vi-VN')} ${noun}`;
 }
 
 function getRevenueCaption(todayRevenue, revenueGrowth) {

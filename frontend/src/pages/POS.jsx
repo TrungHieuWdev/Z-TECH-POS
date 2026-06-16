@@ -41,7 +41,8 @@ const deviceFamilyOptions = [
   { value: 'samsung', label: 'Phụ kiện Samsung' },
   { value: 'vivo', label: 'Phụ kiện Vivo' },
   { value: 'oppo', label: 'Phụ kiện Oppo' },
-  { value: 'xiaomi', label: 'Phụ kiện Xiaomi' }
+  { value: 'xiaomi', label: 'Phụ kiện Xiaomi' },
+  { value: 'other', label: 'Phụ kiện khác' }
 ];
 
 const initialCustomerForm = { name: '', phone: '', email: '', address: '' };
@@ -130,7 +131,7 @@ function ReceiptContent({ receipt }) {
         </div>
         <div className="flex justify-between">
           <span>Giảm giá</span>
-          <span>{formatCurrency(receipt.discount)}</span>
+          <span>{formatCurrency(receipt.discount)} ({Number(receipt.discountPercent || 0)}%)</span>
         </div>
         <div className="flex justify-between">
           <span>VAT {Number(receipt.vatPercent || 0)}%</span>
@@ -295,7 +296,8 @@ export default function POS() {
     [cart]
   );
 
-  const discountValue = toMoneyAmount(discount);
+  const discountPercentValue = Math.min(Math.max(Number(discount) || 0, 0), 100);
+  const discountValue = Math.round((subtotal * discountPercentValue) / 100);
   const taxableTotal = Math.max(subtotal - discountValue, 0);
   const vatPercentValue = Math.max(Number(vatPercent) || 0, 0);
   const vatAmount = Math.round((taxableTotal * vatPercentValue) / 100);
@@ -469,6 +471,7 @@ export default function POS() {
         items: receiptItems,
         subtotal,
         discount: discountValue,
+        discountPercent: discountPercentValue,
         vatPercent: vatPercentValue,
         vatAmount,
         total,
@@ -765,13 +768,19 @@ export default function POS() {
             </div>
             <label className="flex items-center justify-between gap-3 text-sm text-[#434655]">
               <span>Giảm giá</span>
-              <input
-                type="number"
-                min="0"
-                value={discount}
-                onChange={(event) => setDiscount(event.target.value)}
-                className="h-8 w-32 rounded-lg border border-[#c3c6d7] bg-white px-3 text-right text-sm font-semibold text-[#191c1e] outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft"
-              />
+              <span className="flex h-8 w-32 items-center overflow-hidden rounded-lg border border-[#c3c6d7] bg-white focus-within:border-brand focus-within:ring-2 focus-within:ring-brand-soft">
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={discount}
+                  onChange={(event) => setDiscount(event.target.value)}
+                  className="h-full min-w-0 flex-1 bg-transparent px-3 text-right text-sm font-semibold text-[#191c1e] outline-none"
+                />
+                <span className="grid h-full w-8 place-items-center border-l border-[#e0e3e5] text-xs font-bold text-[#737686]">
+                  %
+                </span>
+              </span>
             </label>
             <label className="flex items-center justify-between gap-3 text-sm text-[#434655]">
               <span>VAT</span>
@@ -1144,7 +1153,7 @@ export default function POS() {
           </div>
           <div className="flex justify-between">
             <span>Giảm giá</span>
-            <span>{formatCurrency(discountValue)}</span>
+            <span>{formatCurrency(discountValue)} ({discountPercentValue}%)</span>
           </div>
           <div className="flex justify-between">
             <span>VAT {vatPercentValue}%</span>

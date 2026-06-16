@@ -27,8 +27,76 @@ const searchAliasSql = `
   )
 `;
 
+const genericAccessoryTextSql = `
+  LOWER(CONCAT_WS(' ', p.name, p.description, c.name, dm.name, dm.series))
+`;
+
+const genericAccessoryKeywords = [
+  'phụ kiện chung',
+  'phu kien chung',
+  'giá đỡ',
+  'gia do',
+  'gậy',
+  'gay',
+  'selfie',
+  'tripod',
+  'sạc dự phòng',
+  'sac du phong',
+  'power bank',
+  '10000mah',
+  'kẹp điện thoại',
+  'kep dien thoai',
+  'cửa gió',
+  'cua gio',
+  'ô tô',
+  'o to',
+  'đèn led',
+  'den led',
+  'livestream',
+  'túi chống nước',
+  'tui chong nuoc',
+  'vệ sinh màn hình',
+  've sinh man hinh',
+  'dây móc',
+  'day moc',
+  'phone strap',
+  'popsocket',
+  'popsockets',
+  'đế sạc',
+  'de sac',
+  'không dây',
+  'khong day',
+  'qi'
+];
+
+const modelSpecificProductNameKeywords = [
+  'apple',
+  'iphone',
+  'ipad',
+  'samsung',
+  'galaxy',
+  'vivo',
+  'oppo',
+  'reno',
+  'xiaomi',
+  'redmi',
+  'poco'
+];
+
 function getSearchTokens(search = '') {
   return search.trim().split(/\s+/).filter(Boolean);
+}
+
+function appendGenericAccessoryFilter(sql, params) {
+  const keywordConditions = genericAccessoryKeywords.map(() => `${genericAccessoryTextSql} LIKE ?`).join(' OR ');
+  const modelSpecificConditions = modelSpecificProductNameKeywords
+    .map(() => 'LOWER(p.name) NOT LIKE ?')
+    .join(' AND ');
+
+  params.push(...genericAccessoryKeywords.map((keyword) => `%${keyword}%`));
+  params.push(...modelSpecificProductNameKeywords.map((keyword) => `%${keyword}%`));
+
+  return `${sql} AND (${keywordConditions}) AND (${modelSpecificConditions})`;
 }
 
 function appendTextSearch(sql, params, tokens) {
@@ -234,7 +302,9 @@ export async function getAll(req, res) {
       params.push(category_id);
     }
 
-    if (DEVICE_FAMILIES.has(device_family)) {
+    if (device_family === 'other') {
+      sql = appendGenericAccessoryFilter(sql, params);
+    } else if (DEVICE_FAMILIES.has(device_family)) {
       sql += ' AND dm.family = ?';
       params.push(device_family);
     }
