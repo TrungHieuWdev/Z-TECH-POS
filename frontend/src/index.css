@@ -10,6 +10,18 @@
   -ms-overflow-style: none;
 }
 
+*,
+*::before,
+*::after {
+  border-radius: 0 !important;
+}
+
+[data-preserve-radius='circle'],
+[data-preserve-radius='circle']::before,
+[data-preserve-radius='circle']::after {
+  border-radius: 9999px !important;
+}
+
 *::-webkit-scrollbar {
   display: none;
 }

@@ -332,10 +332,11 @@ export default function Dashboard() {
             <div className="flex justify-center">
               <div
                 className="relative grid h-48 w-48 place-items-center rounded-full"
+                data-preserve-radius="circle"
                 style={{ background: donutBackground }}
                 aria-label="Cơ cấu doanh thu theo danh mục"
               >
-                <div className="grid h-28 w-28 place-items-center rounded-full bg-white shadow-[inset_0_0_0_1px_rgba(225,227,228,0.8)]">
+                <div className="grid h-28 w-28 place-items-center rounded-full bg-white shadow-[inset_0_0_0_1px_rgba(225,227,228,0.8)]" data-preserve-radius="circle">
                   <div className="text-center [&>div:last-child]:hidden">
                     <div className="px-2 text-[13px] font-bold leading-tight text-[#191c1d]">
                       {categoryRevenueTotal > 0 ? formatCurrency(categoryRevenueTotal) : '0 đ'}
