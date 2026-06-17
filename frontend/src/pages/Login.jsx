@@ -69,7 +69,7 @@ export default function Login() {
       <section className="relative hidden min-h-screen w-1/2 items-center justify-center overflow-hidden bg-brand-soft p-8 lg:flex">
         <div className="absolute inset-0 opacity-25 [background-image:radial-gradient(#74B8E0_0.5px,transparent_0.5px)] [background-size:24px_24px]" />
         <div className="relative z-10 flex max-w-[520px] flex-col items-center text-center">
-          <div className="mb-6 h-32 w-32 overflow-hidden rounded-2xl bg-white shadow-sm">
+          <div className="mb-6 h-32 w-32 overflow-hidden rounded-2xl bg-white shadow-sm" data-preserve-radius="logo">
             <img
               src={ztechLogo}
               alt="Z-TECH POS logo"
@@ -87,7 +87,7 @@ export default function Login() {
       <section className="flex min-h-screen flex-1 items-center justify-center bg-[#f8f9fa] px-4 py-10 sm:px-6 lg:min-h-0 lg:px-8">
         <div className="w-full max-w-[460px] rounded-2xl border border-[#e1e3e4] bg-white p-8 shadow-[0_16px_42px_rgba(25,28,29,0.10)] sm:p-9">
           <div className="mb-8 text-center lg:hidden">
-            <div className="mx-auto mb-4 h-16 w-16 overflow-hidden rounded-xl bg-brand-soft">
+            <div className="mx-auto mb-4 h-16 w-16 overflow-hidden rounded-xl bg-brand-soft" data-preserve-radius="logo">
               <img
                 src={ztechLogo}
                 alt="Z-TECH POS logo"

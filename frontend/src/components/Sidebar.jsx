@@ -87,13 +87,13 @@ export default function Sidebar() {
   return (
     <aside className="fixed left-0 top-0 z-50 hidden h-screen w-[260px] flex-col border-r border-[#c3c7cd] bg-white py-3 lg:flex">
       <div className="mb-4 px-6">
-        <div className="flex h-12 items-center gap-3">
-          <div className="h-11 w-11 shrink-0 overflow-hidden rounded-xl bg-brand-surface">
+        <div className="flex h-16 items-center gap-3">
+          <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-brand-surface" data-preserve-radius="logo">
             <img
               src={ztechLogo}
               alt="Z-TECH POS logo"
-              className="max-w-none -translate-x-[48px] -translate-y-[16px] object-contain"
-              style={{ width: 146 }}
+              className="max-w-none -translate-x-[64px] -translate-y-[21px] object-contain"
+              style={{ width: 195 }}
             />
           </div>
           <div className="flex min-w-0 flex-col justify-center">
