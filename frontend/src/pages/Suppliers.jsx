@@ -19,6 +19,7 @@ import {
 import Modal from '../components/Modal';
 
 const STORAGE_KEY = 'ztech-suppliers';
+const PAGE_SIZE = 5;
 
 const statusOptions = [
   { value: 'all', label: 'Tất cả trạng thái' },
@@ -145,6 +146,7 @@ export default function Suppliers() {
   const [editingSupplier, setEditingSupplier] = useState(null);
   const [viewingSupplier, setViewingSupplier] = useState(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(suppliers));
@@ -172,6 +174,18 @@ export default function Suppliers() {
       return matchesStatus && matchesKeyword;
     });
   }, [suppliers, search, statusFilter]);
+
+  const pageCount = Math.max(1, Math.ceil(filteredSuppliers.length / PAGE_SIZE));
+  const pageNumbers = useMemo(() => Array.from({ length: pageCount }, (_, index) => index + 1), [pageCount]);
+  const paginatedSuppliers = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+
+    return filteredSuppliers.slice(start, start + PAGE_SIZE);
+  }, [currentPage, filteredSuppliers]);
+
+  useEffect(() => {
+    setCurrentPage((page) => Math.min(page, pageCount));
+  }, [pageCount]);
 
   const openCreate = () => {
     setEditingSupplier(null);
@@ -366,7 +380,7 @@ export default function Suppliers() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#edf7f9]">
-              {filteredSuppliers.map((supplier) => {
+              {paginatedSuppliers.map((supplier) => {
                 const statusMeta = getStatusMeta(supplier.status);
                 const ToggleIcon = supplier.status === 'active' ? Unlock : Lock;
 
@@ -437,12 +451,42 @@ export default function Suppliers() {
           </table>
         </div>
 
-        <div className="flex items-center justify-between border-t border-[#edf7f9] px-5 py-4 text-sm text-gray-500">
-          <span>
-            Hiển thị <strong className="text-gray-950">{filteredSuppliers.length}</strong> trên{' '}
-            <strong className="text-gray-950">{suppliers.length}</strong> nhà cung cấp
-          </span>
-          <div className="grid h-9 w-9 place-items-center rounded-lg bg-[#c0edf7] font-bold text-[#0f3b46]">1</div>
+        <div className="flex items-center justify-end border-t border-[#edf7f9] px-5 py-4 text-sm text-gray-500">
+          <nav className="flex items-center gap-2" aria-label="Phan trang nha cung cap">
+            <button
+              type="button"
+              onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+              disabled={currentPage === 1}
+              className="grid h-9 w-9 place-items-center rounded-lg border border-[#d7eef3] font-bold text-[#0f3b46] transition hover:bg-[#f4fcfe] disabled:cursor-not-allowed disabled:opacity-40"
+              aria-label="Trang truoc"
+            >
+              &lt;
+            </button>
+            {pageNumbers.map((page) => (
+              <button
+                key={page}
+                type="button"
+                onClick={() => setCurrentPage(page)}
+                className={`grid h-9 w-9 place-items-center rounded-lg font-bold transition ${
+                  currentPage === page
+                    ? 'bg-[#c0edf7] text-[#0f3b46]'
+                    : 'border border-[#d7eef3] text-gray-600 hover:bg-[#f4fcfe] hover:text-[#0f3b46]'
+                }`}
+                aria-current={currentPage === page ? 'page' : undefined}
+              >
+                {page}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setCurrentPage((page) => Math.min(pageCount, page + 1))}
+              disabled={currentPage === pageCount}
+              className="grid h-9 w-9 place-items-center rounded-lg border border-[#d7eef3] font-bold text-[#0f3b46] transition hover:bg-[#f4fcfe] disabled:cursor-not-allowed disabled:opacity-40"
+              aria-label="Trang tiep"
+            >
+              &gt;
+            </button>
+          </nav>
         </div>
       </section>
 

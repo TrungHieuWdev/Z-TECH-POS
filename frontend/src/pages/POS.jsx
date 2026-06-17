@@ -1029,31 +1029,31 @@ export default function POS() {
       isOpen={isConfirmOpen}
       onClose={closeCheckoutConfirm}
       title={isTransferQrStep ? 'Thanh toán chuyển khoản VietQR' : 'Xác nhận thanh toán'}
-      maxWidth={isTransferQrStep ? 'max-w-5xl' : 'max-w-2xl'}
+      maxWidth={isTransferQrStep ? 'max-w-6xl' : 'max-w-2xl'}
     >
-      <div className="space-y-5">
+      <div className={isTransferQrStep ? 'space-y-3' : 'space-y-5'}>
         {isTransferQrStep && (
-          <div className="grid gap-5 lg:grid-cols-[minmax(260px,0.9fr)_minmax(0,1fr)]">
-            <div className="rounded-lg border border-[#d7eef3] bg-[#f8fdfe] p-5">
-              <div className="mx-auto grid max-w-[280px] place-items-center rounded-lg bg-white p-4 shadow-sm ring-1 ring-[#d7eef3]">
+          <div className="grid gap-4 lg:grid-cols-[minmax(220px,0.75fr)_minmax(0,1.25fr)]">
+            <div className="rounded-lg border border-[#d7eef3] bg-[#f8fdfe] p-3">
+              <div className="mx-auto grid max-w-[230px] place-items-center rounded-lg bg-white p-3 shadow-sm ring-1 ring-[#d7eef3]">
                 <img
                   src={vietQrDataUrl}
                   alt="Mã QR chuyển khoản VietQR"
-                  className="h-64 w-64 object-contain"
+                  className="h-52 w-52 object-contain"
                 />
               </div>
-              <div className="mx-auto mt-4 w-fit rounded-full border border-[#c0edf7] bg-white px-4 py-1 text-xs font-extrabold uppercase tracking-wide text-[#2563eb]">
+              <div className="mx-auto mt-3 w-fit rounded-full border border-[#c0edf7] bg-white px-3 py-1 text-xs font-extrabold uppercase tracking-wide text-[#2563eb]">
                 VietQR / Napas 247
               </div>
             </div>
 
-            <div className="space-y-4">
-              <div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="md:col-span-2">
                 <p className="text-xs font-extrabold uppercase tracking-wide text-[#98a2b3]">Ngân hàng thụ hưởng</p>
                 <p className="mt-1 text-lg font-extrabold text-[#191c1e]">{bankTransfer.bankName}</p>
               </div>
 
-              <div className="border-t border-[#edf7f9] pt-4">
+              <div className="border-t border-[#edf7f9] pt-3">
                 <div className="mb-1 flex items-center justify-between gap-3">
                   <p className="text-xs font-extrabold uppercase tracking-wide text-[#98a2b3]">Số tài khoản</p>
                   <button
@@ -1066,10 +1066,10 @@ export default function POS() {
                     <Copy size={17} />
                   </button>
                 </div>
-                <p className="text-lg font-bold text-[#191c1e]">{bankTransfer.accountNo}</p>
+                <p className="text-base font-bold text-[#191c1e]">{bankTransfer.accountNo}</p>
               </div>
 
-              <div className="border-t border-[#edf7f9] pt-4">
+              <div className="border-t border-[#edf7f9] pt-3">
                 <div className="mb-1 flex items-center justify-between gap-3">
                   <p className="text-xs font-extrabold uppercase tracking-wide text-[#98a2b3]">Chủ tài khoản</p>
                   <button
@@ -1082,10 +1082,10 @@ export default function POS() {
                     <Copy size={17} />
                   </button>
                 </div>
-                <p className="text-lg font-bold text-[#191c1e]">{bankTransfer.accountName}</p>
+                <p className="text-base font-bold text-[#191c1e]">{bankTransfer.accountName}</p>
               </div>
 
-              <div className="border-t border-[#edf7f9] pt-4">
+              <div className="border-t border-[#edf7f9] pt-3">
                 <div className="mb-1 flex items-center justify-between gap-3">
                   <p className="text-xs font-extrabold uppercase tracking-wide text-[#98a2b3]">Số tiền thanh toán</p>
                   <button
@@ -1098,11 +1098,11 @@ export default function POS() {
                     <Copy size={17} />
                   </button>
                 </div>
-                <p className="text-2xl font-extrabold text-[#2563eb]">{formatCurrency(total)}</p>
+                <p className="text-xl font-extrabold text-[#2563eb]">{formatCurrency(total)}</p>
               </div>
 
-              <div className="border-t border-[#edf7f9] pt-4">
-                <div className="mb-2 flex items-center justify-between gap-3">
+              <div className="border-t border-[#edf7f9] pt-3">
+                <div className="mb-1 flex items-center justify-between gap-3">
                   <p className="text-xs font-extrabold uppercase tracking-wide text-[#98a2b3]">
                     Nội dung chuyển khoản
                   </p>
@@ -1116,7 +1116,7 @@ export default function POS() {
                     <Copy size={17} />
                   </button>
                 </div>
-                <div className="rounded border border-orange-200 bg-orange-50 px-4 py-3 text-lg font-extrabold text-[#9a3412]">
+                <div className="rounded border border-orange-200 bg-orange-50 px-3 py-2 text-base font-extrabold text-[#9a3412]">
                   {transferMemo}
                 </div>
               </div>
@@ -1124,14 +1124,14 @@ export default function POS() {
           </div>
         )}
 
-        <div className="rounded-lg border border-[#d7eef3] bg-[#f8fdfe] p-4">
-          <div className="mb-3 flex items-center gap-2 text-sm font-bold text-[#0f3b46]">
+        <div className={isTransferQrStep ? 'rounded-lg border border-[#d7eef3] bg-[#f8fdfe] p-3' : 'rounded-lg border border-[#d7eef3] bg-[#f8fdfe] p-4'}>
+          <div className={isTransferQrStep ? 'mb-2 flex items-center gap-2 text-sm font-bold text-[#0f3b46]' : 'mb-3 flex items-center gap-2 text-sm font-bold text-[#0f3b46]'}>
             <ReceiptText size={18} />
             <span>{isTransferQrStep ? 'Sản phẩm trong đơn chuyển khoản' : 'Kiểm tra lại đơn trước khi thanh toán'}</span>
           </div>
-          <div className="space-y-3">
+          <div className={isTransferQrStep ? 'max-h-28 space-y-2 overflow-y-auto pr-1' : 'space-y-3'}>
             {cart.map((item) => (
-              <div key={item.id} className="flex items-start justify-between gap-4 border-b border-dashed border-[#d7eef3] pb-3 last:border-0 last:pb-0">
+              <div key={item.id} className={isTransferQrStep ? 'flex items-start justify-between gap-4 border-b border-dashed border-[#d7eef3] pb-2 last:border-0 last:pb-0' : 'flex items-start justify-between gap-4 border-b border-dashed border-[#d7eef3] pb-3 last:border-0 last:pb-0'}>
                 <div className="min-w-0">
                   <p className="font-bold text-[#191c1e]">{item.name}</p>
                   <p className="mt-1 text-xs font-semibold text-[#737686]">
@@ -1146,7 +1146,7 @@ export default function POS() {
           </div>
         </div>
 
-        <div className="space-y-2 rounded-lg border border-[#d7eef3] p-4 text-sm">
+        <div className={isTransferQrStep ? 'grid gap-x-6 gap-y-1 rounded-lg border border-[#d7eef3] p-3 text-sm md:grid-cols-2' : 'space-y-2 rounded-lg border border-[#d7eef3] p-4 text-sm'}>
           <div className="flex justify-between">
             <span>Tạm tính</span>
             <span>{formatCurrency(subtotal)}</span>
@@ -1158,10 +1158,6 @@ export default function POS() {
           <div className="flex justify-between">
             <span>VAT {vatPercentValue}%</span>
             <span>{formatCurrency(vatAmount)}</span>
-          </div>
-          <div className="flex justify-between text-lg font-extrabold text-[#191c1e]">
-            <span>Tổng cộng</span>
-            <span>{formatCurrency(total)}</span>
           </div>
           <div className="flex justify-between">
             <span>Phương thức</span>
@@ -1179,9 +1175,13 @@ export default function POS() {
               </div>
             </>
           )}
+          <div className="flex justify-between text-lg font-extrabold text-[#191c1e]">
+            <span>Tổng cộng</span>
+            <span>{formatCurrency(total)}</span>
+          </div>
         </div>
 
-        <div className="flex justify-end gap-3">
+        <div className={isTransferQrStep ? 'sticky bottom-0 z-10 -mx-6 -mb-6 flex justify-end gap-3 border-t border-[#edf7f9] bg-white px-6 py-3' : 'flex justify-end gap-3'}>
           <button
             type="button"
             onClick={isTransferQrStep ? () => setCheckoutStep('confirm') : closeCheckoutConfirm}
