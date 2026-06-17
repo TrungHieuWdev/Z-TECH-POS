@@ -1,5 +1,24 @@
 import { query } from '../config/db.js';
 
+function normalizePhone(value) {
+  return String(value || '').replace(/\D/g, '');
+}
+
+function isVietnamPhone(value) {
+  return /^(03|05|07|08|09)\d{8}$/.test(String(value || '').trim());
+}
+
+function getCustomerPayload(body) {
+  const phone = normalizePhone(body.phone);
+
+  return {
+    name: String(body.name || '').trim(),
+    phone,
+    email: String(body.email || '').trim(),
+    address: String(body.address || '').trim()
+  };
+}
+
 export async function getAll(req, res) {
   try {
     const { search } = req.query;
@@ -56,10 +75,14 @@ export async function getById(req, res) {
 
 export async function create(req, res) {
   try {
-    const { name, phone = '', email = '', address = '' } = req.body;
+    const { name, phone, email, address } = getCustomerPayload(req.body);
 
     if (!name) {
       return res.status(400).json({ message: 'Tên khách hàng là bắt buộc' });
+    }
+
+    if (!isVietnamPhone(phone)) {
+      return res.status(400).json({ message: 'Số điện thoại Việt Nam phải gồm 10 chữ số và bắt đầu bằng 03, 05, 07, 08 hoặc 09' });
     }
 
     const result = await query(
@@ -75,10 +98,14 @@ export async function create(req, res) {
 
 export async function update(req, res) {
   try {
-    const { name, phone = '', email = '', address = '' } = req.body;
+    const { name, phone, email, address } = getCustomerPayload(req.body);
 
     if (!name) {
       return res.status(400).json({ message: 'Tên khách hàng là bắt buộc' });
+    }
+
+    if (!isVietnamPhone(phone)) {
+      return res.status(400).json({ message: 'Số điện thoại Việt Nam phải gồm 10 chữ số và bắt đầu bằng 03, 05, 07, 08 hoặc 09' });
     }
 
     const result = await query(

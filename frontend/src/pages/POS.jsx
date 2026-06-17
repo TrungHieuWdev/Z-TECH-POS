@@ -25,6 +25,7 @@ import {
   isBankTransferConfigured
 } from '../utils/bankTransfer';
 import { formatCurrency } from '../utils/format';
+import { isVietnamPhone, normalizePhone, vietnamPhoneMessage } from '../utils/phone';
 
 const paymentOptions = [
   { value: 'cash', label: 'Tiền mặt', icon: Banknote },
@@ -165,6 +166,7 @@ export default function POS() {
   const [categories, setCategories] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [cart, setCart] = useState([]);
+  const [quantityDrafts, setQuantityDrafts] = useState({});
   const [search, setSearch] = useState(routeSearch);
   const [categoryId, setCategoryId] = useState('');
   const [deviceFamily, setDeviceFamily] = useState('');
@@ -338,23 +340,71 @@ export default function POS() {
   };
 
   const updateQuantity = (productId, nextQuantity) => {
+    const normalizedQuantity = Number.isFinite(Number(nextQuantity))
+      ? Math.floor(Number(nextQuantity))
+      : 0;
+
     setCart((current) =>
       current
         .map((item) =>
           item.id === productId
-            ? { ...item, quantity: Math.min(Math.max(nextQuantity, 0), Number(item.stock_quantity)) }
+            ? {
+                ...item,
+                quantity: Math.min(
+                  Math.max(normalizedQuantity, 0),
+                  Number(item.stock_quantity)
+                )
+              }
             : item
         )
         .filter((item) => item.quantity > 0)
     );
   };
 
+  const setCartQuantity = (productId, nextQuantity) => {
+    setQuantityDrafts((current) => {
+      const next = { ...current };
+      delete next[productId];
+      return next;
+    });
+    updateQuantity(productId, nextQuantity);
+  };
+
+  const handleQuantityInput = (productId, value) => {
+    if (!/^\d*$/.test(value)) return;
+
+    setQuantityDrafts((current) => ({ ...current, [productId]: value }));
+
+    if (value !== '') {
+      updateQuantity(productId, Number(value));
+    }
+  };
+
+  const commitQuantityInput = (productId, value) => {
+    if (value === '') {
+      setQuantityDrafts((current) => {
+        const next = { ...current };
+        delete next[productId];
+        return next;
+      });
+      return;
+    }
+
+    setCartQuantity(productId, Number(value));
+  };
+
   const removeItem = (productId) => {
+    setQuantityDrafts((current) => {
+      const next = { ...current };
+      delete next[productId];
+      return next;
+    });
     setCart((current) => current.filter((item) => item.id !== productId));
   };
 
   const clearCart = () => {
     setCart([]);
+    setQuantityDrafts({});
     setDiscount(0);
     setVatPercent(0);
     setCustomerPaid('');
@@ -391,8 +441,15 @@ export default function POS() {
   const createCustomerFromPos = async (event) => {
     event.preventDefault();
 
+    const payload = { ...customerForm, phone: normalizePhone(customerForm.phone) };
+
+    if (!isVietnamPhone(payload.phone)) {
+      toast.error(vietnamPhoneMessage);
+      return;
+    }
+
     try {
-      const response = await api.post('/customers', customerForm);
+      const response = await api.post('/customers', payload);
       const createdCustomer = response.data;
 
       selectCustomer(createdCustomer);
@@ -729,19 +786,33 @@ export default function POS() {
                       <div className="flex overflow-hidden rounded-lg border border-[#c3c6d7] bg-[#eceef0]">
                         <button
                           type="button"
-                          onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                          onClick={() => setCartQuantity(item.id, item.quantity - 1)}
                           className="grid h-8 w-8 place-items-center text-[#434655]"
                           title="Giảm"
                           aria-label="Giảm"
                         >
                           <Minus size={15} />
                         </button>
-                        <span className="grid h-8 w-9 place-items-center text-xs font-bold text-[#191c1e]">
-                          {item.quantity}
-                        </span>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          min="0"
+                          max={Number(item.stock_quantity || 0)}
+                          value={quantityDrafts[item.id] ?? item.quantity}
+                          onChange={(event) => handleQuantityInput(item.id, event.target.value)}
+                          onBlur={(event) => commitQuantityInput(item.id, event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              event.currentTarget.blur();
+                            }
+                          }}
+                          className="h-8 w-10 border-x border-[#c3c6d7] bg-[#eceef0] text-center text-xs font-bold text-[#191c1e] outline-none focus:bg-white focus:ring-1 focus:ring-[#76b8dc]"
+                          aria-label="So luong"
+                        />
                         <button
                           type="button"
-                          onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                          onClick={() => setCartQuantity(item.id, item.quantity + 1)}
                           className="grid h-8 w-8 place-items-center text-[#434655]"
                           title="Tăng"
                           aria-label="Tăng"
@@ -988,8 +1059,13 @@ export default function POS() {
           <span className="mb-1 block text-sm font-semibold text-[#434655]">Số điện thoại</span>
           <input
             value={customerForm.phone}
-            onChange={(event) => setCustomerForm({ ...customerForm, phone: event.target.value })}
+            onChange={(event) =>
+              setCustomerForm({ ...customerForm, phone: normalizePhone(event.target.value) })
+            }
             className="h-10 w-full rounded-lg border border-[#c3c6d7] px-3 outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft"
+            inputMode="numeric"
+            maxLength={10}
+            pattern="(03|05|07|08|09)[0-9]{8}"
             required
           />
         </label>

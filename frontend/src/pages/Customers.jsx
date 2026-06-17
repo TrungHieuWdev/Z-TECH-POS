@@ -5,6 +5,7 @@ import api from '../api/axios';
 import Modal from '../components/Modal';
 import { formatDate } from '../utils/format';
 import { getUser, isFullAccessRole } from '../utils/auth';
+import { isVietnamPhone, normalizePhone, vietnamPhoneMessage } from '../utils/phone';
 
 const initialForm = { name: '', phone: '', email: '', address: '' };
 
@@ -54,12 +55,19 @@ export default function Customers() {
   const handleSubmit = async (event) => {
     event.preventDefault();
 
+    const payload = { ...form, phone: normalizePhone(form.phone) };
+
+    if (!isVietnamPhone(payload.phone)) {
+      toast.error(vietnamPhoneMessage);
+      return;
+    }
+
     try {
       if (editingCustomer) {
-        await api.put(`/customers/${editingCustomer.id}`, form);
+        await api.put(`/customers/${editingCustomer.id}`, payload);
         toast.success('Đã cập nhật khách hàng');
       } else {
-        await api.post('/customers', form);
+        await api.post('/customers', payload);
         toast.success('Đã thêm khách hàng');
       }
 
@@ -183,8 +191,12 @@ export default function Customers() {
             <span className="mb-1 block text-sm font-medium text-gray-700">Điện thoại</span>
             <input
               value={form.phone}
-              onChange={(event) => setForm({ ...form, phone: event.target.value })}
+              onChange={(event) => setForm({ ...form, phone: normalizePhone(event.target.value) })}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-brand"
+              inputMode="numeric"
+              maxLength={10}
+              pattern="(03|05|07|08|09)[0-9]{8}"
+              required
             />
           </label>
           <label>
