@@ -8,11 +8,28 @@ function isVietnamPhone(value) {
   return /^(03|05|07|08|09)\d{8}$/.test(String(value || '').trim());
 }
 
+const customerNameMessage =
+  'Ten khach hang phai tu 2-100 ky tu, chi gom chu cai, khoang trang va dau cham';
+
+function normalizeCustomerName(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ');
+}
+
+function isValidCustomerName(value) {
+  const name = normalizeCustomerName(value);
+
+  if (name.length < 2 || name.length > 100) {
+    return false;
+  }
+
+  return /^(?=.*\p{L})[\p{L} .]+$/u.test(name);
+}
+
 function getCustomerPayload(body) {
   const phone = normalizePhone(body.phone);
 
   return {
-    name: String(body.name || '').trim(),
+    name: normalizeCustomerName(body.name),
     phone,
     email: String(body.email || '').trim(),
     address: String(body.address || '').trim()
@@ -77,8 +94,8 @@ export async function create(req, res) {
   try {
     const { name, phone, email, address } = getCustomerPayload(req.body);
 
-    if (!name) {
-      return res.status(400).json({ message: 'Tên khách hàng là bắt buộc' });
+    if (!isValidCustomerName(name)) {
+      return res.status(400).json({ message: customerNameMessage });
     }
 
     if (!isVietnamPhone(phone)) {
@@ -100,8 +117,8 @@ export async function update(req, res) {
   try {
     const { name, phone, email, address } = getCustomerPayload(req.body);
 
-    if (!name) {
-      return res.status(400).json({ message: 'Tên khách hàng là bắt buộc' });
+    if (!isValidCustomerName(name)) {
+      return res.status(400).json({ message: customerNameMessage });
     }
 
     if (!isVietnamPhone(phone)) {

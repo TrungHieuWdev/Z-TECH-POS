@@ -26,6 +26,7 @@ import {
 } from '../utils/bankTransfer';
 import { formatCurrency } from '../utils/format';
 import { isVietnamPhone, normalizePhone, vietnamPhoneMessage } from '../utils/phone';
+import { customerNameMessage, isValidCustomerName, normalizeCustomerName } from '../utils/customerName';
 
 const paymentOptions = [
   { value: 'cash', label: 'Tiền mặt', icon: Banknote },
@@ -441,7 +442,16 @@ export default function POS() {
   const createCustomerFromPos = async (event) => {
     event.preventDefault();
 
-    const payload = { ...customerForm, phone: normalizePhone(customerForm.phone) };
+    const payload = {
+      ...customerForm,
+      name: normalizeCustomerName(customerForm.name),
+      phone: normalizePhone(customerForm.phone)
+    };
+
+    if (!isValidCustomerName(payload.name)) {
+      toast.error(customerNameMessage);
+      return;
+    }
 
     if (!isVietnamPhone(payload.phone)) {
       toast.error(vietnamPhoneMessage);
@@ -1052,6 +1062,9 @@ export default function POS() {
             value={customerForm.name}
             onChange={(event) => setCustomerForm({ ...customerForm, name: event.target.value })}
             className="h-10 w-full rounded-lg border border-[#c3c6d7] px-3 outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft"
+            maxLength={100}
+            pattern="(?=.*\p{L})[\p{L} .]{2,100}"
+            title={customerNameMessage}
             required
           />
         </label>

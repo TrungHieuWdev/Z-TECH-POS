@@ -6,6 +6,7 @@ import Modal from '../components/Modal';
 import { formatDate } from '../utils/format';
 import { getUser, isFullAccessRole } from '../utils/auth';
 import { isVietnamPhone, normalizePhone, vietnamPhoneMessage } from '../utils/phone';
+import { customerNameMessage, isValidCustomerName, normalizeCustomerName } from '../utils/customerName';
 
 const initialForm = { name: '', phone: '', email: '', address: '' };
 
@@ -55,7 +56,12 @@ export default function Customers() {
   const handleSubmit = async (event) => {
     event.preventDefault();
 
-    const payload = { ...form, phone: normalizePhone(form.phone) };
+    const payload = { ...form, name: normalizeCustomerName(form.name), phone: normalizePhone(form.phone) };
+
+    if (!isValidCustomerName(payload.name)) {
+      toast.error(customerNameMessage);
+      return;
+    }
 
     if (!isVietnamPhone(payload.phone)) {
       toast.error(vietnamPhoneMessage);
@@ -184,6 +190,9 @@ export default function Customers() {
               value={form.name}
               onChange={(event) => setForm({ ...form, name: event.target.value })}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-brand"
+              maxLength={100}
+              pattern="(?=.*\p{L})[\p{L} .]{2,100}"
+              title={customerNameMessage}
               required
             />
           </label>

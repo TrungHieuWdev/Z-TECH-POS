@@ -19,23 +19,32 @@ import {
 import ztechLogo from '../assets/images/1111.png';
 import { getUser, isFullAccessRole, logout } from '../utils/auth';
 
-const navItems = [
+const primaryItems = [
   { to: '/', label: 'Tổng quan', icon: LayoutDashboard },
-  { to: '/pos', label: 'Bán hàng POS', icon: ShoppingCart },
+  { to: '/pos', label: 'Bán hàng', icon: ShoppingCart },
   { to: '/products', label: 'Sản phẩm', icon: Package },
-  { to: '/categories', label: 'Danh mục', icon: Tags },
-  { to: '/orders', label: 'Hóa đơn', icon: ReceiptText },
   { to: '/inventory', label: 'Kho hàng', icon: Boxes },
   { to: '/customers', label: 'Khách hàng', icon: Users },
+  { to: '/orders', label: 'Hóa đơn', icon: ReceiptText },
+  { to: '/reports', label: 'Báo cáo', icon: ChartNoAxesCombined }
+];
+
+const extraItems = [
+  { to: '/categories', label: 'Danh mục', icon: Tags },
   { to: '/suppliers', label: 'Nhà cung cấp', icon: Truck },
   { to: '/employees', label: 'Nhân viên', icon: BadgeCheck },
   { to: '/shifts', label: 'Ca làm', icon: CalendarClock },
-  { to: '/reports', label: 'Báo cáo', icon: ChartNoAxesCombined },
+  { to: '/promotions', label: 'Khuyến mãi', icon: Tags },
+  { label: 'Bảo hành', icon: BadgeCheck },
   { to: '/activity-logs', label: 'Nhật ký hoạt động', icon: History },
   { label: 'AI gợi ý', icon: BrainCircuit }
 ];
 
 const employeeAllowedPaths = new Set(['/pos', '/orders', '/products', '/inventory', '/customers', '/shifts']);
+
+function isAllowed(item, hasFullAccess) {
+  return hasFullAccess || (item.to && employeeAllowedPaths.has(item.to));
+}
 
 function isPathActive(pathname, to) {
   if (!to) return false;
@@ -43,17 +52,17 @@ function isPathActive(pathname, to) {
   return pathname === to || pathname.startsWith(`${to}/`);
 }
 
-function navItemClass(isActive) {
+function navItemClass(isActive, isCompact = false) {
   return [
-    'group relative mx-2 flex min-h-[42px] w-[calc(100%-1rem)] items-center gap-3 overflow-hidden rounded-lg px-4 py-1.5',
-    'text-left text-[15px] font-semibold outline-none',
+    'group relative flex w-full items-center overflow-hidden rounded-lg text-left font-semibold outline-none',
     'transition-[color,transform,box-shadow] duration-200 ease-out',
     'will-change-transform active:scale-[0.985] focus-visible:ring-2 focus-visible:ring-brand-soft',
+    isCompact ? 'min-h-[38px] gap-3 px-4 py-1 text-[15px]' : 'min-h-[38px] gap-3 px-4 py-1 text-[15px]',
     isActive ? 'text-white shadow-sm' : 'text-[#191c1d] hover:text-brand-ink'
   ].join(' ');
 }
 
-function NavItemContent({ icon: Icon, label, isActive }) {
+function NavItemContent({ icon: Icon, label, isActive, isCompact = false }) {
   return (
     <>
       <span
@@ -65,7 +74,7 @@ function NavItemContent({ icon: Icon, label, isActive }) {
         ].join(' ')}
       />
       <Icon
-        size={21}
+        size={isCompact ? 20 : 20}
         strokeWidth={2.1}
         className="relative z-10 shrink-0 transition-transform duration-200 ease-out group-hover:scale-105"
       />
@@ -80,74 +89,92 @@ export default function Sidebar() {
   const hasFullAccess = isFullAccessRole(user?.role);
   const [pendingPath, setPendingPath] = useState('');
 
+  const visiblePrimaryItems = primaryItems.filter((item) => isAllowed(item, hasFullAccess));
+  const visibleExtraItems = extraItems.filter((item) => isAllowed(item, hasFullAccess));
+
   useEffect(() => {
     setPendingPath('');
   }, [location.pathname]);
 
+  const renderNavItem = (item, isCompact = false) => {
+    const isActive = pendingPath ? pendingPath === item.to : isPathActive(location.pathname, item.to);
+
+    if (!item.to) {
+      return (
+        <button
+          key={item.label}
+          type="button"
+          className={`${navItemClass(false, isCompact)} cursor-not-allowed opacity-55`}
+        >
+          <NavItemContent icon={item.icon} label={item.label} isActive={false} isCompact={isCompact} />
+        </button>
+      );
+    }
+
+    return (
+      <NavLink
+        key={item.to}
+        to={item.to}
+        end={item.to === '/'}
+        onPointerDown={() => setPendingPath(item.to)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            setPendingPath(item.to);
+          }
+        }}
+        className={navItemClass(isActive, isCompact)}
+      >
+        <NavItemContent icon={item.icon} label={item.label} isActive={isActive} isCompact={isCompact} />
+      </NavLink>
+    );
+  };
+
   return (
-    <aside className="fixed left-0 top-0 z-50 hidden h-screen w-[260px] flex-col border-r border-[#c3c7cd] bg-white py-3 lg:flex">
-      <div className="mb-4 px-6">
-        <div className="flex h-16 items-center gap-3">
-          <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-brand-surface" data-preserve-radius="logo">
+    <aside className="fixed left-0 top-0 z-50 hidden h-screen w-[260px] flex-col border-r border-[#c3c7cd] bg-white py-2 lg:flex">
+      <div className="mb-5 px-4">
+        <div className="flex h-14 items-center gap-3">
+          <div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-brand-surface" data-preserve-radius="logo">
             <img
               src={ztechLogo}
               alt="Z-TECH POS logo"
-              className="max-w-none -translate-x-[64px] -translate-y-[21px] object-contain"
-              style={{ width: 195 }}
+              className="max-w-none -translate-x-[59px] -translate-y-[19px] object-contain"
+              style={{ width: 180 }}
             />
           </div>
           <div className="flex min-w-0 flex-col justify-center">
-            <div className="whitespace-nowrap text-xl font-extrabold leading-6 text-brand">Z-TECH POS</div>
-            <p className="hidden text-sm text-gray-500 sm:block">Quản lý bán hàng</p>
-           
+            <div
+              className="whitespace-nowrap text-xl font-black leading-6 text-brand"
+              style={{ WebkitTextStroke: '0.8px currentColor', textShadow: '0.25px 0 currentColor' }}
+            >
+              Z-TECH POS
+            </div>
+            <p className="hidden text-xs text-gray-1000 sm:block">Quản lý bán hàng</p>
           </div>
         </div>
       </div>
 
-      <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-2">
-        <div className="space-y-1">
-          {navItems
-            .filter((item) => hasFullAccess || (item.to && employeeAllowedPaths.has(item.to)))
-            .map((item) => {
-            const isActive = pendingPath
-              ? pendingPath === item.to
-              : isPathActive(location.pathname, item.to);
-
-            if (!item.to) {
-              return (
-                <button key={item.label} type="button" className={navItemClass(false)}>
-                  <NavItemContent icon={item.icon} label={item.label} isActive={false} />
-                </button>
-              );
-            }
-
-            return (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.to === '/'}
-                onPointerDown={() => setPendingPath(item.to)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    setPendingPath(item.to);
-                  }
-                }}
-                className={navItemClass(isActive)}
-              >
-                <NavItemContent icon={item.icon} label={item.label} isActive={isActive} />
-              </NavLink>
-            );
-          })}
+      <nav className="flex flex-1 flex-col gap-2.0 overflow-hidden px-3">
+        <div className="space-y-0.5">
+          {visiblePrimaryItems.map((item) => renderNavItem(item))}
         </div>
+
+        {visibleExtraItems.length > 0 && (
+          <div className="space-y-0.5 pt-2">
+            <div className="px-3 text-[10px] font-extrabold uppercase tracking-wide text-[#8b929a]">
+              Quản lý thêm
+            </div>
+            {visibleExtraItems.map((item) => renderNavItem(item))}
+          </div>
+        )}
       </nav>
 
-      <div className="px-2 pt-2">
+      <div className="px-3 pt-2">
         <button
           type="button"
           onClick={logout}
-          className="mx-2 flex min-h-[38px] w-[calc(100%-1rem)] items-center justify-center gap-3 rounded-lg bg-brand-soft px-4 py-1.5 text-[15px] font-semibold text-brand-ink outline-none transition-[background-color,color,box-shadow,transform] duration-200 ease-out hover:bg-red-600 hover:text-white active:scale-[0.985] active:bg-red-700 active:text-white focus-visible:ring-2 focus-visible:ring-red-200"
+          className="flex min-h-[36px] w-full items-center justify-center gap-3 rounded-lg bg-brand-soft px-4 py-1.5 text-[14px] font-semibold text-brand-ink outline-none transition-[background-color,color,box-shadow,transform] duration-200 ease-out hover:bg-red-600 hover:text-white active:scale-[0.985] active:bg-red-700 active:text-white focus-visible:ring-2 focus-visible:ring-red-200"
         >
-          <LogOut size={20} />
+          <LogOut size={18} />
           <span>Đăng xuất</span>
         </button>
       </div>

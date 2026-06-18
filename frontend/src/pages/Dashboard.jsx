@@ -11,7 +11,20 @@ import {
 import api from '../api/axios';
 import { formatCurrency, formatDate, formatTime } from '../utils/format';
 
-const chartColors = ['#74B8E0', '#BFE3F5', '#3F90BD', '#DFF2FB', '#9FD4EE'];
+const chartColors = [
+  '#6FAED6',
+  '#8AB8A8',
+  '#D6A56F',
+  '#9D8CC7',
+  '#6E8FB7',
+  '#D18A8A',
+  '#78A6A3',
+  '#B9A36A',
+  '#8FA0A8',
+  '#A98AA4',
+  '#7EA77B',
+  '#C28B72'
+];
 
 const categoryPeriodOptions = [
   { value: 'today', label: 'Hôm nay' },

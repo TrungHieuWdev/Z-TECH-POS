@@ -12,6 +12,7 @@ import Inventory from './pages/Inventory';
 import Suppliers from './pages/Suppliers';
 import Employees from './pages/Employees';
 import Shifts from './pages/Shifts';
+import Promotions from './pages/Promotions';
 import Reports from './pages/Reports';
 import ActivityLogs from './pages/ActivityLogs';
 import { canAccessPath, getToken, getUser } from './utils/auth';
@@ -45,6 +46,7 @@ export default function App() {
             <Route path="/suppliers" element={<Suppliers />} />
             <Route path="/employees" element={<Employees />} />
             <Route path="/shifts" element={<Shifts />} />
+            <Route path="/promotions" element={<Promotions />} />
             <Route path="/orders" element={<Orders />} />
             <Route path="/inventory" element={<Inventory />} />
             <Route path="/reports" element={<Reports />} />

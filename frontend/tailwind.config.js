@@ -14,7 +14,7 @@ export default {
         }
       },
       fontFamily: {
-        sans: ['Plus Jakarta Sans', 'Inter', 'ui-sans-serif', 'system-ui', 'sans-serif']
+        sans: ['"Be Vietnam Pro"','Plus Jakarta Sans', 'Inter', 'ui-sans-serif', 'system-ui', 'sans-serif']
       }
     }
   },
