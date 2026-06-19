@@ -1,5 +1,6 @@
 import { query } from '../config/db.js';
 import XLSX from 'xlsx';
+import { normalizeWarrantyPolicy } from '../utils/warrantyPolicy.js';
 
 const DEVICE_FAMILIES = new Set(['apple', 'samsung', 'vivo', 'oppo', 'xiaomi']);
 
@@ -191,6 +192,12 @@ async function resolveImportDeviceModel(item) {
 }
 
 function normalizeProductBody(body, existing = {}) {
+  const warrantyPolicy = normalizeWarrantyPolicy(body, {
+    ...existing,
+    name: body.name?.trim() ?? existing.name,
+    category_name: body.category_name ?? existing.category_name
+  });
+
   return {
     category_id: body.category_id === '' ? null : Number(body.category_id ?? existing.category_id ?? 0),
     device_model_id: body.device_model_id === '' ? null : Number(body.device_model_id ?? existing.device_model_id ?? 0),
@@ -200,7 +207,8 @@ function normalizeProductBody(body, existing = {}) {
     cost_price: body.cost_price === '' ? null : toPositiveNumber(body.cost_price, existing.cost_price ?? 0),
     stock_quantity: toPositiveNumber(body.stock_quantity, existing.stock_quantity ?? 0),
     min_stock: toPositiveNumber(body.min_stock, existing.min_stock ?? 5),
-    image_url: body.image_url?.trim() ?? existing.image_url ?? ''
+    image_url: body.image_url?.trim() ?? existing.image_url ?? '',
+    ...warrantyPolicy
   };
 }
 
@@ -352,8 +360,9 @@ export async function create(req, res) {
 
     const result = await query(
       `INSERT INTO products
-        (category_id, device_model_id, name, description, price, cost_price, stock_quantity, min_stock, image_url)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (category_id, device_model_id, name, description, price, cost_price, stock_quantity, min_stock, image_url,
+         warranty_enabled, warranty_period_days, warranty_type, warranty_conditions, warranty_exclusions, warranty_note)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         product.category_id,
         product.device_model_id,
@@ -363,7 +372,13 @@ export async function create(req, res) {
         product.cost_price,
         product.stock_quantity,
         product.min_stock,
-        product.image_url
+        product.image_url,
+        product.warranty_enabled,
+        product.warranty_period_days,
+        product.warranty_type,
+        product.warranty_conditions,
+        product.warranty_exclusions,
+        product.warranty_note
       ]
     );
 
@@ -415,6 +430,13 @@ export async function importProducts(req, res) {
           stock_quantity: existing.stock_quantity ?? product.stock_quantity,
           min_stock: existing.min_stock ?? product.min_stock,
           image_url: fillMissing(existing.image_url, product.image_url)
+          ,
+          warranty_enabled: existing.warranty_enabled ?? product.warranty_enabled,
+          warranty_period_days: existing.warranty_period_days ?? product.warranty_period_days,
+          warranty_type: existing.warranty_type ?? product.warranty_type,
+          warranty_conditions: fillMissing(existing.warranty_conditions, product.warranty_conditions),
+          warranty_exclusions: fillMissing(existing.warranty_exclusions, product.warranty_exclusions),
+          warranty_note: fillMissing(existing.warranty_note, product.warranty_note)
         };
 
         const hasMissingField =
@@ -426,7 +448,13 @@ export async function importProducts(req, res) {
           next.cost_price !== existing.cost_price ||
           next.stock_quantity !== existing.stock_quantity ||
           next.min_stock !== existing.min_stock ||
-          next.image_url !== existing.image_url;
+          next.image_url !== existing.image_url ||
+          next.warranty_enabled !== existing.warranty_enabled ||
+          next.warranty_period_days !== existing.warranty_period_days ||
+          next.warranty_type !== existing.warranty_type ||
+          next.warranty_conditions !== existing.warranty_conditions ||
+          next.warranty_exclusions !== existing.warranty_exclusions ||
+          next.warranty_note !== existing.warranty_note;
 
         if (!hasMissingField) {
           skipped += 1;
@@ -436,7 +464,8 @@ export async function importProducts(req, res) {
         await query(
           `UPDATE products
            SET category_id = ?, device_model_id = ?, name = ?, description = ?, price = ?, cost_price = ?,
-               stock_quantity = ?, min_stock = ?, image_url = ?
+               stock_quantity = ?, min_stock = ?, image_url = ?, warranty_enabled = ?, warranty_period_days = ?,
+               warranty_type = ?, warranty_conditions = ?, warranty_exclusions = ?, warranty_note = ?
            WHERE id = ?`,
           [
             next.category_id,
@@ -448,6 +477,12 @@ export async function importProducts(req, res) {
             next.stock_quantity,
             next.min_stock,
             next.image_url,
+            next.warranty_enabled,
+            next.warranty_period_days,
+            next.warranty_type,
+            next.warranty_conditions,
+            next.warranty_exclusions,
+            next.warranty_note,
             existing.id
           ]
         );
@@ -458,8 +493,9 @@ export async function importProducts(req, res) {
 
       const result = await query(
         `INSERT INTO products
-          (category_id, device_model_id, name, description, price, cost_price, stock_quantity, min_stock, image_url)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          (category_id, device_model_id, name, description, price, cost_price, stock_quantity, min_stock, image_url,
+           warranty_enabled, warranty_period_days, warranty_type, warranty_conditions, warranty_exclusions, warranty_note)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           product.category_id,
           product.device_model_id,
@@ -469,7 +505,13 @@ export async function importProducts(req, res) {
           product.cost_price,
           product.stock_quantity,
           product.min_stock,
-          product.image_url
+          product.image_url,
+          product.warranty_enabled,
+          product.warranty_period_days,
+          product.warranty_type,
+          product.warranty_conditions,
+          product.warranty_exclusions,
+          product.warranty_note
         ]
       );
 
@@ -507,7 +549,8 @@ export async function update(req, res) {
     await query(
       `UPDATE products
        SET category_id = ?, device_model_id = ?, name = ?, description = ?, price = ?, cost_price = ?,
-           stock_quantity = ?, min_stock = ?, image_url = ?
+           stock_quantity = ?, min_stock = ?, image_url = ?, warranty_enabled = ?, warranty_period_days = ?,
+           warranty_type = ?, warranty_conditions = ?, warranty_exclusions = ?, warranty_note = ?
        WHERE id = ?`,
       [
         product.category_id,
@@ -519,6 +562,12 @@ export async function update(req, res) {
         product.stock_quantity,
         product.min_stock,
         product.image_url,
+        product.warranty_enabled,
+        product.warranty_period_days,
+        product.warranty_type,
+        product.warranty_conditions,
+        product.warranty_exclusions,
+        product.warranty_note,
         req.params.id
       ]
     );

@@ -25,6 +25,7 @@ import {
   isBankTransferConfigured
 } from '../utils/bankTransfer';
 import { formatCurrency } from '../utils/format';
+import { getWarrantyLabel } from '../utils/warrantyPolicy';
 import { isVietnamPhone, normalizePhone, vietnamPhoneMessage } from '../utils/phone';
 import { customerNameMessage, isValidCustomerName, normalizeCustomerName } from '../utils/customerName';
 
@@ -37,6 +38,8 @@ const paymentLabels = {
   cash: 'Tiền mặt',
   transfer: 'Chuyển khoản'
 };
+
+const TRANSFER_CONFIRM_TIMEOUT_SECONDS = 10 * 60;
 
 const deviceFamilyOptions = [
   { value: 'apple', label: 'Phụ kiện Apple' },
@@ -51,6 +54,14 @@ const initialCustomerForm = { name: '', phone: '', email: '', address: '' };
 
 function toMoneyAmount(value) {
   return Math.max(Number(value || 0), 0);
+}
+
+function formatCountdown(totalSeconds) {
+  const safeSeconds = Math.max(Number(totalSeconds || 0), 0);
+  const minutes = Math.floor(safeSeconds / 60);
+  const seconds = safeSeconds % 60;
+
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 }
 
 function getProductSku(product) {
@@ -75,7 +86,11 @@ function buildReceiptItems(cart) {
     name: item.name,
     quantity: item.quantity,
     unitPrice: Number(item.price || 0),
-    lineTotal: Number(item.price || 0) * item.quantity
+    lineTotal: Number(item.price || 0) * item.quantity,
+    warranty_enabled: item.warranty_enabled,
+    warranty_period_days: item.warranty_period_days,
+    warranty_type: item.warranty_type,
+    warranty_note: item.warranty_note
   }));
 }
 
@@ -122,6 +137,11 @@ function ReceiptContent({ receipt }) {
               </span>
               <span className="font-bold text-[#191c1e]">{formatCurrency(item.lineTotal)}</span>
             </div>
+            <div className="mt-1 text-xs font-semibold text-[#434655]">
+              {getWarrantyLabel(item)}
+              {Number(item.warranty_period_days || 0) > 0 ? ` - ${Number(item.warranty_period_days).toLocaleString('vi-VN')} ngày` : ''}
+            </div>
+            {item.warranty_note && <div className="mt-0.5 text-[11px] text-[#737686]">{item.warranty_note}</div>}
           </div>
         ))}
       </div>
@@ -189,6 +209,7 @@ export default function POS() {
   const [bankTransfer, setBankTransfer] = useState(getBankTransferSettings);
   const [vietQrDataUrl, setVietQrDataUrl] = useState('');
   const [checkoutStep, setCheckoutStep] = useState('confirm');
+  const [transferCountdown, setTransferCountdown] = useState(TRANSFER_CONFIRM_TIMEOUT_SECONDS);
   const [pageError, setPageError] = useState('');
   const [isPageLoading, setIsPageLoading] = useState(true);
 

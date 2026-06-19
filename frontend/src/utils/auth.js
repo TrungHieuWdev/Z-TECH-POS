@@ -35,7 +35,7 @@ export function canAccessPath(pathname, user = getUser()) {
   if (!user) return false;
   if (isFullAccessRole(user.role)) return true;
 
-  return ['/pos', '/orders', '/products', '/inventory', '/customers', '/shifts'].some(
+  return ['/pos', '/orders', '/products', '/inventory', '/customers', '/shifts', '/warranties'].some(
     (path) => pathname === path || pathname.startsWith(`${path}/`)
   );
 }

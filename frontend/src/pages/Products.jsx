@@ -8,6 +8,7 @@ import Modal from '../components/Modal';
 import ProductImage from '../components/ProductImage';
 import { formatCurrency } from '../utils/format';
 import { getUser, isFullAccessRole } from '../utils/auth';
+import { getDefaultWarrantyPolicy, getWarrantyLabel, warrantyTypes } from '../utils/warrantyPolicy';
 
 const deviceFamilyOptions = [
   { value: 'apple', label: 'Apple' },
@@ -27,7 +28,13 @@ const initialForm = {
   cost_price: '',
   stock_quantity: 0,
   min_stock: 5,
-  image_url: ''
+  image_url: '',
+  warranty_enabled: false,
+  warranty_period_days: 0,
+  warranty_type: 'none',
+  warranty_conditions: '',
+  warranty_exclusions: '',
+  warranty_note: ''
 };
 
 const importTemplateHeaders = ['ten_san_pham', 'dong_may', 'danh_muc', 'gia', 'ton_kho', 'image_url', 'mo_ta'];
@@ -98,6 +105,16 @@ function readImportSheetRows(worksheet) {
 
 function getDeviceFamilyLabel(value) {
   return deviceFamilyOptions.find((option) => option.value === value)?.label || 'Chưa chọn';
+}
+
+function getCategoryName(categories, categoryId) {
+  return categories.find((category) => String(category.id) === String(categoryId))?.name || '';
+}
+
+function getWarrantyBadgeClass(product) {
+  if (product.warranty_type === 'initial_exchange') return 'bg-amber-100 text-amber-800';
+  if (!Boolean(Number(product.warranty_enabled))) return 'bg-gray-100 text-gray-700';
+  return 'bg-emerald-100 text-emerald-700';
 }
 
 export default function Products() {
@@ -307,7 +324,7 @@ export default function Products() {
 
   const openCreate = () => {
     setEditingProduct(null);
-    setForm(initialForm);
+    setForm({ ...initialForm, ...getDefaultWarrantyPolicy(initialForm) });
     setIsOpen(true);
   };
 
@@ -323,7 +340,13 @@ export default function Products() {
       cost_price: product.cost_price || '',
       stock_quantity: product.stock_quantity || 0,
       min_stock: product.min_stock || 5,
-      image_url: product.image_url || ''
+      image_url: product.image_url || '',
+      warranty_enabled: Boolean(Number(product.warranty_enabled)),
+      warranty_period_days: product.warranty_period_days || 0,
+      warranty_type: product.warranty_type || 'none',
+      warranty_conditions: product.warranty_conditions || '',
+      warranty_exclusions: product.warranty_exclusions || '',
+      warranty_note: product.warranty_note || ''
     });
     setIsOpen(true);
   };
@@ -338,6 +361,15 @@ export default function Products() {
     setForm({ ...form, device_family: value, device_model_id: '' });
   };
 
+  const applyDefaultWarranty = () => {
+    const policy = getDefaultWarrantyPolicy({
+      name: form.name,
+      category_name: getCategoryName(categories, form.category_id)
+    });
+
+    setForm({ ...form, ...policy });
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
 
@@ -345,10 +377,13 @@ export default function Products() {
       ...form,
       category_id: form.category_id || null,
       device_model_id: form.device_model_id || null,
+      category_name: getCategoryName(categories, form.category_id),
       price: Number(form.price),
       cost_price: form.cost_price === '' ? null : Number(form.cost_price),
       stock_quantity: Number(form.stock_quantity),
-      min_stock: Number(form.min_stock)
+      min_stock: Number(form.min_stock),
+      warranty_enabled: form.warranty_enabled ? 1 : 0,
+      warranty_period_days: Number(form.warranty_period_days || 0)
     };
 
     try {
@@ -462,13 +497,14 @@ export default function Products() {
 
       <section className="rounded-lg bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1040px] text-left text-sm">
+          <table className="w-full min-w-[1160px] text-left text-sm">
             <thead className="bg-gray-50 text-gray-500">
               <tr>
                 <th className="px-4 py-3 font-semibold">Ảnh</th>
                 <th className="px-4 py-3 font-semibold">Tên</th>
                 <th className="px-4 py-3 font-semibold">Dòng máy</th>
                 <th className="px-4 py-3 font-semibold">Danh mục</th>
+                <th className="px-4 py-3 font-semibold">Bảo hành</th>
                 <th className="px-4 py-3 font-semibold">Giá</th>
                 <th className="px-4 py-3 font-semibold">Tồn kho</th>
                 <th className="px-4 py-3 font-semibold text-right">Thao tác</th>
@@ -493,6 +529,18 @@ export default function Products() {
                       <div className="text-xs text-gray-500">{product.device_model}</div>
                     </td>
                     <td className="px-4 py-3 text-gray-600">{product.category_name}</td>
+                    <td className="px-4 py-3">
+                      <div className="space-y-1">
+                        <span className={`inline-flex rounded px-2.5 py-1 text-xs font-semibold ${getWarrantyBadgeClass(product)}`}>
+                          {getWarrantyLabel(product)}
+                        </span>
+                        <div className="text-xs text-gray-500">
+                          {Number(product.warranty_period_days || 0) > 0
+                            ? `${Number(product.warranty_period_days).toLocaleString('vi-VN')} ngày`
+                            : warrantyTypes[product.warranty_type] || 'Chưa có'}
+                        </div>
+                      </div>
+                    </td>
                     <td className="px-4 py-3 text-gray-950">{formatCurrency(product.price)}</td>
                     <td className="px-4 py-3">
                       <span
@@ -703,7 +751,7 @@ export default function Products() {
         </div>
       </Modal>
 
-      <Modal isOpen={isOpen} onClose={closeModal} title={editingProduct ? 'Sửa sản phẩm' : 'Thêm sản phẩm'}>
+      <Modal isOpen={isOpen} onClose={closeModal} title={editingProduct ? 'Sửa sản phẩm' : 'Thêm sản phẩm'} maxWidth="max-w-4xl">
         <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2">
           <label className="md:col-span-2">
             <span className="mb-1 block text-sm font-medium text-gray-700">Tên sản phẩm</span>
@@ -820,6 +868,102 @@ export default function Products() {
               className="min-h-24 w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-brand"
             />
           </label>
+          <section className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4 md:col-span-2">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-bold text-gray-950">Chính sách bảo hành</h3>
+                <p className="mt-1 text-xs text-gray-600">Áp theo từng sản phẩm, không dùng chung toàn bộ danh mục.</p>
+              </div>
+              <button
+                type="button"
+                onClick={applyDefaultWarranty}
+                className="h-8 rounded border border-[#74B8E0] bg-white px-3 text-xs font-bold text-[#3386b8] hover:bg-[#eef8fd]"
+              >
+                Tự điền theo loại sản phẩm
+              </button>
+            </div>
+
+            <label className="flex items-center justify-between gap-4 rounded border border-gray-200 bg-white px-3 py-2">
+              <span>
+                <span className="block text-sm font-semibold text-gray-800">Áp dụng bảo hành</span>
+                <span className="text-xs text-gray-500">Bật khi sản phẩm có phiếu bảo hành chính thức.</span>
+              </span>
+              <input
+                type="checkbox"
+                checked={Boolean(form.warranty_enabled)}
+                onChange={(event) =>
+                  setForm({
+                    ...form,
+                    warranty_enabled: event.target.checked,
+                    warranty_type: event.target.checked && form.warranty_type === 'none' ? 'replace' : form.warranty_type
+                  })
+                }
+                className="h-5 w-5 rounded border-gray-300 text-brand-strong focus:ring-brand"
+              />
+            </label>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <label>
+                <span className="mb-1 block text-sm font-medium text-gray-700">Loại chính sách</span>
+                <select
+                  value={form.warranty_type}
+                  onChange={(event) =>
+                    setForm({
+                      ...form,
+                      warranty_type: event.target.value,
+                      warranty_enabled: !['none', 'initial_exchange'].includes(event.target.value)
+                    })
+                  }
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 outline-none focus:border-brand"
+                >
+                  {Object.entries(warrantyTypes).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                <span className="mb-1 block text-sm font-medium text-gray-700">Thời gian bảo hành / đổi lỗi</span>
+                <input
+                  type="number"
+                  min="0"
+                  value={form.warranty_period_days}
+                  onChange={(event) => setForm({ ...form, warranty_period_days: event.target.value })}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 outline-none focus:border-brand"
+                  placeholder="Số ngày"
+                />
+              </label>
+            </div>
+
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-gray-700">Điều kiện được bảo hành / đổi lỗi</span>
+              <textarea
+                value={form.warranty_conditions}
+                onChange={(event) => setForm({ ...form, warranty_conditions: event.target.value })}
+                className="min-h-20 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 outline-none focus:border-brand"
+              />
+            </label>
+
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-gray-700">Trường hợp từ chối</span>
+              <textarea
+                value={form.warranty_exclusions}
+                onChange={(event) => setForm({ ...form, warranty_exclusions: event.target.value })}
+                className="min-h-20 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 outline-none focus:border-brand"
+              />
+            </label>
+
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-gray-700">Ghi chú cho nhân viên / khách hàng</span>
+              <textarea
+                value={form.warranty_note}
+                onChange={(event) => setForm({ ...form, warranty_note: event.target.value })}
+                className="min-h-16 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 outline-none focus:border-brand"
+              />
+            </label>
+          </section>
           <div className="flex justify-end gap-3 md:col-span-2">
             <button type="button" onClick={closeModal} className="rounded-lg border border-gray-300 px-4 py-2 font-medium">
               Hủy

@@ -35,7 +35,7 @@ const extraItems = [
   { to: '/employees', label: 'Nhân viên', icon: BadgeCheck },
   { to: '/shifts', label: 'Ca làm', icon: CalendarClock },
   { to: '/promotions', label: 'Khuyến mãi', icon: Tags },
-  { label: 'Bảo hành', icon: BadgeCheck },
+  { to: '/warranties', label: 'Bảo hành', icon: BadgeCheck },
   { to: '/activity-logs', label: 'Nhật ký hoạt động', icon: History },
   { label: 'AI gợi ý', icon: BrainCircuit }
 ];

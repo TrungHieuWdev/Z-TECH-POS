@@ -12,6 +12,7 @@ import dashboardRoutes from './routes/dashboard.js';
 import reportRoutes from './routes/reports.js';
 import activityLogRoutes from './routes/activityLogs.js';
 import employeeRoutes from './routes/employees.js';
+import warrantyRoutes from './routes/warranties.js';
 
 dotenv.config();
 
@@ -97,6 +98,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/activity-logs', activityLogRoutes);
 app.use('/api/employees', employeeRoutes);
+app.use('/api/warranties', warrantyRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ message: 'Không tìm thấy API' });

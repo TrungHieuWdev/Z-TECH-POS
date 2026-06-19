@@ -15,6 +15,7 @@ import Shifts from './pages/Shifts';
 import Promotions from './pages/Promotions';
 import Reports from './pages/Reports';
 import ActivityLogs from './pages/ActivityLogs';
+import Warranty from './pages/Warranty';
 import { canAccessPath, getToken, getUser } from './utils/auth';
 
 function ProtectedRoute() {
@@ -48,6 +49,7 @@ export default function App() {
             <Route path="/shifts" element={<Shifts />} />
             <Route path="/promotions" element={<Promotions />} />
             <Route path="/orders" element={<Orders />} />
+            <Route path="/warranties" element={<Warranty />} />
             <Route path="/inventory" element={<Inventory />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/activity-logs" element={<ActivityLogs />} />
