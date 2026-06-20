@@ -1,4 +1,5 @@
 import { query } from '../config/db.js';
+import { logActivity } from '../utils/activityLogger.js';
 import XLSX from 'xlsx';
 import { normalizeWarrantyPolicy } from '../utils/warrantyPolicy.js';
 
@@ -383,6 +384,7 @@ export async function create(req, res) {
     );
 
     const created = await query(`${productSelect} WHERE p.id = ?`, [result.insertId]);
+    await logActivity(req.user?.id, 'Thêm sản phẩm', product.name, `Tồn kho ban đầu: ${product.stock_quantity}`);
     res.status(201).json(created[0]);
   } catch (error) {
     res.status(500).json({ message: 'Không thể tạo sản phẩm', error: error.message });
@@ -573,6 +575,7 @@ export async function update(req, res) {
     );
 
     const updated = await query(`${productSelect} WHERE p.id = ?`, [req.params.id]);
+    await logActivity(req.user?.id, 'Sửa sản phẩm', product.name, Number(current[0].stock_quantity) !== Number(product.stock_quantity) ? `Cập nhật tồn kho: ${current[0].stock_quantity} → ${product.stock_quantity}` : 'Cập nhật thông tin sản phẩm');
     res.json(updated[0]);
   } catch (error) {
     res.status(500).json({ message: 'Không thể cập nhật sản phẩm', error: error.message });
@@ -581,12 +584,14 @@ export async function update(req, res) {
 
 export async function remove(req, res) {
   try {
+    const products = await query('SELECT name FROM products WHERE id = ? AND is_active = 1', [req.params.id]);
     const result = await query('UPDATE products SET is_active = 0 WHERE id = ?', [req.params.id]);
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: 'Không tìm thấy sản phẩm' });
     }
 
+    await logActivity(req.user?.id, 'Xóa sản phẩm', products[0]?.name || `ID ${req.params.id}`, 'Sản phẩm đã được ngừng hoạt động');
     res.json({ message: 'Đã xóa sản phẩm' });
   } catch (error) {
     res.status(500).json({ message: 'Không thể xóa sản phẩm', error: error.message });

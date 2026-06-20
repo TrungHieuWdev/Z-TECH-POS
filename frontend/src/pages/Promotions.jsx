@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   BarChart3,
   CalendarX,
@@ -13,8 +13,10 @@ import {
   X
 } from 'lucide-react';
 import { formatCurrency } from '../utils/format';
+import { getPromotions, savePromotions } from '../services/promotionService';
+import api from '../api/axios';
 
-const initialPromotions = [
+export const initialPromotions = [
   {
     id: 1,
     code: 'SALE10',
@@ -89,6 +91,9 @@ const emptyForm = {
   minOrder: '',
   maxDiscount: '',
   scope: 'Toàn đơn hàng',
+  categoryId: '',
+  productId: '',
+  deviceFamily: '',
   startDate: '',
   endDate: '',
   enabled: true,
@@ -148,7 +153,8 @@ function getPromotionStatus(promotion) {
 }
 
 export default function Promotions() {
-  const [promotions, setPromotions] = useState(initialPromotions);
+  const [promotions, setPromotions] = useState(() => getPromotions(initialPromotions));
+  useEffect(() => { savePromotions(promotions); }, [promotions]);
   const [filters, setFilters] = useState({
     search: '',
     status: 'all',
@@ -160,6 +166,11 @@ export default function Promotions() {
   const [editingPromotion, setEditingPromotion] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [codeError, setCodeError] = useState('');
+  const [categories, setCategories] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [productSearch, setProductSearch] = useState('');
+  const [productSearchError, setProductSearchError] = useState('');
+  useEffect(() => { Promise.all([api.get('/categories'), api.get('/products')]).then(([categoryResponse, productResponse]) => { setCategories(categoryResponse.data || []); setProducts(productResponse.data || []); }).catch(() => {}); }, []);
 
   const stats = useMemo(() => {
     const total = promotions.length;
@@ -197,6 +208,7 @@ export default function Promotions() {
     setEditingPromotion(null);
     setForm(emptyForm);
     setCodeError('');
+    setProductSearch('');
     setIsDrawerOpen(true);
   };
 
@@ -210,12 +222,16 @@ export default function Promotions() {
       minOrder: promotion.minOrder,
       maxDiscount: promotion.maxDiscount,
       scope: promotion.scope,
+      categoryId: promotion.categoryId || '',
+      productId: promotion.productId || '',
+      deviceFamily: promotion.deviceFamily || '',
       startDate: promotion.startDate,
       endDate: promotion.endDate,
       enabled: promotion.enabled,
       description: promotion.description
     });
     setCodeError('');
+    setProductSearch(promotion.targetName || '');
     setIsDrawerOpen(true);
   };
 
@@ -224,11 +240,21 @@ export default function Promotions() {
     setEditingPromotion(null);
     setForm(emptyForm);
     setCodeError('');
+    setProductSearch('');
   };
 
   const resetFilters = () => {
     setFilters({ search: '', status: 'all', discountType: 'all', startDate: '', endDate: '' });
   };
+
+  const matchingProducts = useMemo(() => {
+    const keyword = productSearch.trim().toLowerCase();
+    if (!keyword) return products.slice(0, 30);
+    return products.filter((product) => {
+      const code = product.sku || `SKU-${String(product.id).padStart(5, '0')}`;
+      return `${code} ${product.name}`.toLowerCase().includes(keyword);
+    }).slice(0, 30);
+  }, [products, productSearch]);
 
   const togglePromotion = (promotionId) => {
     setPromotions((current) =>
@@ -240,6 +266,11 @@ export default function Promotions() {
 
   const handleSubmit = (event) => {
     event.preventDefault();
+
+    if (form.scope === 'Theo sản phẩm cụ thể' && !form.productId) {
+      setProductSearchError('Vui lòng chọn một sản phẩm trong danh sách gợi ý');
+      return;
+    }
 
     const normalizedCode = normalizePromotionCode(form.code);
     const isDuplicateCode = promotions.some(
@@ -264,6 +295,10 @@ export default function Promotions() {
       discountValue: Number(form.discountValue || 0),
       minOrder: Number(form.minOrder || 0),
       maxDiscount: Number(form.maxDiscount || 0),
+      categoryId: form.scope === 'Theo danh mục sản phẩm' ? Number(form.categoryId || 0) || '' : '',
+      productId: form.scope === 'Theo sản phẩm cụ thể' ? Number(form.productId || 0) || '' : '',
+      deviceFamily: form.scope === 'Theo dòng thiết bị' ? form.deviceFamily : '',
+      targetName: form.scope === 'Theo danh mục sản phẩm' ? categories.find((item) => Number(item.id) === Number(form.categoryId))?.name : form.scope === 'Theo sản phẩm cụ thể' ? products.find((item) => Number(item.id) === Number(form.productId))?.name : form.scope === 'Theo dòng thiết bị' ? form.deviceFamily : '',
       condition:
         form.scope === 'Toàn đơn hàng'
           ? `Đơn từ ${formatCurrency(Number(form.minOrder || 0))}`
@@ -491,7 +526,7 @@ export default function Promotions() {
             aria-label="Đóng form khuyến mãi"
             onClick={closeDrawer}
           />
-          <aside className="absolute right-0 top-0 flex h-full w-full max-w-md flex-col bg-white shadow-[0_12px_40px_rgba(15,23,42,0.18)]">
+          <aside className="absolute left-1/2 top-1/2 flex h-[min(90vh,820px)] w-[calc(100vw-2rem)] max-w-2xl -translate-x-1/2 -translate-y-1/2 flex-col bg-white shadow-[0_12px_40px_rgba(15,23,42,0.18)]">
             <div className="flex items-start justify-between gap-4 border-b border-[#e1e5ea] bg-[#f8fbfd] p-6">
               <div>
                 <h2 className="text-xl font-bold text-brand-deep">
@@ -620,14 +655,44 @@ export default function Promotions() {
                   <span className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#68707a]">Phạm vi áp dụng</span>
                   <select
                     value={form.scope}
-                    onChange={(event) => setForm({ ...form, scope: event.target.value })}
+                    onChange={(event) => setForm({ ...form, scope: event.target.value, categoryId: '', productId: '', deviceFamily: '' })}
                     className="h-10 w-full rounded-lg border border-[#d5dbe3] px-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft"
                   >
                     <option>Toàn đơn hàng</option>
                     <option>Theo danh mục sản phẩm</option>
+                    <option>Theo dòng thiết bị</option>
                     <option>Theo sản phẩm cụ thể</option>
                   </select>
                 </label>
+
+                {form.scope === 'Theo danh mục sản phẩm' && <label className="block">
+                  <span className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#68707a]">Danh mục được áp dụng *</span>
+                  <select required value={form.categoryId} onChange={(event) => setForm({ ...form, categoryId: event.target.value })} className="h-10 w-full border border-[#d5dbe3] px-3 text-sm outline-none focus:border-brand">
+                    <option value="">Chọn danh mục sản phẩm</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+                  </select>
+                </label>}
+
+                {form.scope === 'Theo dòng thiết bị' && <label className="block">
+                  <span className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#68707a]">Dòng thiết bị được áp dụng *</span>
+                  <select required value={form.deviceFamily} onChange={(event) => setForm({ ...form, deviceFamily: event.target.value })} className="h-10 w-full border border-[#d5dbe3] px-3 text-sm outline-none focus:border-brand">
+                    <option value="">Chọn dòng thiết bị</option><option value="apple">Apple / iPhone</option><option value="samsung">Samsung</option><option value="oppo">Oppo</option><option value="vivo">Vivo</option><option value="xiaomi">Xiaomi / Redmi / Poco</option>
+                  </select>
+                </label>}
+
+                {form.scope === 'Theo sản phẩm cụ thể' && <div className="block">
+                  <span className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#68707a]">Sản phẩm được áp dụng *</span>
+                  <div className="relative">
+                    <input required value={productSearch} onChange={(event) => { setProductSearch(event.target.value); setProductSearchError(''); setForm({ ...form, productId: '' }); }} placeholder="Nhập mã SKU hoặc tên sản phẩm..." className="h-10 w-full border border-[#d5dbe3] px-3 text-sm outline-none focus:border-brand" />
+                    {!form.productId && <div className="absolute z-30 mt-1 max-h-52 w-full overflow-y-auto border border-[#d5dbe3] bg-white shadow-lg">
+                      {matchingProducts.length === 0 ? <p className="p-3 text-sm text-[#68707a]">Không tìm thấy sản phẩm phù hợp.</p> : matchingProducts.map((product) => {
+                        const code = product.sku || `SKU-${String(product.id).padStart(5, '0')}`;
+                        return <button key={product.id} type="button" onClick={() => { setForm({ ...form, productId: product.id }); setProductSearchError(''); setProductSearch(`${code} - ${product.name}`); }} className="block w-full border-b px-3 py-2 text-left hover:bg-brand-surface"><span className="block text-xs font-bold text-brand-strong">{code}</span><span className="block truncate text-sm text-[#26313d]">{product.name}</span></button>;
+                      })}
+                    </div>}
+                  </div>
+                  {productSearchError && <p className="mt-1 text-xs font-semibold text-red-600">{productSearchError}</p>}
+                  {form.productId && <button type="button" onClick={() => { setForm({ ...form, productId: '' }); setProductSearch(''); }} className="mt-1 text-xs font-bold text-red-600">Chọn lại sản phẩm</button>}
+                </div>}
 
                 <div className="grid grid-cols-2 gap-4">
                   <label>

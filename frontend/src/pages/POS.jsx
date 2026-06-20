@@ -26,6 +26,8 @@ import {
 } from '../utils/bankTransfer';
 import { formatCurrency } from '../utils/format';
 import { getWarrantyLabel } from '../utils/warrantyPolicy';
+import { getPromotionDiscount, getPromotions, isPromotionEligible } from '../services/promotionService';
+import { initialPromotions } from './Promotions';
 import { isVietnamPhone, normalizePhone, vietnamPhoneMessage } from '../utils/phone';
 import { customerNameMessage, isValidCustomerName, normalizeCustomerName } from '../utils/customerName';
 
@@ -192,6 +194,9 @@ export default function POS() {
   const [categoryId, setCategoryId] = useState('');
   const [deviceFamily, setDeviceFamily] = useState('');
   const [discount, setDiscount] = useState(0);
+  const [promotions, setPromotions] = useState(() => getPromotions(initialPromotions));
+  const [selectedPromotion, setSelectedPromotion] = useState(null);
+  const [isPromotionOpen, setIsPromotionOpen] = useState(false);
   const [vatPercent, setVatPercent] = useState(0);
   const [customerPaid, setCustomerPaid] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
@@ -320,9 +325,12 @@ export default function POS() {
     [cart]
   );
 
+  const eligiblePromotions = useMemo(() => promotions.filter((promotion) => isPromotionEligible(promotion, { cart, subtotal, isMember: Boolean(selectedCustomer) })), [promotions, cart, subtotal, selectedCustomer]);
+  const promotionDiscount = selectedPromotion ? getPromotionDiscount(selectedPromotion, subtotal) : 0;
+
   const discountPercentValue = Math.min(Math.max(Number(discount) || 0, 0), 100);
-  const discountValue = Math.round((subtotal * discountPercentValue) / 100);
-  const taxableTotal = Math.max(subtotal - discountValue, 0);
+  const discountValue = Math.min(Math.round((subtotal * discountPercentValue) / 100), Math.max(subtotal - promotionDiscount, 0));
+  const taxableTotal = Math.max(subtotal - promotionDiscount - discountValue, 0);
   const vatPercentValue = Math.max(Number(vatPercent) || 0, 0);
   const vatAmount = Math.round((taxableTotal * vatPercentValue) / 100);
   const total = taxableTotal + vatAmount;
@@ -331,6 +339,20 @@ export default function POS() {
   const changeDue = paymentMethod === 'cash' ? Math.max(customerPaidValue - total, 0) : 0;
   const amountMissing =
     paymentMethod === 'cash' && hasCustomerPaid ? Math.max(total - customerPaidValue, 0) : 0;
+
+  useEffect(() => {
+    const refresh = () => setPromotions(getPromotions(initialPromotions));
+    window.addEventListener('ztech-promotions-changed', refresh);
+    window.addEventListener('storage', refresh);
+    return () => { window.removeEventListener('ztech-promotions-changed', refresh); window.removeEventListener('storage', refresh); };
+  }, []);
+
+  useEffect(() => {
+    if (selectedPromotion && !isPromotionEligible(selectedPromotion, { cart, subtotal, isMember: Boolean(selectedCustomer) })) {
+      setSelectedPromotion(null);
+      toast.error('Khuyến mãi đã được gỡ vì giỏ hàng không còn đủ điều kiện.');
+    }
+  }, [cart, subtotal, selectedCustomer, selectedPromotion]);
 
   const toggleDeviceFamily = (value) => {
     // Tim nhanh theo dong may tach rieng voi loc danh muc san pham chung.
@@ -428,6 +450,7 @@ export default function POS() {
     setCart([]);
     setQuantityDrafts({});
     setDiscount(0);
+    setSelectedPromotion(null);
     setVatPercent(0);
     setCustomerPaid('');
     setIsClearCartOpen(false);
@@ -547,7 +570,7 @@ export default function POS() {
       const response = await api.post('/orders', {
         customer_id: selectedCustomer?.id || null,
         items: buildOrderItems(cart),
-        discount: discountValue,
+        discount: promotionDiscount + discountValue,
         vat_percent: vatPercentValue,
         payment_method: paymentMethod
       });
@@ -558,7 +581,7 @@ export default function POS() {
         paymentMethod,
         items: receiptItems,
         subtotal,
-        discount: discountValue,
+        discount: promotionDiscount + discountValue,
         discountPercent: discountPercentValue,
         vatPercent: vatPercentValue,
         vatAmount,
@@ -610,8 +633,8 @@ export default function POS() {
         {pageError}
       </div>
     )}
-    <div className="no-print grid h-[calc(100vh-6.5rem)] min-h-[720px] overflow-hidden rounded-xl border border-[#c3c6d7] bg-[#f7f9fb] lg:grid-cols-[minmax(0,1fr)_420px] xl:grid-cols-[minmax(0,1fr)_440px]">
-      <section className="flex min-w-0 flex-col overflow-hidden p-5">
+    <div className="no-print grid min-h-0 overflow-visible border border-[#c3c6d7] bg-[#f7f9fb] lg:h-[calc(100vh-6.5rem)] lg:min-h-[720px] lg:overflow-hidden lg:grid-cols-[minmax(0,1fr)_420px] xl:grid-cols-[minmax(0,1fr)_440px]">
+      <section className="flex min-w-0 flex-col overflow-visible p-3 sm:p-4 lg:overflow-hidden lg:p-5">
         <div className="mb-3 grid gap-3 xl:grid-cols-[minmax(0,1fr)_260px]">
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-[#737686]" />
@@ -636,14 +659,14 @@ export default function POS() {
           </select>
         </div>
 
-        <div className="mb-5 flex flex-wrap gap-2">
+        <div className="mb-4 flex gap-2 overflow-x-auto pb-1 lg:flex-wrap lg:overflow-visible">
           {deviceFamilyOptions.map((option) => (
             <button
               key={option.value}
               type="button"
               aria-pressed={deviceFamily === option.value}
               onClick={() => toggleDeviceFamily(option.value)}
-              className={`h-10 rounded-full px-5 text-sm font-semibold ${
+              className={`h-10 shrink-0 rounded-full px-4 text-sm font-semibold sm:px-5 ${
                 deviceFamily === option.value
                   ? 'bg-brand text-brand-ink'
                   : 'border border-[#c3c6d7] bg-white text-[#191c1e]'
@@ -654,9 +677,9 @@ export default function POS() {
           ))}
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+        <div className="min-h-0 flex-1 overflow-visible pr-0 lg:overflow-y-auto lg:pr-1">
           {isPageLoading ? (
-            <div className="grid grid-cols-2 gap-4 pb-5 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+            <div className="grid grid-cols-2 gap-2 pb-5 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
               {Array.from({ length: 8 }).map((_, index) => (
                 <div key={index} className="overflow-hidden rounded-xl border border-[#c3c6d7] bg-white">
                   <div className="aspect-square animate-pulse bg-[#eef2f4]" />
@@ -676,7 +699,7 @@ export default function POS() {
               Chưa có sản phẩm nào để hiển thị. Bạn có thể thử đổi từ khóa tìm kiếm hoặc bộ lọc.
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-4 pb-5 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+            <div className="grid grid-cols-2 gap-2 pb-5 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
             {products.map((product) => {
               const stock = Number(product.stock_quantity || 0);
               const isOutOfStock = stock <= 0;
@@ -684,9 +707,9 @@ export default function POS() {
               return (
                 <div
                   key={product.id}
-                  className="flex min-h-[360px] flex-col overflow-hidden rounded-xl border border-[#c3c6d7] bg-white text-left"
+                  className="flex min-h-[280px] flex-col overflow-hidden rounded-xl border border-[#c3c6d7] bg-white text-left sm:min-h-[360px]"
                 >
-                  <div className="relative h-[180px] shrink-0 overflow-hidden bg-[#f2f4f6]">
+                  <div className="relative aspect-square shrink-0 overflow-hidden bg-[#f2f4f6] sm:h-[180px] sm:aspect-auto">
                     <ProductImage product={product} className="h-full w-full" />
                     <span
                       className={`absolute right-2 top-2 rounded-full px-2 py-1 text-[10px] font-bold uppercase tracking-wide ${getStockTone(stock)}`}
@@ -694,21 +717,21 @@ export default function POS() {
                       {isOutOfStock ? 'Hết hàng' : `Còn ${stock}`}
                     </span>
                   </div>
-                  <div className="flex flex-1 flex-col px-4 pb-5 pt-4">
-                    <h3 className="min-h-[60px] overflow-hidden text-sm font-bold leading-5 text-[#191c1e] [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:3]">
+                  <div className="flex flex-1 flex-col px-2.5 pb-3 pt-3 sm:px-4 sm:pb-5 sm:pt-4">
+                    <h3 className="min-h-[40px] overflow-hidden text-xs font-bold leading-5 text-[#191c1e] [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2] sm:min-h-[60px] sm:text-sm sm:[-webkit-line-clamp:3]">
                       {product.name}
                     </h3>
                     <p className="mt-1 text-[11px] font-semibold uppercase tracking-tight text-[#737686]">
                       {getProductSku(product)}
                     </p>
-                    <span className="mt-auto pt-4 text-lg font-bold leading-6 text-brand-strong">
+                    <span className="mt-auto pt-2 text-sm font-bold leading-6 text-brand-strong sm:pt-4 sm:text-lg">
                       {formatCurrency(product.price)}
                     </span>
                     <button
                       type="button"
                       onClick={() => addToCart(product)}
                       disabled={isOutOfStock}
-                      className={`mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg border text-sm font-bold transition ${
+                      className={`mt-2 inline-flex h-10 w-full items-center justify-center gap-1 rounded-lg border px-1 text-xs font-bold transition sm:mt-4 sm:h-11 sm:gap-2 sm:text-sm ${
                         isOutOfStock
                           ? 'cursor-not-allowed border-[#d7dbe0] bg-[#eceef0] text-[#737686]'
                           : 'border-[#74B8E0] bg-[#f8fdfe] text-[#2f8dc5] hover:bg-[#edf7fd]'
@@ -726,7 +749,7 @@ export default function POS() {
         </div>
       </section>
 
-      <aside className="flex min-h-0 flex-col border-l border-[#c3c6d7] bg-white">
+      <aside className="flex min-h-0 flex-col border-t border-[#c3c6d7] bg-white lg:border-l lg:border-t-0">
         <div className="border-b border-[#c3c6d7] bg-white p-2.5">
           <div className="mb-1.5 flex items-center justify-between">
             <span className="text-sm font-bold text-[#191c1e]">Khách hàng</span>
@@ -868,8 +891,18 @@ export default function POS() {
               <span>Tạm tính</span>
               <span>{formatCurrency(subtotal)}</span>
             </div>
+            <div className="border-y border-[#d9dde2] py-2 text-sm">
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-semibold text-[#434655]">Khuyến mãi</span>
+                <button type="button" onClick={() => { if (!cart.length) return toast.error('Không thể chọn khuyến mãi khi giỏ hàng trống'); setIsPromotionOpen(true); }} className="font-bold text-brand-strong">Chọn khuyến mãi</button>
+              </div>
+              {!selectedPromotion ? <p className="mt-1 text-xs text-[#737686]">Chưa áp dụng</p> : <div className="mt-2 bg-white p-2">
+                <p className="text-xs font-bold text-[#191c1e]">{selectedPromotion.name}</p>
+                <div className="mt-1 flex items-center justify-between"><span className="font-bold text-emerald-700">-{formatCurrency(promotionDiscount)}</span><button type="button" onClick={() => setSelectedPromotion(null)} className="text-xs font-bold text-red-600">Bỏ áp dụng</button></div>
+              </div>}
+            </div>
             <label className="flex items-center justify-between gap-3 text-sm text-[#434655]">
-              <span>Giảm giá</span>
+              <span>Giảm giá thủ công</span>
               <span className="flex h-8 w-32 items-center overflow-hidden rounded-lg border border-[#c3c6d7] bg-white focus-within:border-brand focus-within:ring-2 focus-within:ring-brand-soft">
                 <input
                   type="number"
@@ -966,6 +999,16 @@ export default function POS() {
       </aside>
     </div>
     <div className="no-print">
+    <Modal isOpen={isPromotionOpen} onClose={() => setIsPromotionOpen(false)} title="Khuyến mãi khả dụng" maxWidth="max-w-2xl">
+      <button type="button" onClick={() => { setSelectedPromotion(null); setIsPromotionOpen(false); }} className="mb-3 h-10 w-full border border-[#c3c6d7] bg-white text-sm font-bold text-[#434655]">Không áp dụng khuyến mãi</button>
+      {eligiblePromotions.length === 0 ? <div className="border border-dashed border-[#c3c6d7] p-8 text-center text-sm font-semibold text-[#737686]">Hiện chưa có khuyến mãi phù hợp với giỏ hàng này.</div> : <div className="max-h-[60vh] space-y-3 overflow-y-auto">
+        {eligiblePromotions.map((promotion) => <article key={promotion.id} className="border border-[#d8e4eb] bg-white p-4">
+          <div className="flex items-start justify-between gap-3"><div><h3 className="font-bold text-[#191c1e]">{promotion.name}</h3><p className="mt-1 text-sm text-[#5f6670]">{promotion.description || promotion.condition}</p></div><span className="shrink-0 bg-brand-soft px-2 py-1 text-sm font-bold text-brand-strong">-{formatCurrency(getPromotionDiscount(promotion, subtotal))}</span></div>
+          <div className="mt-3 grid gap-1 text-xs text-[#5f6670] sm:grid-cols-2"><p>Điều kiện: {promotion.condition || 'Không có'}</p><p>Giá trị: {promotion.discountType === 'percent' ? `${promotion.discountValue}%` : formatCurrency(promotion.discountValue)}</p><p>Hiệu lực: {promotion.startDate || '-'} đến {promotion.endDate || '-'}</p></div>
+          <button type="button" onClick={() => { setSelectedPromotion(promotion); setIsPromotionOpen(false); toast.success('Đã áp dụng khuyến mãi'); }} className="mt-3 h-10 w-full bg-brand px-4 text-sm font-bold text-white">Áp dụng</button>
+        </article>)}
+      </div>}
+    </Modal>
     <Modal
       isOpen={isClearCartOpen}
       onClose={() => setIsClearCartOpen(false)}

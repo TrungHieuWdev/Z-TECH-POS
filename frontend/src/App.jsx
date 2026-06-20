@@ -16,6 +16,7 @@ import Promotions from './pages/Promotions';
 import Reports from './pages/Reports';
 import ActivityLogs from './pages/ActivityLogs';
 import Warranty from './pages/Warranty';
+import WarrantyLookupPublic from './pages/WarrantyLookupPublic';
 import { canAccessPath, getToken, getUser } from './utils/auth';
 
 function ProtectedRoute() {
@@ -36,6 +37,7 @@ export default function App() {
       <Toaster position="top-right" />
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/tra-cuu-bao-hanh/:publicToken" element={<WarrantyLookupPublic />} />
         <Route element={<ProtectedRoute />}>
           <Route element={<Layout />}>
             <Route element={<PermissionRoute />}>

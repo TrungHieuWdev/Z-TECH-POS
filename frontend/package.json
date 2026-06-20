@@ -4,7 +4,7 @@
   "description": "React frontend for a phone accessories POS system",
   "type": "module",
   "scripts": {
-    "dev": "vite --open",
+    "dev": "vite --open --host 0.0.0.0",
     "build": "vite build",
     "preview": "vite preview"
   },

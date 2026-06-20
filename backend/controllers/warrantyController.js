@@ -1,5 +1,25 @@
 import { query } from '../config/db.js';
 import { WARRANTY_TYPES } from '../utils/warrantyPolicy.js';
+import { randomUUID } from 'node:crypto';
+
+let warrantySnapshotReady = false;
+export async function ensureWarrantyData() {
+  if (warrantySnapshotReady) return;
+  const columns = [
+    ['warranty_enabled_snapshot', 'BOOLEAN NULL'], ['warranty_period_days_snapshot', 'INT NULL'],
+    ['warranty_type_snapshot', 'VARCHAR(30) NULL'], ['warranty_conditions_snapshot', 'TEXT NULL'],
+    ['warranty_exclusions_snapshot', 'TEXT NULL'], ['warranty_note_snapshot', 'TEXT NULL'],
+    ['public_token', 'CHAR(36) NULL UNIQUE']
+  ];
+  for (const [name, definition] of columns) {
+    const found = await query("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'order_items' AND COLUMN_NAME = ?", [name]);
+    if (!found.length) await query(`ALTER TABLE order_items ADD COLUMN ${name} ${definition}`);
+  }
+  await query(`UPDATE order_items oi JOIN products p ON p.id = oi.product_id SET oi.warranty_enabled_snapshot = p.warranty_enabled, oi.warranty_period_days_snapshot = p.warranty_period_days, oi.warranty_type_snapshot = p.warranty_type, oi.warranty_conditions_snapshot = p.warranty_conditions, oi.warranty_exclusions_snapshot = p.warranty_exclusions, oi.warranty_note_snapshot = p.warranty_note WHERE oi.warranty_enabled_snapshot IS NULL`);
+  const missingTokens = await query('SELECT id FROM order_items WHERE public_token IS NULL');
+  for (const row of missingTokens) await query('UPDATE order_items SET public_token = ? WHERE id = ?', [randomUUID(), row.id]);
+  warrantySnapshotReady = true;
+}
 
 function addMonths(date, months) {
   const nextDate = new Date(date);
@@ -40,7 +60,7 @@ function buildWarrantyCode(row) {
   return `${prefix}-${String(row.order_id).padStart(5, '0')}-${String(row.order_item_id).padStart(3, '0')}`;
 }
 
-function mapWarranty(row) {
+export function mapWarranty(row) {
   const purchasedAt = new Date(row.purchased_at);
   const warrantyPeriodDays = Number(row.warranty_period_days || 0);
   const expiresAt = warrantyPeriodDays > 0 ? addDays(purchasedAt, warrantyPeriodDays) : addMonths(purchasedAt, 0);
@@ -48,6 +68,7 @@ function mapWarranty(row) {
 
   return {
     id: row.order_item_id,
+    publicToken: row.public_token,
     code: buildWarrantyCode(row),
     orderId: row.order_id,
     orderNumber: row.order_number,
@@ -75,6 +96,7 @@ function mapWarranty(row) {
 
 export async function getAll(req, res) {
   try {
+    await ensureWarrantyData();
     const { date_from, date_to } = req.query;
     const params = [];
     let sql = `
@@ -82,6 +104,7 @@ export async function getAll(req, res) {
         oi.id AS order_item_id,
         oi.quantity,
         oi.unit_price,
+        oi.public_token,
         o.id AS order_id,
         o.order_number,
         o.status AS order_status,
@@ -92,12 +115,12 @@ export async function getAll(req, res) {
         u.name AS cashier_name,
         p.id AS product_id,
         p.name AS product_name,
-        p.warranty_enabled,
-        p.warranty_period_days,
-        p.warranty_type,
-        p.warranty_conditions,
-        p.warranty_exclusions,
-        p.warranty_note,
+        COALESCE(oi.warranty_enabled_snapshot, p.warranty_enabled) AS warranty_enabled,
+        COALESCE(oi.warranty_period_days_snapshot, p.warranty_period_days) AS warranty_period_days,
+        COALESCE(oi.warranty_type_snapshot, p.warranty_type) AS warranty_type,
+        COALESCE(oi.warranty_conditions_snapshot, p.warranty_conditions) AS warranty_conditions,
+        COALESCE(oi.warranty_exclusions_snapshot, p.warranty_exclusions) AS warranty_exclusions,
+        COALESCE(oi.warranty_note_snapshot, p.warranty_note) AS warranty_note,
         cat.name AS category_name
       FROM order_items oi
       JOIN orders o ON oi.order_id = o.id

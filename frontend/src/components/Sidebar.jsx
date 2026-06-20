@@ -83,7 +83,7 @@ function NavItemContent({ icon: Icon, label, isActive, isCompact = false }) {
   );
 }
 
-export default function Sidebar() {
+export default function Sidebar({ isMobileOpen = false, onMobileClose = () => {} }) {
   const location = useLocation();
   const user = getUser();
   const hasFullAccess = isFullAccessRole(user?.role);
@@ -94,7 +94,30 @@ export default function Sidebar() {
 
   useEffect(() => {
     setPendingPath('');
+    onMobileClose();
   }, [location.pathname]);
+
+  useEffect(() => {
+    if (!isMobileOpen) return undefined;
+    const scrollY = window.scrollY;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    const previousOverflow = document.body.style.overflow;
+    const previousPosition = document.body.style.position;
+    const previousTop = document.body.style.top;
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+    document.body.style.position = 'fixed';
+    document.body.style.top = `-${scrollY}px`;
+    document.body.style.width = '100%';
+    return () => {
+      document.documentElement.style.overflow = previousHtmlOverflow;
+      document.body.style.overflow = previousOverflow;
+      document.body.style.position = previousPosition;
+      document.body.style.top = previousTop;
+      document.body.style.width = '';
+      window.scrollTo(0, scrollY);
+    };
+  }, [isMobileOpen]);
 
   const renderNavItem = (item, isCompact = false) => {
     const isActive = pendingPath ? pendingPath === item.to : isPathActive(location.pathname, item.to);
@@ -129,8 +152,9 @@ export default function Sidebar() {
     );
   };
 
-  return (
-    <aside className="fixed left-0 top-0 z-50 hidden h-screen w-[260px] flex-col border-r border-[#c3c7cd] bg-white py-2 lg:flex">
+  return (<>
+    {isMobileOpen && <button type="button" className="fixed inset-0 z-50 bg-black/45 lg:hidden" onClick={onMobileClose} aria-label="Đóng menu" />}
+    <aside className={`fixed left-0 top-0 z-[51] flex h-dvh w-[min(86vw,300px)] flex-col border-r border-[#c3c7cd] bg-white py-2 transition-transform duration-200 lg:z-50 lg:h-screen lg:w-[260px] lg:translate-x-0 ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
       <div className="mb-5 px-4">
         <div className="flex h-14 items-center gap-3">
           <div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-brand-surface" data-preserve-radius="logo">
@@ -153,7 +177,7 @@ export default function Sidebar() {
         </div>
       </div>
 
-      <nav className="flex flex-1 flex-col gap-2.0 overflow-hidden px-3">
+      <nav className="flex flex-1 flex-col gap-2 overflow-y-auto px-3 pb-3">
         <div className="space-y-0.5">
           {visiblePrimaryItems.map((item) => renderNavItem(item))}
         </div>
@@ -179,5 +203,5 @@ export default function Sidebar() {
         </button>
       </div>
     </aside>
-  );
+  </>);
 }

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Bell, Search, Settings } from 'lucide-react';
+import { Bell, Menu, Search, Settings } from 'lucide-react';
 import Sidebar from './Sidebar';
 import SettingsModal from './SettingsModal';
+import NotificationCenter from './NotificationCenter';
 import { getUser, isFullAccessRole } from '../utils/auth';
 
 export default function Layout() {
@@ -12,6 +13,9 @@ export default function Layout() {
   const location = useLocation();
   const [quickSearch, setQuickSearch] = useState('');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [notificationCount, setNotificationCount] = useState(0);
 
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
@@ -29,10 +33,12 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen bg-[#f8f9fa] font-sans text-[#191c1d]">
-      <Sidebar />
+      <Sidebar isMobileOpen={isMobileNavOpen} onMobileClose={() => setIsMobileNavOpen(false)} />
       <div className="min-h-screen lg:pl-[260px]">
         <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-[#c3c7cd] bg-white px-4 shadow-sm md:px-5 lg:px-6 xl:px-8">
-          <form onSubmit={handleQuickSearch} className="relative w-full max-w-[260px]">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+          <button type="button" onClick={() => setIsMobileNavOpen(true)} className="grid h-10 w-10 shrink-0 place-items-center text-[#43474d] lg:hidden" aria-label="Mở menu"><Menu size={22} /></button>
+          <form onSubmit={handleQuickSearch} className="relative min-w-0 w-full max-w-[260px]">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-[#73777d]" />
             <input
               type="search"
@@ -42,15 +48,18 @@ export default function Layout() {
               className="h-9 w-full rounded-lg border-0 bg-[#f3f4f5] pl-10 pr-3 text-sm font-medium text-[#191c1d] outline-none ring-1 ring-transparent transition placeholder:text-[#73777d] focus:bg-white focus:ring-2 focus:ring-brand-soft"
             />
           </form>
+          </div>
 
           <div className="flex items-center gap-3">
             <button
               type="button"
-              className="hidden h-9 w-9 items-center justify-center rounded-full text-[#43474d] transition hover:bg-brand-surface hover:text-brand-strong sm:flex"
+              onClick={() => setIsNotificationsOpen(true)}
+              className="relative flex h-9 w-9 items-center justify-center rounded-full text-[#43474d] transition hover:bg-brand-surface hover:text-brand-strong"
               title="Thông báo"
               aria-label="Thông báo"
             >
               <Bell size={20} />
+              {notificationCount > 0 && <span className="absolute left-[23px] top-0 text-[11px] font-extrabold leading-none text-red-600">{notificationCount > 99 ? '99+' : notificationCount}</span>}
             </button>
             <button
               type="button"
@@ -73,11 +82,12 @@ export default function Layout() {
           </div>
         </header>
 
-        <main className="min-w-0 px-4 py-3 md:px-5 lg:px-6 lg:py-4 xl:px-8">
+        <main className="min-w-0 px-3 py-3 sm:px-4 md:px-5 lg:px-6 lg:py-4 xl:px-8">
           <Outlet />
         </main>
       </div>
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
+      <NotificationCenter isOpen={isNotificationsOpen} onClose={() => setIsNotificationsOpen(false)} onCountChange={setNotificationCount} />
     </div>
   );
 }

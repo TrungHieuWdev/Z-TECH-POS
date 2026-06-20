@@ -1,6 +1,7 @@
 import { query } from '../config/db.js';
+import { ensureActivityTable } from '../utils/activityLogger.js';
 
-const allowedTypes = new Set(['order', 'inventory']);
+const allowedTypes = new Set(['order', 'inventory', 'product']);
 
 function getSafeLimit(value) {
   const limit = Number(value || 120);
@@ -99,10 +100,20 @@ const activityLogUnionSql = `
   FROM inventory_logs il
   JOIN products p ON il.product_id = p.id
   LEFT JOIN users u ON il.user_id = u.id
+
+  UNION ALL
+
+  SELECT CONCAT('product-', sal.id), 'product', sal.module, sal.action_label,
+    CONCAT(sal.action_label, ' ', sal.target_name), sal.description,
+    COALESCE(u.name, 'Không rõ'), sal.target_name, NULL, NULL, NULL,
+    sal.action_label, 'completed', sal.created_at
+  FROM system_activity_logs sal
+  LEFT JOIN users u ON sal.user_id = u.id
 `;
 
 export async function getActivityLogs(req, res) {
   try {
+    await ensureActivityTable();
     const params = [];
     const limit = getSafeLimit(req.query.limit);
     const filters = {

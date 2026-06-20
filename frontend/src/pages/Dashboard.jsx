@@ -170,7 +170,7 @@ export default function Dashboard() {
         setError('');
       })
       .catch((requestError) => {
-        setError(requestError.response?.data?.message || 'KhÃ´ng thá»ƒ táº£i dá»¯ liá»‡u dashboard');
+        setError(requestError.response?.data?.message || 'khong the tai du lieu dashboard');
       });
   }, [categoryPeriod, isLoading]);
 
@@ -289,13 +289,13 @@ export default function Dashboard() {
             <CardWrapper
               key={card.label}
               to={card.to}
-              className={`rounded-lg border border-[#e1e3e4] bg-white p-4 shadow-[0_1px_3px_rgba(25,28,29,0.08)] ${
+              className={`rounded-lg border bg-white p-4 shadow-[0_1px_3px_rgba(25,28,29,0.08)] ${card.tone === 'amber' && summary.lowStockCount > 0 ? 'border-red-500' : 'border-[#e1e3e4]'} ${
                 card.to ? 'block transition hover:border-[#c8dff0] hover:shadow-[0_8px_24px_rgba(116,184,224,0.18)]' : ''
               }`}
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-sm font-semibold text-[#73777d]">{card.label}</p>
+                  <p className={`text-sm font-semibold ${card.tone === 'amber' && summary.lowStockCount > 0 ? 'text-red-700' : 'text-[#73777d]'}`}>{card.label}</p>
                   <p className="mt-3 text-xl font-bold leading-6 text-[#191c1d]">
                     {isLoading ? '...' : card.value}
                   </p>

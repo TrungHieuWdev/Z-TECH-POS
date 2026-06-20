@@ -1,4 +1,22 @@
 import { query } from '../config/db.js';
+import { randomUUID } from 'node:crypto';
+
+let warrantySnapshotReady = false;
+async function ensureWarrantySnapshotColumns() {
+  if (warrantySnapshotReady) return;
+  const columns = [
+    ['warranty_enabled_snapshot', 'BOOLEAN NULL'], ['warranty_period_days_snapshot', 'INT NULL'],
+    ['warranty_type_snapshot', "VARCHAR(30) NULL"], ['warranty_conditions_snapshot', 'TEXT NULL'],
+    ['warranty_exclusions_snapshot', 'TEXT NULL'], ['warranty_note_snapshot', 'TEXT NULL'],
+    ['public_token', 'CHAR(36) NULL UNIQUE']
+  ];
+  for (const [name, definition] of columns) {
+    const found = await query("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'order_items' AND COLUMN_NAME = ?", [name]);
+    if (!found.length) await query(`ALTER TABLE order_items ADD COLUMN ${name} ${definition}`);
+  }
+  await query(`UPDATE order_items oi JOIN products p ON p.id = oi.product_id SET oi.warranty_enabled_snapshot = p.warranty_enabled, oi.warranty_period_days_snapshot = p.warranty_period_days, oi.warranty_type_snapshot = p.warranty_type, oi.warranty_conditions_snapshot = p.warranty_conditions, oi.warranty_exclusions_snapshot = p.warranty_exclusions, oi.warranty_note_snapshot = p.warranty_note WHERE oi.warranty_enabled_snapshot IS NULL`);
+  warrantySnapshotReady = true;
+}
 
 async function buildOrderNumber() {
   const rows = await query(`
@@ -16,6 +34,7 @@ async function buildOrderNumber() {
 
 export async function create(req, res) {
   try {
+    await ensureWarrantySnapshotColumns();
     const {
       customer_id = null,
       items = [],
@@ -41,7 +60,7 @@ export async function create(req, res) {
       }
 
       const products = await query(
-        'SELECT id, name, price, stock_quantity FROM products WHERE id = ? AND is_active = 1',
+        'SELECT id, name, price, stock_quantity, warranty_enabled, warranty_period_days, warranty_type, warranty_conditions, warranty_exclusions, warranty_note FROM products WHERE id = ? AND is_active = 1',
         [productId]
       );
       const product = products[0];
@@ -57,7 +76,7 @@ export async function create(req, res) {
       const unitPrice = Number(product.price);
       const lineTotal = unitPrice * quantity;
       subtotal += lineTotal;
-      orderItems.push({ product_id: product.id, quantity, unit_price: unitPrice, subtotal: lineTotal });
+      orderItems.push({ ...product, product_id: product.id, quantity, unit_price: unitPrice, subtotal: lineTotal });
     }
 
     const discountValue = Math.max(Number(discount) || 0, 0);
@@ -76,8 +95,8 @@ export async function create(req, res) {
 
     for (const item of orderItems) {
       await query(
-        'INSERT INTO order_items (order_id, product_id, quantity, unit_price, subtotal) VALUES (?, ?, ?, ?, ?)',
-        [orderResult.insertId, item.product_id, item.quantity, item.unit_price, item.subtotal]
+        `INSERT INTO order_items (order_id, product_id, quantity, unit_price, subtotal, warranty_enabled_snapshot, warranty_period_days_snapshot, warranty_type_snapshot, warranty_conditions_snapshot, warranty_exclusions_snapshot, warranty_note_snapshot, public_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [orderResult.insertId, item.product_id, item.quantity, item.unit_price, item.subtotal, item.warranty_enabled, item.warranty_period_days, item.warranty_type, item.warranty_conditions, item.warranty_exclusions, item.warranty_note, randomUUID()]
       );
 
       await query(

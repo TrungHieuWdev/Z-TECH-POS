@@ -30,6 +30,43 @@
   display: none;
 }
 
+@media (max-width: 1023px) {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    overflow-x: hidden;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    max-width: 100%;
+  }
+
+  .overflow-x-auto {
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .overflow-x-auto::-webkit-scrollbar {
+    display: block;
+    height: 5px;
+  }
+
+  .overflow-x-auto::-webkit-scrollbar-thumb {
+    background: #c3c7cd;
+  }
+
+  [data-rht-toaster] {
+    left: 12px !important;
+    right: 12px !important;
+  }
+}
+
 body {
   margin: 0;
   min-width: 320px;

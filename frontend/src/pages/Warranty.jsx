@@ -9,14 +9,18 @@ import {
   RefreshCw,
   RotateCcw,
   Search,
+  Settings,
   ShieldCheck,
   TimerReset,
   XCircle
 } from 'lucide-react';
 import api from '../api/axios';
 import Modal from '../components/Modal';
+import WarrantySettingsModal from '../components/WarrantySettingsModal';
+import WarrantyQr from '../components/WarrantyQr';
+import { getWarrantySettings } from '../services/warrantySettingsService';
 import { formatCurrency, formatDate, formatTime } from '../utils/format';
-import { getUser } from '../utils/auth';
+import { getUser, isFullAccessRole } from '../utils/auth';
 
 const PAGE_SIZE = 8;
 
@@ -322,14 +326,17 @@ function HistoryTable({ history }) {
 }
 
 async function adjustInventoryForExchange() {
-  // Placeholder: connect this to the inventory API when exchange stock deduction is supported.
+
   return { ok: true };
 }
 
 export default function Warranty() {
   const currentUser = getUser();
+  const canEditWarrantySettings = isFullAccessRole(currentUser?.role);
+  const [showWarrantySettings, setShowWarrantySettings] = useState(false);
   const currentStaffName = currentUser?.name || 'Nhân viên tiếp nhận';
   const [warranties, setWarranties] = useState([]);
+  const [showWarrantyQr, setShowWarrantyQr] = useState(true);
   const [localStatusByCode, setLocalStatusByCode] = useState({});
   const [historyByCode, setHistoryByCode] = useState({});
   const [receiptByCode, setReceiptByCode] = useState({});
@@ -341,11 +348,7 @@ export default function Warranty() {
   const [activeModal, setActiveModal] = useState({ type: '', warranty: null });
   const [receiveForm, setReceiveForm] = useState({
     issue: '',
-    hasSeal: true,
-    scratched: false,
-    missingBox: false,
-    broken: false,
-    waterDamage: false,
+    productState: '',
     receivedAt: getCurrentDateInput(),
     staffName: currentStaffName,
     note: ''
@@ -378,7 +381,13 @@ export default function Warranty() {
 
   useEffect(() => {
     loadWarranties();
+    getWarrantySettings().then((settings) => setShowWarrantyQr(settings.receipt?.qr !== false));
   }, [period]);
+
+  useEffect(() => {
+    const warrantyCode = new URLSearchParams(window.location.search).get('code');
+    if (warrantyCode) setSearch(warrantyCode);
+  }, []);
 
   const enrichedWarranties = useMemo(() => {
     return warranties.map((warranty) => ({
@@ -402,11 +411,7 @@ export default function Warranty() {
     if (type === 'receive') {
       setReceiveForm({
         issue: '',
-        hasSeal: true,
-        scratched: false,
-        missingBox: false,
-        broken: false,
-        waterDamage: false,
+        productState: '',
         receivedAt: getCurrentDateInput(),
         staffName: currentStaffName,
         note: ''
@@ -444,15 +449,7 @@ export default function Warranty() {
   function handleReceiveSubmit(event) {
     event.preventDefault();
     const warranty = activeModal.warranty;
-    const productState = [
-      receiveForm.hasSeal ? 'còn tem' : 'mất tem',
-      receiveForm.scratched ? 'trầy xước' : '',
-      receiveForm.missingBox ? 'mất hộp' : '',
-      receiveForm.broken ? 'rơi vỡ' : '',
-      receiveForm.waterDamage ? 'vào nước' : ''
-    ]
-      .filter(Boolean)
-      .join(', ');
+    const productState = receiveForm.productState.trim();
 
     setLocalStatusByCode((current) => ({ ...current, [warranty.code]: 'processing' }));
     setReceiptByCode((current) => ({ ...current, [warranty.code]: { ...receiveForm, productState } }));
@@ -591,9 +588,17 @@ export default function Warranty() {
         <div>
           <h1 className="text-xl font-semibold text-gray-950">Bảo hành</h1>
           <p className="mt-2 text-sm text-gray-700">
-            Tra cứu hạn bảo hành từ hóa đơn thật, sản phẩm đã bán và thông tin khách hàng trong hệ thống.
+            Tra cứu hạn bảo hành từ hóa đơn, sản phẩm đã bán và thông tin khách hàng.
           </p>
         </div>
+        <button
+          type="button"
+          onClick={() => setShowWarrantySettings(true)}
+          className="ml-auto inline-flex h-9 items-center gap-2 rounded-md border border-gray-300 bg-white px-4 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+        >
+          <Settings size={15} />
+          Thiết lập bảo hành
+        </button>
         <button
           type="button"
           onClick={loadWarranties}
@@ -603,6 +608,13 @@ export default function Warranty() {
           Làm mới
         </button>
       </div>
+
+      <WarrantySettingsModal
+        isOpen={showWarrantySettings}
+        onClose={() => setShowWarrantySettings(false)}
+        canEdit={canEditWarrantySettings}
+        userName={currentStaffName}
+      />
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {summaryCards.map((card) => (
@@ -678,7 +690,7 @@ export default function Warranty() {
                 <th className="px-4 py-3">Khách hàng</th>
                 <th className="px-4 py-3">Sản phẩm</th>
                 <th className="px-4 py-3">Ngày mua</th>
-                <th className="px-4 py-3">Hạn BH</th>
+                <th className="px-4 py-3">Hạn Bảo Hành</th>
                 <th className="px-4 py-3">Trạng thái</th>
                 <th className="px-4 py-3">Nhân viên</th>
                 <th className="px-4 py-3 text-right">Thao tác</th>
@@ -774,7 +786,8 @@ export default function Warranty() {
             </div>
 
             <aside className="space-y-4">
-              <div className="grid h-40 place-items-center rounded-lg border border-dashed border-gray-300 bg-gray-50 text-center text-xs font-semibold text-gray-500">
+              {showWarrantyQr && <WarrantyQr warrantyCode={selectedWarranty.code} publicToken={selectedWarranty.publicToken} />}
+              <div className="hidden h-40 place-items-center rounded-lg border border-dashed border-gray-300 bg-gray-50 text-center text-xs font-semibold text-gray-500">
                 QR tra cứu bảo hành
               </div>
               <div className="rounded-lg border border-gray-200 p-4">
@@ -812,16 +825,15 @@ export default function Warranty() {
                 className="min-h-24 w-full rounded border border-gray-300 px-3 py-2 outline-none focus:border-brand"
               />
             </label>
-            <div>
-              <span className="mb-2 block font-medium text-gray-700">Tình trạng sản phẩm khi nhận</span>
-              <div className="grid gap-2 sm:grid-cols-2">
-                <Checkbox label="Còn tem" checked={receiveForm.hasSeal} onChange={(value) => setReceiveForm({ ...receiveForm, hasSeal: value })} />
-                <Checkbox label="Trầy xước" checked={receiveForm.scratched} onChange={(value) => setReceiveForm({ ...receiveForm, scratched: value })} />
-                <Checkbox label="Mất hộp" checked={receiveForm.missingBox} onChange={(value) => setReceiveForm({ ...receiveForm, missingBox: value })} />
-                <Checkbox label="Rơi vỡ" checked={receiveForm.broken} onChange={(value) => setReceiveForm({ ...receiveForm, broken: value })} />
-                <Checkbox label="Vào nước" checked={receiveForm.waterDamage} onChange={(value) => setReceiveForm({ ...receiveForm, waterDamage: value })} />
-              </div>
-            </div>
+            <label className="block">
+              <span className="mb-1 block font-medium text-gray-700">Tình trạng sản phẩm khi nhận</span>
+              <textarea
+                required
+                value={receiveForm.productState}
+                onChange={(event) => setReceiveForm({ ...receiveForm, productState: event.target.value })}
+                className="min-h-24 w-full rounded border border-gray-300 px-3 py-2 outline-none focus:border-brand"
+              />
+            </label>
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block">
                 <span className="mb-1 block font-medium text-gray-700">Ngày tiếp nhận</span>
@@ -833,7 +845,7 @@ export default function Warranty() {
               </label>
             </div>
             <label className="block">
-              <span className="mb-1 block font-medium text-gray-700">Ghi chú nhân viên</span>
+              <span className="mb-1 block font-medium text-gray-700">Ghi chú</span>
               <textarea
                 value={receiveForm.note}
                 onChange={(event) => setReceiveForm({ ...receiveForm, note: event.target.value })}
@@ -901,7 +913,7 @@ export default function Warranty() {
               checked={exchangeForm.deductStock}
               onChange={(value) => setExchangeForm({ ...exchangeForm, deductStock: value })}
             />
-            <p className="text-xs text-gray-500">Tồn kho hiện là logic frontend placeholder, chờ nối API kho khi backend hỗ trợ đổi hàng.</p>
+            
             <FormActions onCancel={closeModal} submitLabel="Xác nhận đổi sản phẩm" />
           </form>
         )}

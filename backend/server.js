@@ -13,14 +13,24 @@ import reportRoutes from './routes/reports.js';
 import activityLogRoutes from './routes/activityLogs.js';
 import employeeRoutes from './routes/employees.js';
 import warrantyRoutes from './routes/warranties.js';
+import publicWarrantyRoutes from './routes/publicWarranties.js';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+const allowedOrigins = new Set([
+  process.env.FRONTEND_ORIGIN || 'http://172.31.98.205:5173',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173'
+]);
+
 app.use(cors({
-  origin: 'http://localhost:5173',
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.has(origin)) return callback(null, true);
+    return callback(new Error('Origin không được CORS cho phép'));
+  },
   credentials: true
 }));
 app.use(express.json());
@@ -99,11 +109,12 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/activity-logs', activityLogRoutes);
 app.use('/api/employees', employeeRoutes);
 app.use('/api/warranties', warrantyRoutes);
+app.use('/api/public/warranties', publicWarrantyRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ message: 'Không tìm thấy API' });
 });
 
-app.listen(PORT, () => {
-  console.log(`POS API is running on http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server running on http://0.0.0.0:${PORT}`);
 });
