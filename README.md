@@ -51,8 +51,3 @@ npm run dev
 
 Frontend chạy tại `http://localhost:5173`.
 
-## Tài khoản test
-
-- Chủ cửa hàng: `owner@pos.com` / `admin123`
-- Quản lý: `manager@pos.com` / `admin123`
-- Nhân viên: `employee@pos.com` / `123456`
