@@ -1,7 +1,6 @@
 import QRCode from 'qrcode';
 import { QRPay } from 'vietnam-qr-pay';
-
-export const BANK_TRANSFER_STORAGE_KEY = 'ztech-bank-transfer-settings';
+import bankConfig from '../config/bank';
 
 export const bankOptions = [
   { bankId: '970422', bankName: 'MB Bank - Ngân hàng TMCP Quân đội' },
@@ -15,10 +14,10 @@ export const bankOptions = [
 ];
 
 export const defaultBankTransferSettings = {
-  bankId: '970422',
-  bankName: 'MB Bank - Ngân hàng TMCP Quân đội',
-  accountNo: '0877724374',
-  accountName: 'MAI TRAN THIEN TAM'
+  bankId: bankConfig.bankId,
+  bankName: bankConfig.bankName,
+  accountNo: bankConfig.accountNumber,
+  accountName: bankConfig.accountName
 };
 
 export function getBankById(bankId) {
@@ -26,32 +25,7 @@ export function getBankById(bankId) {
 }
 
 export function getBankTransferSettings() {
-  try {
-    const saved = localStorage.getItem(BANK_TRANSFER_STORAGE_KEY);
-    const settings = saved ? { ...defaultBankTransferSettings, ...JSON.parse(saved) } : defaultBankTransferSettings;
-    const selectedBank = getBankById(settings.bankId);
-
-    return {
-      ...settings,
-      bankName: selectedBank?.bankName || settings.bankName
-    };
-  } catch (error) {
-    return defaultBankTransferSettings;
-  }
-}
-
-export function saveBankTransferSettings(settings) {
-  const selectedBank = getBankById(settings.bankId);
-  const nextSettings = {
-    ...defaultBankTransferSettings,
-    ...settings,
-    bankName: selectedBank?.bankName || settings.bankName,
-    accountNo: String(settings.accountNo || '').trim(),
-    accountName: String(settings.accountName || '').trim().toUpperCase()
-  };
-
-  localStorage.setItem(BANK_TRANSFER_STORAGE_KEY, JSON.stringify(nextSettings));
-  return nextSettings;
+  return { ...defaultBankTransferSettings };
 }
 
 export function isBankTransferConfigured(settings = getBankTransferSettings()) {

@@ -1,5 +1,6 @@
 import { query } from '../config/db.js';
 import { randomUUID } from 'node:crypto';
+import { hasFullAccess } from '../middleware/auth.js';
 
 let warrantySnapshotReady = false;
 async function ensureWarrantySnapshotColumns() {
@@ -124,6 +125,11 @@ export async function getAll(req, res) {
       WHERE 1 = 1
     `;
 
+    if (!hasFullAccess(req.user)) {
+      sql += ' AND o.user_id = ?';
+      params.push(req.user.id);
+    }
+
     if (date_from) {
       sql += ' AND DATE(o.created_at) >= ?';
       params.push(date_from);
@@ -145,13 +151,15 @@ export async function getAll(req, res) {
 
 export async function getById(req, res) {
   try {
+    const ownerFilter = hasFullAccess(req.user) ? '' : ' AND o.user_id = ?';
+    const ownerParams = hasFullAccess(req.user) ? [req.params.id] : [req.params.id, req.user.id];
     const orders = await query(
       `SELECT o.*, c.name AS customer_name, u.name AS cashier_name
        FROM orders o
        LEFT JOIN customers c ON o.customer_id = c.id
        LEFT JOIN users u ON o.user_id = u.id
-       WHERE o.id = ?`,
-      [req.params.id]
+       WHERE o.id = ?${ownerFilter}`,
+      ownerParams
     );
 
     if (!orders[0]) {

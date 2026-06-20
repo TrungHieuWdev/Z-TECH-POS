@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { query } from '../config/db.js';
+import { hasActiveShift } from './shiftController.js';
 
 function normalizeEmployeeCode(value = '') {
   return String(value).trim().toUpperCase();
@@ -42,6 +43,11 @@ export async function login(req, res) {
 
     if (!isMatch) {
       return res.status(401).json({ message: 'Mã nhân viên hoặc mật khẩu không đúng' });
+    }
+
+    const fullAccess = ['owner', 'manager', 'admin'].includes(String(user.role || '').toLowerCase());
+    if (!fullAccess && !(await hasActiveShift(user.name))) {
+      return res.status(403).json({ message: 'Quản lý cần mở và bắt đầu ca làm trước khi nhân viên đăng nhập' });
     }
 
     const safeUser = {

@@ -26,7 +26,7 @@ const chartColors = [
   '#C28B72'
 ];
 
-const categoryPeriodOptions = [
+const dashboardPeriodOptions = [
   { value: 'today', label: 'Hôm nay' },
   { value: 'week', label: '7 ngày' },
   { value: 'month', label: 'Tháng này' },
@@ -57,53 +57,24 @@ function formatPercent(value) {
   return `${prefix}${numberValue.toLocaleString('vi-VN')}%`;
 }
 
-function formatDeltaCount(value, noun) {
-  return `${Math.round(Math.abs(Number(value || 0))).toLocaleString('vi-VN')} ${noun}`;
+function safeNumber(value) { const number = Number(value); return Number.isFinite(number) ? number : 0; }
+
+function getRevenueCaption(todayRevenue, yesterdayRevenue) {
+  const today = safeNumber(todayRevenue); const yesterday = safeNumber(yesterdayRevenue);
+  if (yesterday <= 0) return today > 0 ? 'Phát sinh mới hôm nay' : 'Hôm qua chưa có dữ liệu';
+  const delta = today - yesterday;
+  if (delta === 0) return 'Bằng hôm qua';
+  return `${delta > 0 ? 'Tăng' : 'Giảm'} ${formatCurrency(Math.abs(delta))} so với hôm qua`;
 }
 
-function getRevenueCaption(todayRevenue, revenueGrowth) {
-  if (Number(todayRevenue || 0) <= 0) {
-    return 'Chưa có đơn hàng hôm nay';
-  }
-
-  return `${formatPercent(revenueGrowth)} so với hôm qua`;
+function getCountCaption(todayValue, yesterdayValue, noun) {
+  const today = Math.round(safeNumber(todayValue)); const yesterday = Math.round(safeNumber(yesterdayValue));
+  if (yesterday === 0) return today > 0 ? 'Hôm qua chưa có dữ liệu' : 'Bằng hôm qua';
+  const delta = today - yesterday;
+  if (delta === 0) return 'Bằng hôm qua';
+  return `${delta > 0 ? '+' : '-'}${Math.abs(delta).toLocaleString('vi-VN')} ${noun} so với hôm qua`;
 }
 
-function getOrderCaption(todayOrders, orderGrowth) {
-  const growth = Number(orderGrowth || 0);
-
-  if (Number(todayOrders || 0) <= 0) {
-    return 'Chưa có đơn hàng mới hôm nay';
-  }
-
-  if (growth > 0) {
-    return `+${formatDeltaCount(growth, 'đơn')} so với hôm qua`;
-  }
-
-  if (growth < 0) {
-    return `Giảm ${formatDeltaCount(growth, 'đơn')} so với hôm qua`;
-  }
-
-  return 'Bằng hôm qua';
-}
-
-function getCustomerCaption(newCustomers, customerGrowth) {
-  const growth = Number(customerGrowth || 0);
-
-  if (Number(newCustomers || 0) <= 0) {
-    return 'Chưa có khách mới hôm nay';
-  }
-
-  if (growth > 0) {
-    return `+${formatDeltaCount(growth, 'khách')} so với hôm qua`;
-  }
-
-  if (growth < 0) {
-    return `Giảm ${formatDeltaCount(growth, 'khách')} so với hôm qua`;
-  }
-
-  return 'Bằng hôm qua';
-}
 
 function getInitials(name = '') {
   const words = name.trim().split(/\s+/).filter(Boolean);
@@ -118,10 +89,13 @@ function getInitials(name = '') {
 export default function Dashboard() {
   const [summary, setSummary] = useState({
     todayRevenue: 0,
+    yesterdayRevenue: 0,
     monthRevenue: 0,
     todayOrders: 0,
+    yesterdayOrders: 0,
     lowStockCount: 0,
-    newCustomers: 0,
+    todayNewCustomers: 0,
+    yesterdayNewCustomers: 0,
     revenueGrowth: 0,
     orderGrowth: 0,
     customerGrowth: 0
@@ -129,18 +103,20 @@ export default function Dashboard() {
   const [categoryShare, setCategoryShare] = useState([]);
   const [topProducts, setTopProducts] = useState([]);
   const [recentOrders, setRecentOrders] = useState([]);
-  const [categoryPeriod, setCategoryPeriod] = useState('month');
+  const [dashboardPeriod, setDashboardPeriod] = useState('year');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
     async function fetchDashboard() {
+      setIsLoading(true);
       try {
+        const params = { period: dashboardPeriod };
         const [summaryRes, categoryRes, topRes, recentRes] = await Promise.all([
-          api.get('/dashboard/summary'),
-          api.get('/dashboard/category-share', { params: { period: categoryPeriod } }),
-          api.get('/dashboard/top-products'),
-          api.get('/dashboard/recent-orders')
+          api.get('/dashboard/summary', { params }),
+          api.get('/dashboard/category-share', { params }),
+          api.get('/dashboard/top-products', { params }),
+          api.get('/dashboard/recent-orders', { params })
         ]);
 
         setSummary(summaryRes.data);
@@ -156,23 +132,7 @@ export default function Dashboard() {
     }
 
     fetchDashboard();
-  }, []);
-
-  useEffect(() => {
-    if (isLoading) {
-      return;
-    }
-
-    api
-      .get('/dashboard/category-share', { params: { period: categoryPeriod } })
-      .then((response) => {
-        setCategoryShare(response.data);
-        setError('');
-      })
-      .catch((requestError) => {
-        setError(requestError.response?.data?.message || 'khong the tai du lieu dashboard');
-      });
-  }, [categoryPeriod, isLoading]);
+  }, [dashboardPeriod]);
 
   const donutBackground = useMemo(() => {
     if (categoryShare.length === 0) {
@@ -204,35 +164,43 @@ export default function Dashboard() {
     bars: []
   };
 
-  const categoryPeriodLabel = useMemo(() => {
-    return categoryPeriodOptions.find((option) => option.value === categoryPeriod)?.label || 'Tháng này';
-  }, [categoryPeriod]);
+  const dashboardPeriodLabel = useMemo(() => {
+    return dashboardPeriodOptions.find((option) => option.value === dashboardPeriod)?.label || 'Năm nay';
+  }, [dashboardPeriod]);
+
+  const comparisonCaption = (caption) => {
+    if (dashboardPeriod === 'today') return caption;
+    return caption
+      .replaceAll('hôm qua', 'kỳ trước')
+      .replaceAll('Hôm qua', 'Kỳ trước')
+      .replaceAll('hôm nay', 'trong kỳ');
+  };
 
   const cards = [
     {
-      label: 'Doanh thu hôm nay',
+      label: `Doanh thu · ${dashboardPeriodLabel}`,
       value: formatCurrency(summary.todayRevenue),
       caption: `${formatPercent(summary.revenueGrowth)} so với hôm qua`,
       icon: WalletCards,
       tone: 'blue'
     },
     {
-      label: 'Đơn hàng mới',
-      value: summary.todayOrders.toLocaleString('vi-VN'),
+      label: `Đơn hàng · ${dashboardPeriodLabel}`,
+      value: safeNumber(summary.todayOrders).toLocaleString('vi-VN'),
       caption: `${formatPercent(summary.orderGrowth)} so với hôm qua`,
       icon: ReceiptText,
       tone: 'gray'
     },
     {
       label: 'Sắp hết hàng',
-      value: summary.lowStockCount.toLocaleString('vi-VN'),
-      caption: summary.lowStockCount > 0 ? 'Cần nhập thêm' : 'Kho đang ổn định',
+      value: `${safeNumber(summary.lowStockCount).toLocaleString('vi-VN')} sản phẩm`,
+      caption: summary.lowStockCount > 0 ? 'Dưới mức tồn tối thiểu' : 'Kho đang ổn định',
       icon: PackageCheck,
       tone: 'amber'
     },
     {
-      label: 'Khách hàng mới',
-      value: summary.newCustomers.toLocaleString('vi-VN'),
+      label: `Khách hàng mới · ${dashboardPeriodLabel}`,
+      value: safeNumber(summary.todayNewCustomers ?? summary.newCustomers).toLocaleString('vi-VN'),
       caption: `${formatPercent(summary.customerGrowth)} so với hôm qua`,
       icon: Users,
       tone: 'slate'
@@ -243,14 +211,18 @@ export default function Dashboard() {
     if (index === 0) {
       return {
         ...card,
-        caption: getRevenueCaption(summary.todayRevenue, summary.revenueGrowth)
+        caption: dashboardPeriod === 'all'
+          ? 'Tổng doanh thu toàn thời gian'
+          : comparisonCaption(getRevenueCaption(summary.todayRevenue, summary.yesterdayRevenue))
       };
     }
 
     if (index === 1) {
       return {
         ...card,
-        caption: getOrderCaption(summary.todayOrders, summary.orderGrowth)
+        caption: dashboardPeriod === 'all'
+          ? 'Tổng đơn hàng toàn thời gian'
+          : comparisonCaption(getCountCaption(summary.todayOrders, summary.yesterdayOrders, 'đơn'))
       };
     }
 
@@ -264,7 +236,9 @@ export default function Dashboard() {
     if (index === 3) {
       return {
         ...card,
-        caption: getCustomerCaption(summary.newCustomers, summary.customerGrowth)
+        caption: dashboardPeriod === 'all'
+          ? 'Tổng khách hàng toàn thời gian'
+          : comparisonCaption(getCountCaption(summary.todayNewCustomers ?? summary.newCustomers, summary.yesterdayNewCustomers ?? summary.yesterdayCustomers, 'khách'))
       };
     }
 
@@ -273,6 +247,27 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
+      <section className="flex flex-col gap-3 rounded-lg border border-[#dce8f0] bg-gradient-to-r from-white to-[#f3f9fd] p-4 shadow-[0_1px_3px_rgba(25,28,29,0.06)] sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-xl font-bold text-[#191c1d]">Tổng quan cửa hàng</h1>
+          <p className="mt-1 text-sm font-medium text-[#73777d]">
+            Toàn bộ số liệu đang hiển thị theo kỳ: {dashboardPeriodLabel.toLowerCase()}
+          </p>
+        </div>
+        <label className="relative w-full sm:w-[180px]">
+          <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-[#557084]">Thời gian báo cáo</span>
+          <select
+            value={dashboardPeriod}
+            onChange={(event) => setDashboardPeriod(event.target.value)}
+            className="h-11 w-full appearance-none rounded-lg border border-[#b9d5e7] bg-white pl-3 pr-10 text-sm font-bold text-brand-ink outline-none transition hover:border-brand-strong focus:border-brand-strong focus:ring-2 focus:ring-brand-soft"
+          >
+            {dashboardPeriodOptions.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+          <ChevronDown className="pointer-events-none absolute bottom-3 right-3 text-brand-ink" size={18} />
+        </label>
+      </section>
 
       {error && (
         <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
@@ -317,21 +312,9 @@ export default function Dashboard() {
               <h2 className="text-lg font-semibold leading-6 text-[#191c1d]">Cơ cấu doanh thu</h2>
               <p className="mt-0.5 text-xs font-medium text-[#73777d]">Phân bổ theo nhóm sản phẩm</p>
             </div>
-            <label className="relative">
-              <span className="sr-only">Lọc thời gian cơ cấu doanh thu</span>
-              <select
-                value={categoryPeriod}
-                onChange={(event) => setCategoryPeriod(event.target.value)}
-                className="h-9 appearance-none rounded-lg bg-brand-surface pl-3 pr-8 text-base font-semibold text-brand-ink outline-none transition hover:bg-brand-soft focus:ring-2 focus:ring-brand-soft"
-              >
-                {categoryPeriodOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-brand-ink" size={16} />
-            </label>
+            <span className="rounded-lg bg-brand-surface px-3 py-2 text-sm font-semibold text-brand-ink">
+              {dashboardPeriodLabel}
+            </span>
             <button
               type="button"
               className="hidden h-8 items-center gap-2 rounded-lg bg-brand-surface px-3 text-xs font-semibold text-brand-ink transition hover:bg-brand-soft"
@@ -354,7 +337,7 @@ export default function Dashboard() {
                     <div className="px-2 text-[13px] font-bold leading-tight text-[#191c1d]">
                       {categoryRevenueTotal > 0 ? formatCurrency(categoryRevenueTotal) : '0 đ'}
                     </div>
-                    <div className="mt-1 text-xs font-medium text-[#73777d]">{categoryPeriodLabel}</div>
+                    <div className="mt-1 text-xs font-medium text-[#73777d]">{dashboardPeriodLabel}</div>
                     <div className="mt-1 text-xs font-medium text-[#73777d]">Tổng cộng</div>
                   </div>
                 </div>
@@ -421,7 +404,7 @@ export default function Dashboard() {
 
         <article className="rounded-lg border border-[#e1e3e4] bg-white p-4 shadow-[0_1px_3px_rgba(25,28,29,0.08)]">
           <div className="mb-3 flex items-center justify-between gap-4">
-            <h2 className="text-lg font-semibold leading-6 text-[#191c1d]">Top sản phẩm</h2>
+            <h2 className="text-lg font-semibold leading-6 text-[#191c1d]">Top sản phẩm bán chạy</h2>
             <Link to="/products" className="text-sm font-semibold text-brand-strong transition hover:text-brand-deep">
               Tất cả
             </Link>

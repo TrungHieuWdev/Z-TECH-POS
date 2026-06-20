@@ -1,8 +1,10 @@
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
-import { Toaster } from 'react-hot-toast';
+import { useEffect } from 'react';
+import toast, { Toaster } from 'react-hot-toast';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
+import StaffDashboard from './pages/StaffDashboard';
 import POS from './pages/POS';
 import Products from './pages/Products';
 import Categories from './pages/Categories';
@@ -18,6 +20,7 @@ import ActivityLogs from './pages/ActivityLogs';
 import Warranty from './pages/Warranty';
 import WarrantyLookupPublic from './pages/WarrantyLookupPublic';
 import { canAccessPath, getToken, getUser } from './utils/auth';
+import { isFullAccessRole } from './utils/auth';
 
 function ProtectedRoute() {
   const token = getToken();
@@ -28,7 +31,17 @@ function PermissionRoute() {
   const user = getUser();
   const pathname = window.location.pathname;
 
-  return canAccessPath(pathname, user) ? <Outlet /> : <Navigate to="/pos" replace />;
+  return canAccessPath(pathname, user) ? <Outlet /> : <AccessDenied />;
+}
+
+function AccessDenied() {
+  useEffect(() => { toast.error('Bạn không có quyền truy cập chức năng này'); }, []);
+  return <Navigate to="/pos" replace />;
+}
+
+function HomePage() {
+  const user = getUser();
+  return isFullAccessRole(user?.role) ? <Dashboard /> : <StaffDashboard />;
 }
 
 export default function App() {
@@ -41,7 +54,7 @@ export default function App() {
         <Route element={<ProtectedRoute />}>
           <Route element={<Layout />}>
             <Route element={<PermissionRoute />}>
-            <Route path="/" element={<Dashboard />} />
+            <Route path="/" element={<HomePage />} />
             <Route path="/pos" element={<POS />} />
             <Route path="/products" element={<Products />} />
             <Route path="/categories" element={<Categories />} />

@@ -16,6 +16,7 @@ import {
 import api from '../api/axios';
 import Modal from '../components/Modal';
 import { getUser, isFullAccessRole } from '../utils/auth';
+import { formatCurrency } from '../utils/format';
 
 const STORAGE_KEY = 'ztech-shifts';
 const TODAY = new Date().toISOString().slice(0, 10);
@@ -96,6 +97,7 @@ const emptyForm = {
   endTime: '12:00',
   workDate: TODAY,
   status: 'scheduled',
+  openingCash: 0,
   note: ''
 };
 
@@ -207,10 +209,26 @@ export default function Shifts() {
   const [editingShift, setEditingShift] = useState(null);
   const [viewingShift, setViewingShift] = useState(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [orders, setOrders] = useState([]);
+  const [closingShift, setClosingShift] = useState(null);
+  const [actualCash, setActualCash] = useState('');
+  const [shiftStoreReady, setShiftStoreReady] = useState(false);
+
+  useEffect(() => {
+    api.get('/shifts').then(async (response) => {
+      const sharedShifts = Array.isArray(response.data) ? response.data : [];
+      if (sharedShifts.length) setShifts(sharedShifts);
+      else if (hasFullAccess) await api.put('/shifts', shifts);
+      setShiftStoreReady(true);
+    }).catch(() => setShiftStoreReady(true));
+  }, []);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(shifts));
-  }, [shifts]);
+    if (shiftStoreReady && hasFullAccess) api.put('/shifts', shifts).catch(() => toast.error('Không thể đồng bộ ca làm lên hệ thống'));
+  }, [shifts, shiftStoreReady, hasFullAccess]);
+
+  useEffect(() => { api.get('/orders').then((response) => setOrders(response.data || [])).catch(() => setOrders([])); }, []);
 
   useEffect(() => {
     if (!hasFullAccess) {
@@ -271,6 +289,7 @@ export default function Shifts() {
       endTime: shift.endTime,
       workDate: shift.workDate,
       status: shift.status,
+      openingCash: Number(shift.openingCash || 0),
       note: shift.note || ''
     });
     setIsFormOpen(true);
@@ -295,7 +314,8 @@ export default function Shifts() {
       id: editingShift?.id ?? Date.now(),
       code: editingShift?.code ?? getNextShiftCode(shifts),
       name: form.name.trim(),
-      note: form.note.trim()
+      note: form.note.trim(),
+      openingCash: Math.max(Number(form.openingCash || 0), 0)
     };
 
     if (nextShift.startTime >= nextShift.endTime) {
@@ -336,6 +356,19 @@ export default function Shifts() {
     );
 
     toast.success(getStatusMeta(status).label);
+  };
+
+  const getCashSales = (shift) => orders.filter((order) => order.status !== 'cancelled' && order.payment_method === 'cash' && order.cashier_name === shift.employee && String(order.created_at || '').slice(0, 10) === shift.workDate).reduce((sum, order) => sum + Number(order.total || 0), 0);
+  const getExpectedCash = (shift) => Number(shift.openingCash || 0) + Number(shift.cashSales ?? getCashSales(shift));
+
+  const openCloseShift = (shift) => { setClosingShift(shift); setActualCash(''); };
+  const confirmCloseShift = () => {
+    const cashSales = getCashSales(closingShift);
+    const expectedCash = Number(closingShift.openingCash || 0) + cashSales;
+    const actual = Math.max(Number(actualCash || 0), 0);
+    const now = getCurrentTime();
+    setShifts((current) => current.map((item) => item.id === closingShift.id ? { ...item, status: 'completed', endTime: now, cashSales, expectedCash, actualCash: actual, cashDifference: actual - expectedCash } : item));
+    setClosingShift(null); setActualCash(''); toast.success('Đã chốt ca làm');
   };
 
   return (
@@ -451,6 +484,7 @@ export default function Shifts() {
                 <th className="px-5 py-4 font-semibold">Nhân viên phụ trách</th>
                 <th className="px-5 py-4 font-semibold">Thời gian</th>
                 <th className="px-5 py-4 font-semibold">Ngày làm</th>
+                <th className="px-5 py-4 font-semibold">Tiền đầu ca</th>
                 <th className="px-5 py-4 font-semibold">Trạng thái</th>
                 <th className="px-5 py-4 font-semibold">Ghi chú</th>
                 <th className="px-5 py-4 text-center font-semibold">Thao tác</th>
@@ -479,6 +513,7 @@ export default function Shifts() {
                       </div>
                     </td>
                     <td className="px-5 py-4 text-gray-700">{formatDate(shift.workDate)}</td>
+                    <td className="px-5 py-4 font-semibold text-gray-800">{formatCurrency(shift.openingCash || 0)}</td>
                     <td className="px-5 py-4">
                       <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-bold ${statusMeta.badgeClass}`}>
                         <span className={`mr-2 h-2 w-2 rounded-full ${statusMeta.dotClass}`} />
@@ -522,7 +557,7 @@ export default function Shifts() {
                         {hasFullAccess && shift.status === 'active' && (
                           <button
                             type="button"
-                            onClick={() => updateShiftStatus(shift, 'completed')}
+                            onClick={() => openCloseShift(shift)}
                             className="rounded-lg p-2 text-red-600 transition hover:bg-red-50"
                             title="Dừng ca"
                             aria-label="Dừng ca"
@@ -623,6 +658,11 @@ export default function Shifts() {
                 ))}
             </select>
           </label>
+          <label>
+            <span className="mb-1 block text-sm font-medium text-gray-700">Tiền đầu ca</span>
+            <div className="relative"><input type="number" min="0" step="1000" value={form.openingCash} onChange={(event) => setForm({ ...form, openingCash: event.target.value === '' ? '' : Math.max(Number(event.target.value), 0) })} className="w-full border border-gray-300 px-3 py-2 pr-10 outline-none focus:border-[#7ed5e6] focus:ring-2 focus:ring-[#c0edf7]" placeholder="0"/><span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-500">đ</span></div>
+            <p className="mt-1 text-xs text-gray-500">{formatCurrency(Number(form.openingCash || 0))}</p>
+          </label>
           <label className="md:col-span-2">
             <span className="mb-1 block text-sm font-medium text-gray-700">Ghi chú</span>
             <textarea
@@ -667,6 +707,10 @@ export default function Shifts() {
                 <span className="text-gray-500">Ngày làm</span>
                 <p className="font-semibold text-gray-950">{formatDate(viewingShift.workDate)}</p>
               </div>
+              <div><span className="text-gray-500">Tiền đầu ca</span><p className="font-semibold text-gray-950">{formatCurrency(viewingShift.openingCash || 0)}</p></div>
+              <div><span className="text-gray-500">Tiền mặt bán được trong ca</span><p className="font-semibold text-gray-950">{formatCurrency(viewingShift.cashSales ?? getCashSales(viewingShift))}</p></div>
+              <div><span className="text-gray-500">Tiền mặt dự kiến cuối ca</span><p className="font-semibold text-[#0f3b46]">{formatCurrency(viewingShift.expectedCash ?? getExpectedCash(viewingShift))}</p></div>
+              {viewingShift.status === 'completed' && <><div><span className="text-gray-500">Tiền mặt thực tế</span><p className="font-semibold">{formatCurrency(viewingShift.actualCash || 0)}</p></div><div><span className="text-gray-500">Chênh lệch</span><p className={`font-bold ${Number(viewingShift.cashDifference || 0) < 0 ? 'text-red-600' : 'text-emerald-700'}`}>{formatCurrency(viewingShift.cashDifference || 0)}</p></div></>}
               <div>
                 <span className="text-gray-500">Ghi chú</span>
                 <p className="font-semibold text-gray-950">{viewingShift.note || 'Chưa có ghi chú'}</p>
@@ -674,6 +718,10 @@ export default function Shifts() {
             </div>
           </div>
         )}
+      </Modal>
+
+      <Modal isOpen={Boolean(closingShift)} onClose={() => setClosingShift(null)} title="Chốt ca làm">
+        {closingShift && <div className="space-y-4"><div className="grid gap-3 border bg-[#f8fdfe] p-4 text-sm sm:grid-cols-2"><div><span className="text-gray-500">Tiền đầu ca</span><p className="font-bold">{formatCurrency(closingShift.openingCash || 0)}</p></div><div><span className="text-gray-500">Tiền mặt bán được</span><p className="font-bold">{formatCurrency(getCashSales(closingShift))}</p></div><div className="sm:col-span-2"><span className="text-gray-500">Tiền mặt dự kiến cuối ca</span><p className="text-lg font-bold text-[#0f3b46]">{formatCurrency(getExpectedCash(closingShift))}</p></div></div><label className="block"><span className="mb-1 block text-sm font-semibold">Tiền mặt thực tế</span><input type="number" min="0" value={actualCash} onChange={(event) => setActualCash(event.target.value)} className="h-11 w-full border px-3" placeholder="0"/><p className="mt-1 text-xs text-gray-500">Chênh lệch dự kiến: <strong className={Number(actualCash || 0) - getExpectedCash(closingShift) < 0 ? 'text-red-600' : 'text-emerald-700'}>{formatCurrency(Number(actualCash || 0) - getExpectedCash(closingShift))}</strong></p></label><div className="flex justify-end gap-2"><button type="button" onClick={() => setClosingShift(null)} className="h-10 border px-4 font-semibold">Hủy</button><button type="button" onClick={confirmCloseShift} className="h-10 bg-brand px-4 font-bold text-white">Xác nhận chốt ca</button></div></div>}
       </Modal>
     </div>
   );

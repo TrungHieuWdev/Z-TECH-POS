@@ -40,10 +40,10 @@ const extraItems = [
   { label: 'AI gợi ý', icon: BrainCircuit }
 ];
 
-const employeeAllowedPaths = new Set(['/pos', '/orders', '/products', '/inventory', '/customers', '/shifts']);
+const employeeAllowedPaths = new Set(['/', '/pos', '/orders', '/products', '/inventory', '/customers', '/shifts', '/promotions', '/warranties']);
 
 function isAllowed(item, hasFullAccess) {
-  return hasFullAccess || (item.to && employeeAllowedPaths.has(item.to));
+  return hasFullAccess || (item.to && employeeAllowedPaths.has(item.to)) || item.label.includes('AI');
 }
 
 function isPathActive(pathname, to) {

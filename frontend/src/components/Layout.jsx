@@ -4,7 +4,7 @@ import { Bell, Menu, Search, Settings } from 'lucide-react';
 import Sidebar from './Sidebar';
 import SettingsModal from './SettingsModal';
 import NotificationCenter from './NotificationCenter';
-import { getUser, isFullAccessRole } from '../utils/auth';
+import { getRoleLabel, getUser, isFullAccessRole } from '../utils/auth';
 
 export default function Layout() {
   const user = getUser();
@@ -74,6 +74,7 @@ export default function Layout() {
             <div className="flex items-center gap-2">
               <div className="hidden text-right sm:block">
                 <p className="text-xs font-semibold leading-none text-[#191c1d]">{user?.name || 'Admin'}</p>
+                <p className="mt-1 text-[10px] font-medium text-[#73777d]">{getRoleLabel(user?.role)}</p>
               </div>
               <div className="grid h-9 w-9 place-items-center rounded-full bg-brand-soft text-sm font-bold text-brand-ink ring-2 ring-white">
                 {(user?.name || 'Admin').slice(0, 1).toUpperCase()}

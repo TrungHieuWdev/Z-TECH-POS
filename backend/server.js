@@ -14,6 +14,7 @@ import activityLogRoutes from './routes/activityLogs.js';
 import employeeRoutes from './routes/employees.js';
 import warrantyRoutes from './routes/warranties.js';
 import publicWarrantyRoutes from './routes/publicWarranties.js';
+import shiftRoutes from './routes/shifts.js';
 
 dotenv.config();
 
@@ -110,6 +111,7 @@ app.use('/api/activity-logs', activityLogRoutes);
 app.use('/api/employees', employeeRoutes);
 app.use('/api/warranties', warrantyRoutes);
 app.use('/api/public/warranties', publicWarrantyRoutes);
+app.use('/api/shifts', shiftRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ message: 'Không tìm thấy API' });

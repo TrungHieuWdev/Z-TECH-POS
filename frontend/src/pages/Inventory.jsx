@@ -4,10 +4,12 @@ import { PackagePlus, RotateCcw, Search } from 'lucide-react';
 import api from '../api/axios';
 import Modal from '../components/Modal';
 import { formatDate } from '../utils/format';
+import { getUser, isFullAccessRole } from '../utils/auth';
 
 const initialForm = { product_id: '', quantity: '', note: '' };
 
 export default function Inventory() {
+  const hasFullAccess = isFullAccessRole(getUser()?.role);
   const [logs, setLogs] = useState([]);
   const [products, setProducts] = useState([]);
   const [search, setSearch] = useState('');
@@ -81,7 +83,7 @@ export default function Inventory() {
           <h1 className="text-2xl font-bold text-gray-950">Kho hàng</h1>
           <p className="mt-1 text-sm text-gray-500">Lịch sử nhập và điều chỉnh tồn kho</p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2" style={{ display: hasFullAccess ? undefined : 'none' }} title={hasFullAccess ? '' : 'Bạn không có quyền thực hiện thao tác này'}>
           <button
             type="button"
             onClick={() => openModal('in')}

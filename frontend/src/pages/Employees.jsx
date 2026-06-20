@@ -44,6 +44,12 @@ const emptyForm = {
   note: ''
 };
 
+const rolePermissionSummary = {
+  manager: ['Toàn quyền quản trị', 'Xem báo cáo toàn cửa hàng', 'Quản lý sản phẩm, kho và nhân viên'],
+  cashier: ['Bán hàng và áp dụng khuyến mãi', 'Xem sản phẩm, kho và hóa đơn của mình', 'Chăm sóc khách hàng và tiếp nhận bảo hành'],
+  warehouse: ['Xem sản phẩm và tồn kho', 'Theo dõi cảnh báo kho', 'Không được quản trị nhân viên hoặc báo cáo tổng']
+};
+
 function getRoleMeta(role) {
   const roleMap = {
     manager: { label: 'Quản lý', badgeClass: 'bg-[#c0edf7] text-[#0f3b46]' },
@@ -530,6 +536,13 @@ export default function Employees() {
               ))}
             </select>
           </label>
+          <div className="border border-[#d8eef4] bg-[#f8fdfe] p-3 md:col-span-2">
+            <p className="text-sm font-bold text-[#0f3b46]">Quyền của vai trò: {getRoleMeta(form.role).label}</p>
+            <ul className="mt-2 grid gap-1 text-xs text-[#4f5965] sm:grid-cols-2">
+              {(rolePermissionSummary[form.role] || []).map((permission) => <li key={permission}>• {permission}</li>)}
+            </ul>
+            {form.role !== 'manager' && <p className="mt-2 text-xs font-semibold text-amber-700">Các thao tác thêm, sửa, xóa dữ liệu quản trị sẽ bị khóa và kiểm tra lại ở backend.</p>}
+          </div>
           <label>
             <span className="mb-1 block text-sm font-medium text-gray-700">Trạng thái</span>
             <select

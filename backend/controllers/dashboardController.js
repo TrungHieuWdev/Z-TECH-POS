@@ -7,7 +7,7 @@ function getPercentChange(current, previous) {
   const previousValue = toNumber(previous);
 
   if (previousValue === 0) {
-    return currentValue > 0 ? 100 : 0;
+    return null;
   }
 
   return Number((((currentValue - previousValue) / previousValue) * 100).toFixed(1));
@@ -33,8 +33,19 @@ function getCategoryShareDateFilter(period = 'month') {
   }
 }
 
+function getPeriodFilters(value = 'year', alias = '') {
+  const period = getCategorySharePeriod(value);
+  const column = `${alias}created_at`;
+  if (period === 'today') return { current: `DATE(${column}) = CURDATE()`, previous: `DATE(${column}) = DATE_SUB(CURDATE(), INTERVAL 1 DAY)` };
+  if (period === 'week') return { current: `${column} >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)`, previous: `${column} >= DATE_SUB(CURDATE(), INTERVAL 13 DAY) AND ${column} < DATE_SUB(CURDATE(), INTERVAL 6 DAY)` };
+  if (period === 'month') return { current: `${column} >= DATE_FORMAT(CURDATE(), '%Y-%m-01')`, previous: `${column} >= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 MONTH), '%Y-%m-01') AND ${column} < DATE_FORMAT(CURDATE(), '%Y-%m-01')` };
+  if (period === 'year') return { current: `YEAR(${column}) = YEAR(CURDATE())`, previous: `YEAR(${column}) = YEAR(CURDATE()) - 1` };
+  return { current: '1 = 1', previous: '0 = 1' };
+}
+
 export async function getSummary(req, res) {
   try {
+    const filters = getPeriodFilters(req.query.period || 'year');
     const [
       todayRevenue,
       yesterdayRevenue,
@@ -46,12 +57,12 @@ export async function getSummary(req, res) {
       yesterdayCustomers
     ] = await Promise.all([
       query(
-        "SELECT COALESCE(SUM(total), 0) AS value FROM orders WHERE status = 'completed' AND DATE(created_at) = CURDATE()"
+        `SELECT COALESCE(SUM(total), 0) AS value FROM orders WHERE status = 'completed' AND ${filters.current}`
       ),
       query(
         `SELECT COALESCE(SUM(total), 0) AS value
          FROM orders
-         WHERE status = 'completed' AND DATE(created_at) = DATE_SUB(CURDATE(), INTERVAL 1 DAY)`
+         WHERE status = 'completed' AND ${filters.previous}`
       ),
       query(
         `SELECT COALESCE(SUM(total), 0) AS value
@@ -60,11 +71,11 @@ export async function getSummary(req, res) {
            AND YEAR(created_at) = YEAR(CURDATE())
            AND MONTH(created_at) = MONTH(CURDATE())`
       ),
-      query("SELECT COUNT(*) AS value FROM orders WHERE DATE(created_at) = CURDATE()"),
-      query("SELECT COUNT(*) AS value FROM orders WHERE DATE(created_at) = DATE_SUB(CURDATE(), INTERVAL 1 DAY)"),
+      query(`SELECT COUNT(*) AS value FROM orders WHERE status = 'completed' AND ${filters.current}`),
+      query(`SELECT COUNT(*) AS value FROM orders WHERE status = 'completed' AND ${filters.previous}`),
       query('SELECT COUNT(*) AS value FROM products WHERE is_active = 1 AND stock_quantity <= min_stock'),
-      query('SELECT COUNT(*) AS value FROM customers WHERE DATE(created_at) = CURDATE()'),
-      query('SELECT COUNT(*) AS value FROM customers WHERE DATE(created_at) = DATE_SUB(CURDATE(), INTERVAL 1 DAY)')
+      query(`SELECT COUNT(*) AS value FROM customers WHERE ${filters.current}`),
+      query(`SELECT COUNT(*) AS value FROM customers WHERE ${filters.previous}`)
     ]);
 
     const todayRevenueValue = toNumber(todayRevenue[0].value);
@@ -81,6 +92,8 @@ export async function getSummary(req, res) {
       todayOrders: todayOrdersValue,
       yesterdayOrders: yesterdayOrdersValue,
       lowStockCount: toNumber(lowStock[0].value),
+      todayNewCustomers: newCustomersValue,
+      yesterdayNewCustomers: yesterdayCustomersValue,
       newCustomers: newCustomersValue,
       yesterdayCustomers: yesterdayCustomersValue,
       revenueGrowth: getPercentChange(todayRevenueValue, yesterdayRevenueValue),
@@ -111,6 +124,7 @@ export async function getRevenueChart(req, res) {
 
 export async function getTopProducts(req, res) {
   try {
+    const filters = getPeriodFilters(req.query.period || 'year', 'o.');
     const rows = await query(
       `SELECT
          p.id AS product_id,
@@ -124,7 +138,7 @@ export async function getTopProducts(req, res) {
        JOIN orders o ON oi.order_id = o.id
        LEFT JOIN categories c ON p.category_id = c.id
        WHERE o.status = 'completed'
-         AND o.created_at >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+         AND ${filters.current}
        GROUP BY p.id, p.name, c.name
        ORDER BY revenue DESC
        LIMIT 5`
@@ -190,6 +204,7 @@ export async function getCategoryShare(req, res) {
 
 export async function getRecentOrders(req, res) {
   try {
+    const filters = getPeriodFilters(req.query.period || 'year', 'o.');
     const rows = await query(
       `SELECT
          o.id,
@@ -203,6 +218,7 @@ export async function getRecentOrders(req, res) {
        FROM orders o
        LEFT JOIN customers c ON o.customer_id = c.id
        LEFT JOIN users u ON o.user_id = u.id
+       WHERE ${filters.current}
        ORDER BY o.created_at DESC
        LIMIT 6`
     );

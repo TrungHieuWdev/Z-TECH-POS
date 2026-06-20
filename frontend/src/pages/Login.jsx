@@ -6,30 +6,6 @@ import api from '../api/axios';
 import ztechLogo from '../assets/images/1111.png';
 import { isFullAccessRole, saveAuth } from '../utils/auth';
 
-const SHIFT_STORAGE_KEY = 'ztech-shifts';
-
-function canEmployeeLoginByShift(user) {
-  if (isFullAccessRole(user?.role)) {
-    return true;
-  }
-
-  const today = new Date().toISOString().slice(0, 10);
-  const employeeName = String(user?.name || '').trim();
-
-  try {
-    const shifts = JSON.parse(localStorage.getItem(SHIFT_STORAGE_KEY) || '[]');
-
-    return shifts.some(
-      (shift) =>
-        String(shift.employee || '').trim() === employeeName &&
-        shift.workDate === today &&
-        shift.status === 'active'
-    );
-  } catch {
-    return false;
-  }
-}
-
 export default function Login() {
   const navigate = useNavigate();
   const [form, setForm] = useState({ employeeCode: '', password: '' });
@@ -47,11 +23,6 @@ export default function Login() {
         password: form.password
       });
       const user = response.data.user;
-
-      if (!canEmployeeLoginByShift(user)) {
-        toast.error('Quản lý cần bắt đầu ca làm hôm nay trước khi nhân viên đăng nhập');
-        return;
-      }
 
       saveAuth(user, response.data.token, remember);
       toast.success('Đăng nhập thành công');

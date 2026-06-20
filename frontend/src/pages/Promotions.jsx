@@ -15,6 +15,7 @@ import {
 import { formatCurrency } from '../utils/format';
 import { getPromotions, savePromotions } from '../services/promotionService';
 import api from '../api/axios';
+import { getUser, isFullAccessRole } from '../utils/auth';
 
 export const initialPromotions = [
   {
@@ -153,6 +154,7 @@ function getPromotionStatus(promotion) {
 }
 
 export default function Promotions() {
+  const hasFullAccess = isFullAccessRole(getUser()?.role);
   const [promotions, setPromotions] = useState(() => getPromotions(initialPromotions));
   useEffect(() => { savePromotions(promotions); }, [promotions]);
   const [filters, setFilters] = useState({
@@ -200,9 +202,10 @@ export default function Promotions() {
       const matchesStart = !filters.startDate || promotion.endDate >= filters.startDate;
       const matchesEnd = !filters.endDate || promotion.startDate <= filters.endDate;
 
-      return matchesKeyword && matchesStatus && matchesType && matchesStart && matchesEnd;
+      const staffCanView = hasFullAccess || (promotion.enabled && ['active', 'ending'].includes(currentStatus));
+      return staffCanView && matchesKeyword && matchesStatus && matchesType && matchesStart && matchesEnd;
     });
-  }, [filters, promotions]);
+  }, [filters, promotions, hasFullAccess]);
 
   const openCreateDrawer = () => {
     setEditingPromotion(null);
@@ -326,7 +329,7 @@ export default function Promotions() {
             Quản lý chương trình giảm giá và điều kiện áp dụng
           </p>
         </div>
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-3" style={{ display: hasFullAccess ? undefined : 'none' }}>
           <button
             type="button"
             className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#d5dbe3] bg-white px-4 text-sm font-semibold text-[#26313d] transition hover:bg-[#f5f9fc]"
@@ -489,6 +492,7 @@ export default function Promotions() {
                         <button
                           type="button"
                           onClick={() => openEditDrawer(promotion)}
+                          style={{ display: hasFullAccess ? undefined : 'none' }}
                           className="text-[#68707a] transition hover:text-brand-deep"
                           title="Sửa"
                         >
@@ -497,6 +501,7 @@ export default function Promotions() {
                         <button
                           type="button"
                           onClick={() => togglePromotion(promotion.id)}
+                          style={{ display: hasFullAccess ? undefined : 'none' }}
                           className={`relative h-5 w-9 rounded-full transition ${
                             promotion.enabled ? 'bg-brand' : 'bg-gray-300'
                           }`}

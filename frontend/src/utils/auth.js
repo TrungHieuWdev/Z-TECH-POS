@@ -32,12 +32,7 @@ export function getRoleLabel(role) {
 }
 
 export function canAccessPath(pathname, user = getUser()) {
-  if (!user) return false;
-  if (isFullAccessRole(user.role)) return true;
-
-  return ['/pos', '/orders', '/products', '/inventory', '/customers', '/shifts', '/warranties'].some(
-    (path) => pathname === path || pathname.startsWith(`${path}/`)
-  );
+  return Boolean(user && canAccessRoute(pathname, user.role));
 }
 
 export function logout() {
@@ -47,3 +42,4 @@ export function logout() {
   sessionStorage.removeItem('user');
   window.location.href = '/login';
 }
+import { canAccessRoute } from './permissions';
