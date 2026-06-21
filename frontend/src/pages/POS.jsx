@@ -4,6 +4,8 @@ import toast from 'react-hot-toast';
 import {
   Banknote,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Copy,
   Minus,
   Plus,
@@ -94,6 +96,20 @@ function buildReceiptItems(cart) {
     warranty_type: item.warranty_type,
     warranty_note: item.warranty_note
   }));
+}
+
+function MobileCartLauncher({ itemCount, onOpen }) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="no-print fixed right-0 top-1/2 z-50 flex h-14 -translate-y-1/2 items-center gap-1 bg-[#0f3b46] px-2 text-white shadow-[0_10px_30px_rgba(15,59,70,0.3)] xl:hidden"
+      aria-label="Mở giỏ hàng"
+    >
+      <ChevronLeft size={20} />
+      <span className="grid h-6 min-w-6 place-items-center bg-[#74B8E0] px-1 text-xs font-extrabold text-white">{itemCount}</span>
+    </button>
+  );
 }
 
 function ReceiptContent({ receipt }) {
@@ -209,6 +225,8 @@ export default function POS() {
   const [isClearCartOpen, setIsClearCartOpen] = useState(false);
   const [isCustomerPickerOpen, setIsCustomerPickerOpen] = useState(false);
   const [isCustomerFormOpen, setIsCustomerFormOpen] = useState(false);
+  const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
+  const [mobileCartView, setMobileCartView] = useState('cart');
   const [receipt, setReceipt] = useState(null);
   const [transferMemo, setTransferMemo] = useState('');
   const [bankTransfer, setBankTransfer] = useState(getBankTransferSettings);
@@ -217,6 +235,16 @@ export default function POS() {
   const [transferCountdown, setTransferCountdown] = useState(TRANSFER_CONFIRM_TIMEOUT_SECONDS);
   const [pageError, setPageError] = useState('');
   const [isPageLoading, setIsPageLoading] = useState(true);
+
+  useEffect(() => {
+    if (!isMobileCartOpen) return undefined;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isMobileCartOpen]);
 
   async function loadProducts() {
     const params = new URLSearchParams();
@@ -597,6 +625,7 @@ export default function POS() {
       await loadCustomers(customerLookup);
       await loadProducts();
       toast.success('Thanh toán thành công');
+      setIsMobileCartOpen(false);
     } catch (error) {
       toast.error(error.response?.data?.message || 'Không thể thanh toán');
     } finally {
@@ -633,8 +662,8 @@ export default function POS() {
         {pageError}
       </div>
     )}
-    <div className="no-print grid min-h-0 overflow-visible border border-[#c3c6d7] bg-[#f7f9fb] lg:h-[calc(100vh-6.5rem)] lg:min-h-[720px] lg:overflow-hidden lg:grid-cols-[minmax(0,1fr)_420px] xl:grid-cols-[minmax(0,1fr)_440px]">
-      <section className="flex min-w-0 flex-col overflow-visible p-3 sm:p-4 lg:overflow-hidden lg:p-5">
+    <div className="no-print grid min-h-0 overflow-visible border border-[#c3c6d7] bg-[#f7f9fb] xl:h-[calc(100vh-6.5rem)] xl:min-h-[680px] xl:overflow-hidden xl:grid-cols-[minmax(0,1fr)_minmax(360px,420px)]">
+      <section className="flex min-w-0 flex-col overflow-visible p-3 pb-24 sm:p-4 sm:pb-24 xl:overflow-hidden xl:p-5">
         <div className="mb-3 grid gap-3 xl:grid-cols-[minmax(0,1fr)_260px]">
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-[#737686]" />
@@ -677,7 +706,7 @@ export default function POS() {
           ))}
         </div>
 
-        <div className="min-h-0 flex-1 overflow-visible pr-0 lg:overflow-y-auto lg:pr-1">
+        <div className="min-h-0 flex-1 overflow-visible pr-0 xl:overflow-y-auto xl:pr-1">
           {isPageLoading ? (
             <div className="grid grid-cols-2 gap-2 pb-5 sm:gap-4 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
               {Array.from({ length: 8 }).map((_, index) => (
@@ -749,8 +778,17 @@ export default function POS() {
         </div>
       </section>
 
-      <aside className="flex min-h-0 flex-col border-t border-[#c3c6d7] bg-white lg:border-l lg:border-t-0">
-        <div className="border-b border-[#c3c6d7] bg-white p-2.5">
+      {isMobileCartOpen && (
+        <button
+          type="button"
+          className="fixed inset-0 z-[55] bg-black/45 xl:hidden"
+          onClick={() => setIsMobileCartOpen(false)}
+          aria-label="Đóng giỏ hàng"
+        />
+      )}
+
+      <aside className={`fixed inset-x-0 bottom-0 z-[60] flex max-h-[88dvh] min-h-0 flex-col overflow-y-auto border-t border-[#c3c6d7] bg-white pb-14 shadow-[0_-12px_36px_rgba(15,59,70,0.18)] transition-transform duration-200 xl:static xl:max-h-none xl:translate-y-0 xl:overflow-hidden xl:border-l xl:border-t-0 xl:pb-0 xl:shadow-none ${isMobileCartOpen ? 'translate-y-0' : 'translate-y-full'}`}>
+        <div className={`border-b border-[#c3c6d7] bg-white p-2.5 xl:block ${mobileCartView === 'checkout' ? 'hidden' : 'block'}`}>
           <div className="mb-1.5 flex items-center justify-between">
             <span className="text-sm font-bold text-[#191c1e]">Khách hàng</span>
             <button type="button" onClick={openCustomerForm} className="text-xs font-bold text-brand-strong">
@@ -801,18 +839,23 @@ export default function POS() {
           </div>
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-2.5">
+        <div className={`min-h-0 flex-none flex-col overflow-hidden p-2.5 xl:flex xl:flex-1 ${mobileCartView === 'checkout' ? 'hidden' : 'flex'}`}>
           <div className="mb-2 flex items-center justify-between">
             <div className="flex items-center gap-2 text-sm font-bold text-[#191c1e]">
               <Smartphone size={19} className="text-brand-strong" />
               <span>Giỏ hàng ({cart.length})</span>
             </div>
-            <button type="button" onClick={requestClearCart} className="rounded px-2 py-1 text-xs font-bold text-[#ba1a1a]">
-              Xóa hết
-            </button>
+            <div className="flex items-center gap-1">
+              <button type="button" onClick={requestClearCart} className="rounded px-2 py-1 text-xs font-bold text-[#ba1a1a]">
+                Xóa hết
+              </button>
+              <button type="button" onClick={() => setIsMobileCartOpen(false)} className="grid h-8 w-8 place-items-center text-[#434655] xl:hidden" aria-label="Đóng giỏ hàng">
+                <X size={19} />
+              </button>
+            </div>
           </div>
 
-          <div className="min-h-[230px] flex-1 space-y-2 overflow-y-auto pr-1">
+          <div className="max-h-[52dvh] min-h-[240px] flex-1 space-y-2 overflow-y-auto pr-1 xl:max-h-none xl:min-h-[230px]">
             {cart.length === 0 ? (
               <div className="rounded-xl border border-dashed border-[#c3c6d7] bg-[#f7f9fb] p-6 text-center text-sm font-medium text-[#737686]">
                 Chưa có sản phẩm trong giỏ hàng
@@ -885,7 +928,15 @@ export default function POS() {
           </div>
         </div>
 
-        <div className="border-t border-[#c3c6d7] bg-[#f2f4f6] p-3">
+        <div className={`border-t border-[#c3c6d7] bg-[#f2f4f6] p-3 xl:block ${mobileCartView === 'checkout' ? 'block' : 'hidden'}`}>
+          <button
+            type="button"
+            onClick={() => setMobileCartView('cart')}
+            className="mb-3 flex h-10 w-full items-center gap-2 border border-[#c3c6d7] bg-white px-3 text-sm font-bold text-[#0f3b46] xl:hidden"
+          >
+            <ChevronLeft size={18} />
+            Quay lại giỏ hàng
+          </button>
           <div className="mb-2.5 space-y-2">
             <div className="flex justify-between text-sm text-[#434655]">
               <span>Tạm tính</span>
@@ -990,14 +1041,36 @@ export default function POS() {
             type="button"
             onClick={openCheckoutConfirm}
             disabled={loading}
-            className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#74B8E0] px-4 text-sm font-bold uppercase text-white shadow-[0_8px_20px_rgba(116,184,224,0.22)] disabled:opacity-70"
+            className="hidden h-10 w-full items-center justify-center gap-2 rounded-lg bg-[#74B8E0] px-4 text-sm font-bold uppercase text-white shadow-[0_8px_20px_rgba(116,184,224,0.22)] disabled:opacity-70 xl:flex"
           >
             <ReceiptText size={18} />
             <span>Thanh toán</span>
           </button>
         </div>
+        {mobileCartView === 'cart' ? (
+          <button
+            type="button"
+            onClick={() => setMobileCartView('checkout')}
+            disabled={!cart.length}
+            className="fixed inset-x-0 bottom-0 z-10 flex h-14 items-center justify-center gap-2 border-t border-[#c3c6d7] bg-[#0f3b46] px-4 text-sm font-bold uppercase text-white shadow-[0_-8px_20px_rgba(15,59,70,0.16)] disabled:opacity-50 xl:hidden"
+          >
+            <span>Tiếp tục thanh toán · {formatCurrency(total)}</span>
+            <ChevronRight size={19} />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={openCheckoutConfirm}
+            disabled={loading}
+            className="fixed inset-x-0 bottom-0 z-10 flex h-14 items-center justify-center gap-2 border-t border-[#c3c6d7] bg-[#74B8E0] px-4 text-sm font-bold uppercase text-white shadow-[0_-8px_20px_rgba(15,59,70,0.16)] disabled:opacity-70 xl:hidden"
+          >
+            <ReceiptText size={18} />
+            <span>Thanh toán · {formatCurrency(total)}</span>
+          </button>
+        )}
       </aside>
     </div>
+    <MobileCartLauncher itemCount={cart.length} onOpen={() => { setMobileCartView('cart'); setIsMobileCartOpen(true); }} />
     <div className="no-print">
     <Modal isOpen={isPromotionOpen} onClose={() => setIsPromotionOpen(false)} title="Khuyến mãi khả dụng" maxWidth="max-w-2xl">
       <button type="button" onClick={() => { setSelectedPromotion(null); setIsPromotionOpen(false); }} className="mb-3 h-10 w-full border border-[#c3c6d7] bg-white text-sm font-bold text-[#434655]">Không áp dụng khuyến mãi</button>

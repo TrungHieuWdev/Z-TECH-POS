@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
+  AlertTriangle,
   Download,
   Edit,
   Eye,
@@ -10,6 +11,7 @@ import {
   Phone,
   Search,
   ShieldCheck,
+  Trash2,
   Unlock,
   UserCheck,
   UserPlus,
@@ -132,7 +134,10 @@ export default function Employees() {
   const [form, setForm] = useState(emptyForm);
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [viewingEmployee, setViewingEmployee] = useState(null);
+  const [revealedPasswords, setRevealedPasswords] = useState({});
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [confirmAction, setConfirmAction] = useState(null);
+  const [isConfirming, setIsConfirming] = useState(false);
 
   const loadEmployees = async () => {
     const response = await api.get('/employees');
@@ -207,11 +212,13 @@ export default function Employees() {
       note: form.note.trim()
     };
 
+    if (editingEmployee) {
+      setConfirmAction({ type: 'update', employee: editingEmployee, payload });
+      return;
+    }
+
     try {
-      if (editingEmployee) {
-        await api.put(`/employees/${editingEmployee.id}`, payload);
-        toast.success('Đã cập nhật tài khoản nhân viên');
-      } else {
+      {
         const response = await api.post('/employees', payload);
         toast.success(`Đã thêm nhân viên ${response.data.code}`);
       }
@@ -238,9 +245,42 @@ export default function Employees() {
   const resetPassword = async (employee) => {
     try {
       const response = await api.post(`/employees/${employee.id}/reset-password`);
+      setRevealedPasswords((current) => ({ ...current, [employee.id]: response.data.password }));
       toast.success(`Mật khẩu mới của ${response.data.code}: ${response.data.password}`);
     } catch (error) {
       toast.error(error.response?.data?.message || 'Không thể đặt lại mật khẩu');
+    }
+  };
+
+  const deleteEmployee = (employee) => {
+    setConfirmAction({ type: 'delete', employee });
+  };
+
+  const executeConfirmedAction = async () => {
+    if (!confirmAction || isConfirming) return;
+    const { type, employee, payload } = confirmAction;
+    setIsConfirming(true);
+    try {
+      if (type === 'update') {
+        await api.put(`/employees/${employee.id}`, payload);
+        closeForm();
+        toast.success(`Đã cập nhật tài khoản ${employee.code}`);
+      } else {
+        await api.delete(`/employees/${employee.id}`);
+        setRevealedPasswords((current) => {
+          const next = { ...current };
+          delete next[employee.id];
+          return next;
+        });
+        if (viewingEmployee?.id === employee.id) setViewingEmployee(null);
+        toast.success(`Đã xóa nhân viên ${employee.code}`);
+      }
+      await loadEmployees();
+      setConfirmAction(null);
+    } catch (error) {
+      toast.error(error.response?.data?.message || `Không thể ${type === 'update' ? 'cập nhật' : 'xóa'} nhân viên`);
+    } finally {
+      setIsConfirming(false);
     }
   };
 
@@ -407,7 +447,7 @@ export default function Employees() {
                 filteredEmployees.map((employee) => {
                   const roleMeta = getRoleMeta(employee.role);
                   const statusMeta = getStatusMeta(employee.status);
-                  const ToggleIcon = employee.status === 'active' ? Lock : Unlock;
+                  const ToggleIcon = employee.status === 'active' ? Unlock : Lock;
 
                   return (
                     <tr key={employee.id} className="transition hover:bg-[#f8fdfe]">
@@ -475,9 +515,20 @@ export default function Employees() {
                           <button
                             type="button"
                             onClick={() => toggleStatus(employee)}
+                            title={employee.status === 'active' ? 'Khóa tài khoản' : 'Mở khóa tài khoản'}
+                            aria-label={employee.status === 'active' ? 'Khóa tài khoản' : 'Mở khóa tài khoản'}
                             className="rounded-lg p-2 text-gray-500 transition hover:bg-red-50 hover:text-red-600"
                           >
                             <ToggleIcon size={18} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteEmployee(employee)}
+                            title="Xóa nhân viên"
+                            aria-label="Xóa nhân viên"
+                            className="rounded-lg p-2 text-gray-500 transition hover:bg-red-50 hover:text-red-600"
+                          >
+                            <Trash2 size={18} />
                           </button>
                         </div>
                       </td>
@@ -599,6 +650,51 @@ export default function Employees() {
         </form>
       </Modal>
 
+      <Modal
+        isOpen={Boolean(confirmAction)}
+        onClose={() => !isConfirming && setConfirmAction(null)}
+        title={confirmAction?.type === 'delete' ? 'Xác nhận xóa nhân viên' : 'Xác nhận cập nhật tài khoản'}
+        maxWidth="max-w-md"
+      >
+        {confirmAction && (
+          <div className="space-y-5">
+            <div className={`flex gap-4 p-4 ${confirmAction.type === 'delete' ? 'bg-red-50' : 'bg-[#f4fcfe]'}`}>
+              <div className={`grid h-11 w-11 shrink-0 place-items-center ${confirmAction.type === 'delete' ? 'bg-red-100 text-red-600' : 'bg-[#c0edf7] text-[#0f3b46]'}`}>
+                {confirmAction.type === 'delete' ? <AlertTriangle size={22} /> : <Edit size={22} />}
+              </div>
+              <div>
+                <p className="font-bold text-gray-950">
+                  {confirmAction.employee.code} - {confirmAction.employee.name}
+                </p>
+                <p className="mt-1 text-sm leading-6 text-gray-600">
+                  {confirmAction.type === 'delete'
+                    ? 'Nhân viên sẽ bị xóa khỏi hệ thống. Thao tác này không thể hoàn tác.'
+                    : 'Các thông tin vừa chỉnh sửa sẽ được lưu vào tài khoản nhân viên này.'}
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmAction(null)}
+                disabled={isConfirming}
+                className="border border-gray-300 px-4 py-2 font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={executeConfirmedAction}
+                disabled={isConfirming}
+                className={`px-4 py-2 font-semibold text-white disabled:opacity-60 ${confirmAction.type === 'delete' ? 'bg-red-600 hover:bg-red-700' : 'bg-[#0f3b46] hover:bg-[#174f5d]'}`}
+              >
+                {isConfirming ? 'Đang xử lý...' : confirmAction.type === 'delete' ? 'Xác nhận xóa' : 'Xác nhận cập nhật'}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
       <Modal isOpen={Boolean(viewingEmployee)} onClose={() => setViewingEmployee(null)} title="Chi tiết nhân viên">
         {viewingEmployee && (
           <div className="space-y-4">
@@ -617,8 +713,18 @@ export default function Employees() {
                 <p className="font-semibold text-gray-950">{viewingEmployee.phone}</p>
               </div>
               <div>
-                <span className="text-gray-500">Mật khẩu hiện tại</span>
-                <p className="font-semibold text-gray-950">Không hiển thị vì đã lưu mã hóa</p>
+                <span className="text-gray-500">Mật khẩu đăng nhập</span>
+                {revealedPasswords[viewingEmployee.id] ? (
+                  <p className="font-semibold text-gray-950">{revealedPasswords[viewingEmployee.id]}</p>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => resetPassword(viewingEmployee)}
+                    className="mt-1 font-semibold text-[#0f3b46] underline underline-offset-2"
+                  >
+                    Đặt lại và hiển thị mật khẩu mới
+                  </button>
+                )}
               </div>
               <div>
                 <span className="text-gray-500">Vai trò</span>

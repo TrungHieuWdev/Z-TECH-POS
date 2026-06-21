@@ -11,6 +11,7 @@ import { getUser, isFullAccessRole } from '../utils/auth';
 import { getDefaultWarrantyPolicy, getWarrantyLabel, warrantyTypes } from '../utils/warrantyPolicy';
 
 const deviceFamilyOptions = [
+  { value: 'generic', label: 'Dùng chung / Không theo hãng' },
   { value: 'apple', label: 'Apple' },
   { value: 'samsung', label: 'Samsung' },
   { value: 'vivo', label: 'Vivo' },
@@ -358,7 +359,15 @@ export default function Products() {
   };
 
   const handleFamilyChange = (value) => {
-    setForm({ ...form, device_family: value, device_model_id: '' });
+    const genericModel = value === 'generic'
+      ? deviceModels.find((model) => model.family === 'generic')
+      : null;
+
+    setForm({
+      ...form,
+      device_family: value,
+      device_model_id: genericModel?.id || ''
+    });
   };
 
   const applyDefaultWarranty = () => {
@@ -763,14 +772,14 @@ export default function Products() {
             />
           </label>
           <label>
-            <span className="mb-1 block text-sm font-medium text-gray-700">Dòng máy</span>
+            <span className="mb-1 block text-sm font-medium text-gray-700">Phạm vi tương thích</span>
             <select
               value={form.device_family}
               onChange={(event) => handleFamilyChange(event.target.value)}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-brand"
               required
             >
-              <option value="">Chọn dòng máy</option>
+              <option value="">Chọn hãng / phạm vi</option>
               {deviceFamilyOptions.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
@@ -784,15 +793,19 @@ export default function Products() {
               value={form.device_model_id}
               onChange={(event) => setForm({ ...form, device_model_id: event.target.value })}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-brand"
+              disabled={form.device_family === 'generic'}
               required
             >
-              <option value="">Chọn model</option>
+              <option value="">{form.device_family === 'generic' ? 'Không yêu cầu model máy' : 'Chọn model'}</option>
               {formDeviceModels.map((model) => (
                 <option key={model.id} value={model.id}>
                   {model.name}
                 </option>
               ))}
             </select>
+            {form.device_family === 'generic' && (
+              <span className="mt-1 block text-xs text-gray-500">Dành cho tai nghe, cáp, sạc, phụ kiện tiện ích… không gắn với một hãng hoặc model cụ thể.</span>
+            )}
           </label>
           <label>
             <span className="mb-1 block text-sm font-medium text-gray-700">Danh mục</span>

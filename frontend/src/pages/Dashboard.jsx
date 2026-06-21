@@ -103,7 +103,7 @@ export default function Dashboard() {
   const [categoryShare, setCategoryShare] = useState([]);
   const [topProducts, setTopProducts] = useState([]);
   const [recentOrders, setRecentOrders] = useState([]);
-  const [dashboardPeriod, setDashboardPeriod] = useState('year');
+  const [dashboardPeriod, setDashboardPeriod] = useState('today');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -165,7 +165,7 @@ export default function Dashboard() {
   };
 
   const dashboardPeriodLabel = useMemo(() => {
-    return dashboardPeriodOptions.find((option) => option.value === dashboardPeriod)?.label || 'Năm nay';
+    return dashboardPeriodOptions.find((option) => option.value === dashboardPeriod)?.label || dashboardPeriodOptions[0].label;
   }, [dashboardPeriod]);
 
   const comparisonCaption = (caption) => {

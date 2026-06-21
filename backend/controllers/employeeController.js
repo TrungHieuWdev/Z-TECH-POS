@@ -214,3 +214,31 @@ export async function toggleEmployeeStatus(req, res) {
     res.status(500).json({ message: 'Không thể cập nhật trạng thái nhân viên', error: error.message });
   }
 }
+
+export async function deleteEmployee(req, res) {
+  try {
+    await ensureEmployeeSchema();
+
+    const employeeId = Number(req.params.id);
+    const rows = await query(
+      "SELECT id, employee_code FROM users WHERE id = ? AND role IN ('cashier', 'employee', 'warehouse')",
+      [employeeId]
+    );
+    const employee = rows[0];
+
+    if (!employee) {
+      return res.status(404).json({ message: 'Không tìm thấy nhân viên' });
+    }
+
+    await query('DELETE FROM users WHERE id = ?', [employeeId]);
+    res.json({ message: 'Đã xóa nhân viên', code: employee.employee_code });
+  } catch (error) {
+    if (error.code === 'ER_ROW_IS_REFERENCED_2' || error.code === 'ER_ROW_IS_REFERENCED') {
+      return res.status(409).json({
+        message: 'Không thể xóa nhân viên đã phát sinh đơn hàng hoặc lịch sử kho. Hãy khóa tài khoản để giữ nguyên dữ liệu.'
+      });
+    }
+
+    res.status(500).json({ message: 'Không thể xóa nhân viên', error: error.message });
+  }
+}

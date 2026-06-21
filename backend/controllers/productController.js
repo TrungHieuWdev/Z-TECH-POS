@@ -2,8 +2,9 @@ import { query } from '../config/db.js';
 import { logActivity } from '../utils/activityLogger.js';
 import XLSX from 'xlsx';
 import { normalizeWarrantyPolicy } from '../utils/warrantyPolicy.js';
+import { ensureGenericDeviceModel } from './deviceModelController.js';
 
-const DEVICE_FAMILIES = new Set(['apple', 'samsung', 'vivo', 'oppo', 'xiaomi']);
+const DEVICE_FAMILIES = new Set(['apple', 'samsung', 'vivo', 'oppo', 'xiaomi', 'generic']);
 
 const searchAliasSql = `
   CONCAT_WS(' ',
@@ -98,7 +99,15 @@ function appendGenericAccessoryFilter(sql, params) {
   params.push(...genericAccessoryKeywords.map((keyword) => `%${keyword}%`));
   params.push(...modelSpecificProductNameKeywords.map((keyword) => `%${keyword}%`));
 
-  return `${sql} AND (${keywordConditions}) AND (${modelSpecificConditions})`;
+  return `${sql} AND (dm.family = 'generic' OR ((${keywordConditions}) AND (${modelSpecificConditions})))`;
+}
+
+async function withResolvedDeviceModel(body) {
+  if (body.device_family === 'generic' && !body.device_model_id) {
+    return { ...body, device_model_id: await ensureGenericDeviceModel() };
+  }
+
+  return body;
 }
 
 function appendTextSearch(sql, params, tokens) {
@@ -352,7 +361,7 @@ export async function getById(req, res) {
 
 export async function create(req, res) {
   try {
-    const product = normalizeProductBody(req.body);
+    const product = normalizeProductBody(await withResolvedDeviceModel(req.body));
     const validationMessage = await validateProduct(product);
 
     if (validationMessage) {
@@ -541,7 +550,7 @@ export async function update(req, res) {
       return res.status(404).json({ message: 'Không tìm thấy sản phẩm' });
     }
 
-    const product = normalizeProductBody(req.body, current[0]);
+    const product = normalizeProductBody(await withResolvedDeviceModel(req.body), current[0]);
     const validationMessage = await validateProduct(product);
 
     if (validationMessage) {

@@ -28,7 +28,7 @@ CREATE TABLE categories (
 
 CREATE TABLE device_models (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  family ENUM('apple', 'samsung', 'vivo', 'oppo', 'xiaomi') NOT NULL,
+  family ENUM('apple', 'samsung', 'vivo', 'oppo', 'xiaomi', 'generic') NOT NULL,
   name VARCHAR(100) NOT NULL,
   series VARCHAR(50),
   release_year SMALLINT,
