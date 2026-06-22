@@ -1,4 +1,4 @@
-import { query } from '../config/db.js';
+import { query, withTransaction } from '../config/db.js';
 import { randomUUID } from 'node:crypto';
 import { hasFullAccess } from '../middleware/auth.js';
 
@@ -19,8 +19,8 @@ async function ensureWarrantySnapshotColumns() {
   warrantySnapshotReady = true;
 }
 
-async function buildOrderNumber() {
-  const rows = await query(`
+async function buildOrderNumber(db = query) {
+  const rows = await db(`
     SELECT
       DATE_FORMAT(NOW(), '%Y%m%d') AS date_part,
       COALESCE(MAX(CAST(SUBSTRING_INDEX(order_number, '-', -1) AS UNSIGNED)), 0) AS max_number
@@ -39,8 +39,8 @@ export async function create(req, res) {
     const {
       customer_id = null,
       items = [],
-      discount = 0,
-      vat_percent = 0,
+      promotion_discount = 0,
+      points_used = 0,
       payment_method = 'cash',
       note = ''
     } = req.body;
@@ -49,67 +49,103 @@ export async function create(req, res) {
       return res.status(400).json({ message: 'Đơn hàng cần có ít nhất một sản phẩm' });
     }
 
-    const orderItems = [];
-    let subtotal = 0;
+    const createdOrder = await withTransaction(async (db) => {
+      const orderItems = [];
+      let subtotal = 0;
 
-    for (const item of items) {
-      const productId = item.product_id;
-      const quantity = Number(item.quantity);
+      for (const item of items) {
+        const productId = item.product_id;
+        const quantity = Math.floor(Number(item.quantity));
+        if (!productId || !Number.isInteger(quantity) || quantity <= 0) {
+          const error = new Error('Sản phẩm hoặc số lượng không hợp lệ');
+          error.status = 400;
+          throw error;
+        }
 
-      if (!productId || quantity <= 0) {
-        return res.status(400).json({ message: 'Sản phẩm hoặc số lượng không hợp lệ' });
+        const products = await db(
+          'SELECT id, name, price, stock_quantity, warranty_enabled, warranty_period_days, warranty_type, warranty_conditions, warranty_exclusions, warranty_note FROM products WHERE id = ? AND is_active = 1 FOR UPDATE',
+          [productId]
+        );
+        const product = products[0];
+        if (!product) {
+          const error = new Error(`Không tìm thấy sản phẩm ID ${productId}`);
+          error.status = 404;
+          throw error;
+        }
+        if (Number(product.stock_quantity) < quantity) {
+          const error = new Error(`Sản phẩm ${product.name} không đủ tồn kho`);
+          error.status = 400;
+          throw error;
+        }
+
+        const unitPrice = Number(product.price);
+        const lineTotal = unitPrice * quantity;
+        subtotal += lineTotal;
+        orderItems.push({ ...product, product_id: product.id, quantity, unit_price: unitPrice, subtotal: lineTotal });
       }
 
-      const products = await query(
-        'SELECT id, name, price, stock_quantity, warranty_enabled, warranty_period_days, warranty_type, warranty_conditions, warranty_exclusions, warranty_note FROM products WHERE id = ? AND is_active = 1',
-        [productId]
-      );
-      const product = products[0];
+      const promotionDiscount = Math.min(Math.max(Number(promotion_discount) || 0, 0), subtotal);
+      const amountAfterPromotion = Math.max(subtotal - promotionDiscount, 0);
+      const requestedPoints = Math.floor(Math.max(Number(points_used) || 0, 0));
+      let availablePoints = 0;
 
-      if (!product) {
-        return res.status(404).json({ message: `Không tìm thấy sản phẩm ID ${productId}` });
+      if (customer_id) {
+        const customers = await db('SELECT id, loyalty_points FROM customers WHERE id = ? FOR UPDATE', [customer_id]);
+        if (!customers[0]) {
+          const error = new Error('Không tìm thấy khách hàng thành viên');
+          error.status = 400;
+          throw error;
+        }
+        availablePoints = Number(customers[0].loyalty_points || 0);
+      } else if (requestedPoints > 0) {
+        const error = new Error('Chỉ khách hàng thành viên mới được sử dụng điểm');
+        error.status = 400;
+        throw error;
       }
 
-      if (Number(product.stock_quantity) < quantity) {
-        return res.status(400).json({ message: `Sản phẩm ${product.name} không đủ tồn kho` });
+      const maxRedeemPoints = Math.floor(Math.min(availablePoints, amountAfterPromotion * 0.2 / 1000));
+      if (requestedPoints > maxRedeemPoints) {
+        const error = new Error(`Chỉ có thể sử dụng tối đa ${maxRedeemPoints} điểm`);
+        error.status = 400;
+        throw error;
       }
 
-      const unitPrice = Number(product.price);
-      const lineTotal = unitPrice * quantity;
-      subtotal += lineTotal;
-      orderItems.push({ ...product, product_id: product.id, quantity, unit_price: unitPrice, subtotal: lineTotal });
-    }
+      const pointsDiscountAmount = requestedPoints * 1000;
+      const afterPoints = Math.max(amountAfterPromotion - pointsDiscountAmount, 0);
+      const total = afterPoints;
+      const earnedPoints = customer_id ? Math.floor(total / 10000) : 0;
+      const totalDiscount = promotionDiscount + pointsDiscountAmount;
+      const orderNumber = await buildOrderNumber(db);
 
-    const discountValue = Math.max(Number(discount) || 0, 0);
-    const vatPercentValue = Math.max(Number(vat_percent) || 0, 0);
-    const taxableTotal = Math.max(subtotal - discountValue, 0);
-    const vatAmount = Math.round((taxableTotal * vatPercentValue) / 100);
-    const total = taxableTotal + vatAmount;
-    const orderNumber = await buildOrderNumber();
-
-    const orderResult = await query(
-      `INSERT INTO orders
-        (customer_id, user_id, order_number, subtotal, discount, total, payment_method, status, note)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'completed', ?)`,
-      [customer_id || null, req.user.id, orderNumber, subtotal, discountValue, total, payment_method, note]
-    );
-
-    for (const item of orderItems) {
-      await query(
-        `INSERT INTO order_items (order_id, product_id, quantity, unit_price, subtotal, warranty_enabled_snapshot, warranty_period_days_snapshot, warranty_type_snapshot, warranty_conditions_snapshot, warranty_exclusions_snapshot, warranty_note_snapshot, public_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [orderResult.insertId, item.product_id, item.quantity, item.unit_price, item.subtotal, item.warranty_enabled, item.warranty_period_days, item.warranty_type, item.warranty_conditions, item.warranty_exclusions, item.warranty_note, randomUUID()]
+      const orderResult = await db(
+        `INSERT INTO orders
+          (customer_id, user_id, order_number, subtotal, discount, points_used, points_discount_amount, points_earned, total, payment_method, status, note)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?)`,
+        [customer_id || null, req.user.id, orderNumber, subtotal, totalDiscount, requestedPoints, pointsDiscountAmount, earnedPoints, total, payment_method, note]
       );
 
-      await query(
-        'UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?',
-        [item.quantity, item.product_id]
-      );
-    }
+      for (const item of orderItems) {
+        await db(
+          `INSERT INTO order_items (order_id, product_id, quantity, unit_price, subtotal, warranty_enabled_snapshot, warranty_period_days_snapshot, warranty_type_snapshot, warranty_conditions_snapshot, warranty_exclusions_snapshot, warranty_note_snapshot, public_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [orderResult.insertId, item.product_id, item.quantity, item.unit_price, item.subtotal, item.warranty_enabled, item.warranty_period_days, item.warranty_type, item.warranty_conditions, item.warranty_exclusions, item.warranty_note, randomUUID()]
+        );
+        await db('UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?', [item.quantity, item.product_id]);
+      }
 
-    const created = await query('SELECT * FROM orders WHERE id = ?', [orderResult.insertId]);
-    res.status(201).json(created[0]);
+      if (customer_id) {
+        await db(
+          'UPDATE customers SET loyalty_points = loyalty_points - ? + ? WHERE id = ? AND loyalty_points >= ?',
+          [requestedPoints, earnedPoints, customer_id, requestedPoints]
+        );
+      }
+
+      const created = await db('SELECT * FROM orders WHERE id = ?', [orderResult.insertId]);
+      return created[0];
+    });
+
+    res.status(201).json(createdOrder);
   } catch (error) {
-    res.status(500).json({ message: 'Không thể tạo đơn hàng', error: error.message });
+    res.status(error.status || 500).json({ message: error.status ? error.message : 'Không thể tạo đơn hàng', error: error.message });
   }
 }
 
@@ -189,9 +225,41 @@ export async function update(req, res) {
       return res.status(400).json({ message: 'Trạng thái đơn hàng không hợp lệ' });
     }
 
+    if (status === 'cancelled') {
+      const result = await withTransaction(async (db) => {
+        const orders = await db('SELECT * FROM orders WHERE id = ? FOR UPDATE', [req.params.id]);
+        const order = orders[0];
+        if (!order) return { affectedRows: 0 };
+
+        if (order.status === 'completed') {
+          const items = await db('SELECT product_id, quantity FROM order_items WHERE order_id = ?', [order.id]);
+          for (const item of items) {
+            await db('UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?', [item.quantity, item.product_id]);
+          }
+          if (order.customer_id) {
+            await db(
+              'UPDATE customers SET loyalty_points = GREATEST(loyalty_points + ? - ?, 0) WHERE id = ?',
+              [order.points_used, order.points_earned, order.customer_id]
+            );
+          }
+        }
+
+        return db(
+          "UPDATE orders SET status = 'cancelled', payment_method = COALESCE(?, payment_method), note = ? WHERE id = ?",
+          [payment_method || null, note, order.id]
+        );
+      });
+
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ message: 'Không tìm thấy đơn hàng' });
+      }
+      const updated = await query('SELECT * FROM orders WHERE id = ?', [req.params.id]);
+      return res.json(updated[0]);
+    }
+
     const result = await query(
-      'UPDATE orders SET status = COALESCE(?, status), payment_method = COALESCE(?, payment_method), note = ? WHERE id = ?',
-      [status || null, payment_method || null, note, req.params.id]
+      'UPDATE orders SET payment_method = COALESCE(?, payment_method), note = ? WHERE id = ?',
+      [payment_method || null, note, req.params.id]
     );
 
     if (result.affectedRows === 0) {
@@ -207,7 +275,24 @@ export async function update(req, res) {
 
 export async function remove(req, res) {
   try {
-    const result = await query("UPDATE orders SET status = 'cancelled' WHERE id = ?", [req.params.id]);
+    const result = await withTransaction(async (db) => {
+      const orders = await db('SELECT * FROM orders WHERE id = ? FOR UPDATE', [req.params.id]);
+      const order = orders[0];
+      if (!order) return { affectedRows: 0 };
+      if (order.status === 'cancelled') return { affectedRows: 1 };
+
+      const items = await db('SELECT product_id, quantity FROM order_items WHERE order_id = ?', [order.id]);
+      for (const item of items) {
+        await db('UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?', [item.quantity, item.product_id]);
+      }
+      if (order.customer_id) {
+        await db(
+          'UPDATE customers SET loyalty_points = GREATEST(loyalty_points + ? - ?, 0) WHERE id = ?',
+          [order.points_used, order.points_earned, order.customer_id]
+        );
+      }
+      return db("UPDATE orders SET status = 'cancelled' WHERE id = ?", [order.id]);
+    });
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: 'Không tìm thấy đơn hàng' });

@@ -15,6 +15,7 @@ import employeeRoutes from './routes/employees.js';
 import warrantyRoutes from './routes/warranties.js';
 import publicWarrantyRoutes from './routes/publicWarranties.js';
 import shiftRoutes from './routes/shifts.js';
+import settingsRoutes from './routes/settings.js';
 
 dotenv.config();
 
@@ -126,6 +127,7 @@ app.use('/api/employees', employeeRoutes);
 app.use('/api/warranties', warrantyRoutes);
 app.use('/api/public/warranties', publicWarrantyRoutes);
 app.use('/api/shifts', shiftRoutes);
+app.use('/api/settings', settingsRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ message: 'Không tìm thấy API' });

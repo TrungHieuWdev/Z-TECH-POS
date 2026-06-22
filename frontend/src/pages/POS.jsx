@@ -170,18 +170,24 @@ function ReceiptContent({ receipt }) {
           <span>Tạm tính</span>
           <span>{formatCurrency(receipt.subtotal)}</span>
         </div>
-        <div className="flex justify-between">
-          <span>Giảm giá</span>
-          <span>{formatCurrency(receipt.discount)} ({Number(receipt.discountPercent || 0)}%)</span>
-        </div>
-        <div className="flex justify-between">
-          <span>VAT {Number(receipt.vatPercent || 0)}%</span>
-          <span>{formatCurrency(receipt.vatAmount || 0)}</span>
-        </div>
+        {Number(receipt.discount || 0) > 0 && <div className="flex justify-between"><span>Khuyến mãi</span><span>-{formatCurrency(receipt.discount)}</span></div>}
+        {Number(receipt.pointsUsed || 0) > 0 && (
+          <div className="flex justify-between text-emerald-700">
+            <span>Dùng {Number(receipt.pointsUsed).toLocaleString('vi-VN')} điểm</span>
+            <span>-{formatCurrency(receipt.pointsDiscountAmount)}</span>
+          </div>
+        )}
+        {Number(receipt.pointsEarned || 0) > 0 && (
+          <div className="flex justify-between text-xs font-semibold text-brand-strong">
+            <span>Điểm được cộng</span>
+            <span>+{Number(receipt.pointsEarned).toLocaleString('vi-VN')} điểm</span>
+          </div>
+        )}
         <div className="flex justify-between text-base font-extrabold">
           <span>Tổng cộng</span>
           <span>{formatCurrency(receipt.total)}</span>
         </div>
+        <p className="text-center text-[11px] font-medium text-[#737686]">Hóa đơn bán hàng nội bộ, không phải hóa đơn VAT</p>
         {receipt.paymentMethod === 'cash' && (
           <>
             <div className="flex justify-between">
@@ -215,14 +221,13 @@ export default function POS() {
   const scanModeRef = useRef(false);
   const [categoryId, setCategoryId] = useState('');
   const [deviceFamily, setDeviceFamily] = useState('');
-  const [discount, setDiscount] = useState(0);
+  const [usedPoints, setUsedPoints] = useState(0);
   const [promotions, setPromotions] = useState(() => getPromotions(initialPromotions));
   const [selectedPromotion, setSelectedPromotion] = useState(null);
   const [isPromotionOpen, setIsPromotionOpen] = useState(false);
-  const [vatPercent, setVatPercent] = useState(0);
   const [customerPaid, setCustomerPaid] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
-  const [customerName, setCustomerName] = useState('Khách lẻ');
+  const [customerName, setCustomerName] = useState('Chọn khách hàng');
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [customerLookup, setCustomerLookup] = useState('');
   const [customerForm, setCustomerForm] = useState(initialCustomerForm);
@@ -266,6 +271,7 @@ export default function POS() {
       setScanMode(false);
     }
   }, [isConfirmOpen, isCustomerPickerOpen, isCustomerFormOpen, isPromotionOpen]);
+
 
   useEffect(() => {
     if (!isMobileCartOpen) return undefined;
@@ -387,12 +393,17 @@ export default function POS() {
   const eligiblePromotions = useMemo(() => promotions.filter((promotion) => isPromotionEligible(promotion, { cart, subtotal, isMember: Boolean(selectedCustomer) })), [promotions, cart, subtotal, selectedCustomer]);
   const promotionDiscount = selectedPromotion ? getPromotionDiscount(selectedPromotion, subtotal) : 0;
 
-  const discountPercentValue = Math.min(Math.max(Number(discount) || 0, 0), 100);
-  const discountValue = Math.min(Math.round((subtotal * discountPercentValue) / 100), Math.max(subtotal - promotionDiscount, 0));
-  const taxableTotal = Math.max(subtotal - promotionDiscount - discountValue, 0);
-  const vatPercentValue = Math.max(Number(vatPercent) || 0, 0);
-  const vatAmount = Math.round((taxableTotal * vatPercentValue) / 100);
-  const total = taxableTotal + vatAmount;
+  const amountAfterPromotion = Math.max(subtotal - promotionDiscount, 0);
+  const availablePoints = selectedCustomer ? Math.max(Number(selectedCustomer.points) || 0, 0) : 0;
+  const maxRedeemValue = amountAfterPromotion * 0.2;
+  const maxRedeemPoints = cart.length > 0
+    ? Math.floor(Math.min(availablePoints, maxRedeemValue / 1000))
+    : 0;
+  const normalizedUsedPoints = Math.min(Math.max(Math.floor(Number(usedPoints) || 0), 0), maxRedeemPoints);
+  const pointsDiscountAmount = normalizedUsedPoints * 1000;
+  const amountAfterPoints = Math.max(amountAfterPromotion - pointsDiscountAmount, 0);
+  const total = amountAfterPoints;
+  const earnedPoints = selectedCustomer ? Math.floor(total / 10000) : 0;
   const hasCustomerPaid = String(customerPaid).trim() !== '';
   const customerPaidValue = toMoneyAmount(customerPaid);
   const changeDue = paymentMethod === 'cash' ? Math.max(customerPaidValue - total, 0) : 0;
@@ -413,9 +424,31 @@ export default function POS() {
     }
   }, [cart, subtotal, selectedCustomer, selectedPromotion]);
 
+  useEffect(() => {
+    if (Number(usedPoints) > maxRedeemPoints) {
+      setUsedPoints(maxRedeemPoints);
+    }
+  }, [maxRedeemPoints, usedPoints]);
+
   const toggleDeviceFamily = (value) => {
     // Tim nhanh theo dong may tach rieng voi loc danh muc san pham chung.
     setDeviceFamily((current) => (current === value ? '' : value));
+  };
+
+  const handlePointsChange = (value) => {
+    if (value === '') {
+      setUsedPoints('');
+      return;
+    }
+
+    if (!/^\d+$/.test(value)) return;
+    const requested = Math.floor(Number(value));
+    if (requested > maxRedeemPoints) {
+      setUsedPoints(maxRedeemPoints);
+      toast.error(`Chỉ có thể dùng tối đa ${maxRedeemPoints} điểm`);
+      return;
+    }
+    setUsedPoints(requested);
   };
 
   const addToCart = (product) => {
@@ -547,9 +580,8 @@ export default function POS() {
   const clearCart = () => {
     setCart([]);
     setQuantityDrafts({});
-    setDiscount(0);
+    setUsedPoints(0);
     setSelectedPromotion(null);
-    setVatPercent(0);
     setCustomerPaid('');
     setIsClearCartOpen(false);
   };
@@ -564,12 +596,14 @@ export default function POS() {
   };
 
   const selectWalkInCustomer = () => {
+    setUsedPoints(0);
     setSelectedCustomer(null);
     setCustomerName('Khách lẻ');
     setIsCustomerPickerOpen(false);
   };
 
   const selectCustomer = (customer) => {
+    setUsedPoints(0);
     setSelectedCustomer(customer);
     setCustomerName(customer.name || 'Khách lẻ');
     setIsCustomerPickerOpen(false);
@@ -668,8 +702,8 @@ export default function POS() {
       const response = await api.post('/orders', {
         customer_id: selectedCustomer?.id || null,
         items: buildOrderItems(cart),
-        discount: promotionDiscount + discountValue,
-        vat_percent: vatPercentValue,
+        promotion_discount: promotionDiscount,
+        points_used: normalizedUsedPoints,
         payment_method: paymentMethod
       });
 
@@ -679,10 +713,10 @@ export default function POS() {
         paymentMethod,
         items: receiptItems,
         subtotal,
-        discount: promotionDiscount + discountValue,
-        discountPercent: discountPercentValue,
-        vatPercent: vatPercentValue,
-        vatAmount,
+        discount: promotionDiscount,
+        pointsUsed: normalizedUsedPoints,
+        pointsDiscountAmount,
+        pointsEarned: Number(response.data.points_earned || earnedPoints),
         total,
         customerPaid: paymentMethod === 'cash' && hasCustomerPaid ? customerPaidValue : total,
         changeDue,
@@ -886,17 +920,18 @@ export default function POS() {
       )}
 
       <aside className={`fixed inset-x-0 bottom-0 z-[60] flex max-h-[88dvh] min-h-0 flex-col overflow-y-auto border-t border-[#c3c6d7] bg-white pb-14 shadow-[0_-12px_36px_rgba(15,59,70,0.18)] transition-transform duration-200 xl:static xl:max-h-none xl:translate-y-0 xl:overflow-hidden xl:border-l xl:border-t-0 xl:pb-0 xl:shadow-none ${isMobileCartOpen ? 'translate-y-0' : 'translate-y-full'}`}>
-        <div className={`border-b border-[#c3c6d7] bg-white p-2.5 xl:block ${mobileCartView === 'checkout' ? 'hidden' : 'block'}`}>
-          <div className="mb-1.5 flex items-center justify-between">
+        <div className={`border-b border-[#c3c6d7] bg-white px-2.5 py-2 xl:block ${mobileCartView === 'checkout' ? 'hidden' : 'block'}`}>
+          <div className="mb-1 flex items-center justify-between">
             <span className="text-sm font-bold text-[#191c1e]">Khách hàng</span>
-            <button type="button" onClick={openCustomerForm} className="text-xs font-bold text-brand-strong">
-              Thêm mới (+)
-            </button>
+            <div className="flex items-center gap-3">
+              {selectedCustomer && <button type="button" onClick={selectWalkInCustomer} className="text-xs font-bold text-[#737686]">Khách lẻ</button>}
+              <button type="button" onClick={openCustomerForm} className="text-xs font-bold text-brand-strong">Thêm mới (+)</button>
+            </div>
           </div>
           <button
             type="button"
             onClick={() => setIsCustomerPickerOpen(true)}
-            className="flex w-full items-center gap-2.5 rounded-lg border border-[#c3c6d7] bg-[#f7f9fb] px-3 py-2 text-left outline-none transition focus:border-brand focus:ring-2 focus:ring-brand-soft"
+            className="flex h-12 w-full items-center gap-2 border border-[#c3c6d7] bg-[#f7f9fb] px-2.5 text-left outline-none transition focus:border-brand focus:ring-2 focus:ring-brand-soft"
           >
             <UserSearch className="h-5 w-5 shrink-0 text-[#737686]" />
             <span className="min-w-0 flex-1">
@@ -907,38 +942,20 @@ export default function POS() {
                 </span>
               ) : (
                 <span className="block truncate text-xs font-semibold leading-4 text-[#737686]">
-                  Không lưu thông tin, không tích điểm
+            
                 </span>
               )}
             </span>
             {selectedCustomer && (
-              <span className="rounded-full bg-brand-soft px-2.5 py-1 text-xs font-extrabold text-brand-strong">
+              <span className="bg-brand-soft px-2 py-1 text-xs font-extrabold text-brand-strong">
                 {Number(selectedCustomer.points || 0).toLocaleString('vi-VN')} điểm
               </span>
             )}
           </button>
-          <div className="mt-1.5 grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={selectWalkInCustomer}
-              className={`h-7 rounded-lg border px-2 text-xs font-bold ${
-                selectedCustomer ? 'border-[#c3c6d7] bg-white text-[#434655]' : 'border-brand bg-brand-soft text-brand-strong'
-              }`}
-            >
-              Khách chưa đăng ký
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsCustomerPickerOpen(true)}
-              className="h-7 rounded-lg border border-[#c3c6d7] bg-white px-2 text-xs font-bold text-[#434655]"
-            >
-              Thành viên
-            </button>
-          </div>
         </div>
 
-        <div className={`min-h-0 flex-none flex-col overflow-hidden p-2.5 xl:flex xl:flex-1 ${mobileCartView === 'checkout' ? 'hidden' : 'flex'}`}>
-          <div className="mb-2 flex items-center justify-between">
+        <div className={`min-h-0 flex-none flex-col overflow-hidden px-2.5 py-2 xl:flex xl:flex-1 ${mobileCartView === 'checkout' ? 'hidden' : 'flex'}`}>
+          <div className="mb-1.5 flex items-center justify-between">
             <div className="flex items-center gap-2 text-sm font-bold text-[#191c1e]">
               <Smartphone size={19} className="text-brand-strong" />
               <span>Giỏ hàng ({cart.length})</span>
@@ -960,8 +977,8 @@ export default function POS() {
               </div>
             ) : (
               cart.map((item) => (
-                <div key={item.id} className="flex gap-2.5 rounded-lg border border-[#e0e3e5] bg-white p-2">
-                  <div className="h-[72px] w-[72px] shrink-0 overflow-hidden rounded-lg border border-[#c3c6d7] bg-[#f2f4f6]">
+                <div key={item.id} className="flex gap-2 border border-[#e0e3e5] bg-white p-1.5">
+                  <div className="h-14 w-14 shrink-0 overflow-hidden border border-[#c3c6d7] bg-[#f2f4f6]">
                     <ProductImage product={item} iconSize={24} />
                   </div>
                   <div className="min-w-0 flex-1">
@@ -1026,7 +1043,7 @@ export default function POS() {
           </div>
         </div>
 
-        <div className={`border-t border-[#c3c6d7] bg-[#f2f4f6] p-3 xl:block ${mobileCartView === 'checkout' ? 'block' : 'hidden'}`}>
+        <div className={`border-t border-[#c3c6d7] bg-[#f2f4f6] p-2.5 xl:block ${mobileCartView === 'checkout' ? 'block' : 'hidden'}`}>
           <button
             type="button"
             onClick={() => setMobileCartView('cart')}
@@ -1035,12 +1052,12 @@ export default function POS() {
             <ChevronLeft size={18} />
             Quay lại giỏ hàng
           </button>
-          <div className="mb-2.5 space-y-2">
+          <div className="mb-2 space-y-1.5">
             <div className="flex justify-between text-sm text-[#434655]">
               <span>Tạm tính</span>
               <span>{formatCurrency(subtotal)}</span>
             </div>
-            <div className="border-y border-[#d9dde2] py-2 text-sm">
+            <div className="border-y border-[#d9dde2] py-1.5 text-sm">
               <div className="flex items-center justify-between gap-3">
                 <span className="font-semibold text-[#434655]">Khuyến mãi</span>
                 <button type="button" onClick={() => { if (!cart.length) return toast.error('Không thể chọn khuyến mãi khi giỏ hàng trống'); setIsPromotionOpen(true); }} className="font-bold text-brand-strong">Chọn khuyến mãi</button>
@@ -1050,37 +1067,46 @@ export default function POS() {
                 <div className="mt-1 flex items-center justify-between"><span className="font-bold text-emerald-700">-{formatCurrency(promotionDiscount)}</span><button type="button" onClick={() => setSelectedPromotion(null)} className="text-xs font-bold text-red-600">Bỏ áp dụng</button></div>
               </div>}
             </div>
-            <label className="flex items-center justify-between gap-3 text-sm text-[#434655]">
-              <span>Giảm giá thủ công</span>
-              <span className="flex h-8 w-32 items-center overflow-hidden rounded-lg border border-[#c3c6d7] bg-white focus-within:border-brand focus-within:ring-2 focus-within:ring-brand-soft">
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={discount}
-                  onChange={(event) => setDiscount(event.target.value)}
-                  className="h-full min-w-0 flex-1 bg-transparent px-3 text-right text-sm font-semibold text-[#191c1e] outline-none"
-                />
-                <span className="grid h-full w-8 place-items-center border-l border-[#e0e3e5] text-xs font-bold text-[#737686]">
-                  %
+            <div className="border-b border-[#d9dde2] pb-1.5 text-sm">
+              <div className="flex items-center justify-between gap-3">
+                <span className="font-semibold text-[#434655]">Điểm tích lũy</span>
+                <span className="text-xs font-bold text-[#737686]">
+                  {selectedCustomer ? `Có ${availablePoints.toLocaleString('vi-VN')} điểm` : 'Chỉ áp dụng cho thành viên'}
                 </span>
-              </span>
-            </label>
-            <label className="flex items-center justify-between gap-3 text-sm text-[#434655]">
-              <span>VAT</span>
-              <span className="flex h-8 w-32 items-center overflow-hidden rounded-lg border border-[#c3c6d7] bg-white">
+              </div>
+              <div className="mt-1 flex items-center gap-1.5">
                 <input
-                  type="number"
-                  min="0"
-                  value={vatPercent}
-                  onChange={(event) => setVatPercent(event.target.value)}
-                  className="h-full min-w-0 flex-1 bg-transparent px-3 text-right text-sm font-semibold text-[#191c1e] outline-none"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={usedPoints}
+                  onChange={(event) => handlePointsChange(event.target.value)}
+                  disabled={!selectedCustomer || cart.length === 0 || maxRedeemPoints === 0}
+                  className="h-8 min-w-0 flex-1 border border-[#c3c6d7] bg-white px-2 text-right text-sm font-semibold outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft disabled:bg-[#e7e9ec] disabled:text-[#8b8e98]"
+                  placeholder="Số điểm muốn dùng"
+                  aria-label="Số điểm muốn dùng"
                 />
-                <span className="grid h-full w-8 place-items-center border-l border-[#e0e3e5] text-xs font-bold text-[#737686]">
-                  %
-                </span>
-              </span>
-            </label>
+                <button
+                  type="button"
+                  onClick={() => setUsedPoints(maxRedeemPoints)}
+                  disabled={!selectedCustomer || maxRedeemPoints === 0}
+                  className="h-8 shrink-0 border border-brand bg-white px-2 text-xs font-bold text-brand-strong disabled:border-[#c3c6d7] disabled:text-[#8b8e98]"
+                >
+                  Dùng tối đa
+                </button>
+                {normalizedUsedPoints > 0 && (
+                  <button type="button" onClick={() => setUsedPoints(0)} className="h-8 px-1 text-xs font-bold text-red-600" aria-label="Bỏ điểm đã dùng">
+                    Xóa
+                  </button>
+                )}
+              </div>
+              {selectedCustomer && (
+                <div className="mt-1 flex justify-between text-xs">
+                  <span className="text-[#737686]">Tối đa {maxRedeemPoints.toLocaleString('vi-VN')} điểm</span>
+                  <span className="font-bold text-emerald-700">-{formatCurrency(pointsDiscountAmount)}</span>
+                </div>
+              )}
+            </div>
             {paymentMethod === 'cash' && (
               <>
                 <label className="flex items-center justify-between gap-3 text-sm text-[#434655]">
@@ -1090,7 +1116,7 @@ export default function POS() {
                     min="0"
                     value={customerPaid}
                     onChange={(event) => setCustomerPaid(event.target.value)}
-                    className="h-8 w-32 rounded-lg border border-[#c3c6d7] bg-white px-3 text-right text-sm font-semibold text-[#191c1e] outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft"
+                    className="h-8 w-32 border border-[#c3c6d7] bg-white px-3 text-right text-sm font-semibold text-[#191c1e] outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft"
                     placeholder="0"
                   />
                 </label>
@@ -1110,7 +1136,7 @@ export default function POS() {
             </div>
           </div>
 
-          <div className="mb-2.5 grid grid-cols-2 gap-2">
+          <div className="mb-2 grid grid-cols-2 gap-2">
             {paymentOptions.map((option) => {
               const Icon = option.icon;
               const isSelected = paymentMethod === option.value;
@@ -1120,14 +1146,14 @@ export default function POS() {
                   key={option.value}
                   type="button"
                   onClick={() => setPaymentMethod(option.value)}
-                  className={`flex min-h-[48px] flex-col items-center justify-center rounded-lg border px-2 py-1.5 ${
+                  className={`flex h-10 items-center justify-center gap-2 border px-2 ${
                     isSelected
                       ? 'border-2 border-brand bg-brand-soft text-brand-strong'
                       : 'border-[#c3c6d7] bg-white text-[#434655]'
                   }`}
                 >
                   <Icon size={18} />
-                  <span className="mt-0.5 text-center text-[10px] font-bold uppercase leading-3 tracking-tight">
+                  <span className="text-center text-[10px] font-bold uppercase leading-3 tracking-tight">
                     {option.label}
                   </span>
                 </button>
@@ -1232,7 +1258,7 @@ export default function POS() {
           className="flex w-full items-center justify-between rounded-lg border border-[#c3c6d7] bg-[#f7f9fb] p-3 text-left"
         >
           <span>
-            <span className="block text-sm font-bold text-[#191c1e]">Khách lẻ</span>
+            <span className="block text-sm font-bold text-[#191c1e]">Khách chưa đăng ký</span>
             <span className="text-xs font-semibold text-[#737686]">Không lưu thông tin và không tích điểm</span>
           </span>
           <span className="text-xs font-extrabold text-[#737686]">0 điểm</span>
@@ -1475,14 +1501,13 @@ export default function POS() {
             <span>Tạm tính</span>
             <span>{formatCurrency(subtotal)}</span>
           </div>
-          <div className="flex justify-between">
-            <span>Giảm giá</span>
-            <span>{formatCurrency(discountValue)} ({discountPercentValue}%)</span>
-          </div>
-          <div className="flex justify-between">
-            <span>VAT {vatPercentValue}%</span>
-            <span>{formatCurrency(vatAmount)}</span>
-          </div>
+          {promotionDiscount > 0 && <div className="flex justify-between"><span>Khuyến mãi</span><span>-{formatCurrency(promotionDiscount)}</span></div>}
+          {normalizedUsedPoints > 0 && (
+            <div className="flex justify-between text-emerald-700">
+              <span>Dùng {normalizedUsedPoints.toLocaleString('vi-VN')} điểm</span>
+              <span>-{formatCurrency(pointsDiscountAmount)}</span>
+            </div>
+          )}
           <div className="flex justify-between">
             <span>Phương thức</span>
             <span className="font-bold">{paymentLabels[paymentMethod]}</span>

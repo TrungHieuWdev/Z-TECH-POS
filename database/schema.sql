@@ -79,8 +79,21 @@ CREATE TABLE customers (
   phone VARCHAR(20),
   email VARCHAR(100),
   address TEXT,
+  loyalty_points INT NOT NULL DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE system_settings (
+  setting_key VARCHAR(100) PRIMARY KEY,
+  setting_value VARCHAR(255) NOT NULL,
+  updated_by INT NULL,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (updated_by) REFERENCES users(id)
+);
+
+INSERT INTO system_settings (setting_key, setting_value) VALUES
+('vat_enabled', '0'),
+('vat_rate', '0');
 
 CREATE TABLE orders (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -95,6 +108,9 @@ CREATE TABLE orders (
   warranty_exclusions_snapshot TEXT NULL,
   warranty_note_snapshot TEXT NULL,
   discount DECIMAL(15,0) DEFAULT 0,
+  points_used INT NOT NULL DEFAULT 0,
+  points_discount_amount DECIMAL(15,0) NOT NULL DEFAULT 0,
+  points_earned INT NOT NULL DEFAULT 0,
   total DECIMAL(15,0) NOT NULL,
   payment_method ENUM('cash', 'card', 'transfer') DEFAULT 'cash',
   status ENUM('completed', 'cancelled') DEFAULT 'completed',

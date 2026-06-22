@@ -22,3 +22,23 @@ export async function query(sql, params = []) {
     await connection.end();
   }
 }
+
+export async function withTransaction(callback) {
+  const connection = await mysql.createConnection(dbConfig);
+
+  try {
+    await connection.beginTransaction();
+    const transactionQuery = async (sql, params = []) => {
+      const [rows] = await connection.execute(sql, params);
+      return rows;
+    };
+    const result = await callback(transactionQuery);
+    await connection.commit();
+    return result;
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    await connection.end();
+  }
+}

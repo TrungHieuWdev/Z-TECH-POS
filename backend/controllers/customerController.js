@@ -45,7 +45,7 @@ export async function getAll(req, res) {
         c.*,
         COALESCE(SUM(CASE WHEN o.status = 'completed' THEN o.total ELSE 0 END), 0) AS total_spent,
         COUNT(CASE WHEN o.status = 'completed' THEN o.id END) AS order_count,
-        FLOOR(COALESCE(SUM(CASE WHEN o.status = 'completed' THEN o.total ELSE 0 END), 0) / 10000) AS points
+        c.loyalty_points AS points
       FROM customers c
       LEFT JOIN orders o ON o.customer_id = c.id
       WHERE 1 = 1
@@ -72,7 +72,7 @@ export async function getById(req, res) {
         c.*,
         COALESCE(SUM(CASE WHEN o.status = 'completed' THEN o.total ELSE 0 END), 0) AS total_spent,
         COUNT(CASE WHEN o.status = 'completed' THEN o.id END) AS order_count,
-        FLOOR(COALESCE(SUM(CASE WHEN o.status = 'completed' THEN o.total ELSE 0 END), 0) / 10000) AS points
+        c.loyalty_points AS points
        FROM customers c
        LEFT JOIN orders o ON o.customer_id = c.id
        WHERE c.id = ?
@@ -106,7 +106,7 @@ export async function create(req, res) {
       'INSERT INTO customers (name, phone, email, address) VALUES (?, ?, ?, ?)',
       [name, phone, email, address]
     );
-    const created = await query('SELECT * FROM customers WHERE id = ?', [result.insertId]);
+    const created = await query('SELECT *, loyalty_points AS points FROM customers WHERE id = ?', [result.insertId]);
     res.status(201).json(created[0]);
   } catch (error) {
     res.status(500).json({ message: 'Không thể tạo khách hàng', error: error.message });
@@ -134,7 +134,7 @@ export async function update(req, res) {
       return res.status(404).json({ message: 'Không tìm thấy khách hàng' });
     }
 
-    const updated = await query('SELECT * FROM customers WHERE id = ?', [req.params.id]);
+    const updated = await query('SELECT *, loyalty_points AS points FROM customers WHERE id = ?', [req.params.id]);
     res.json(updated[0]);
   } catch (error) {
     res.status(500).json({ message: 'Không thể cập nhật khách hàng', error: error.message });
