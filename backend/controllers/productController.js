@@ -117,6 +117,8 @@ function appendTextSearch(sql, params, tokens) {
     nextSql += `
       AND (
         p.name LIKE ?
+        OR p.sku LIKE ?
+        OR CONCAT('PRD-', LPAD(p.id, 4, '0')) LIKE ?
         OR p.description LIKE ?
         OR dm.name LIKE ?
         OR dm.series LIKE ?
@@ -126,6 +128,8 @@ function appendTextSearch(sql, params, tokens) {
       )
     `;
     params.push(
+      `%${token}%`,
+      `%${token}%`,
       `%${token}%`,
       `%${token}%`,
       `%${token}%`,
@@ -366,19 +370,23 @@ export async function scan(req, res) {
     const code = String(req.params.barcode || '').trim();
 
     if (!code) {
-      return res.status(404).json({ message: 'Không tìm thấy sản phẩm' });
+      return res.status(404).json({ message: 'Không tìm thấy sản phẩm với mã vạch này' });
     }
 
     const products = await query(
       `${productSelect}
-       WHERE p.is_active = 1 AND (p.barcode = ? OR p.sku = ?)
+       WHERE p.is_active = 1 AND p.barcode = ?
        LIMIT 1`,
-      [code, code]
+      [code]
     );
     const product = products[0];
 
     if (!product) {
-      return res.status(404).json({ message: 'Không tìm thấy sản phẩm' });
+      return res.status(404).json({ message: 'Không tìm thấy sản phẩm với mã vạch này' });
+    }
+
+    if (Number(product.stock_quantity) <= 0) {
+      return res.status(409).json({ message: 'Sản phẩm đã hết hàng' });
     }
 
     res.json({
@@ -387,6 +395,7 @@ export async function scan(req, res) {
       sku: product.sku,
       barcode: product.barcode,
       price: product.price,
+      stock: product.stock_quantity,
       stock_quantity: product.stock_quantity,
       image_url: product.image_url,
       category: product.category_name || null,
@@ -637,16 +646,27 @@ export async function update(req, res) {
 
 export async function remove(req, res) {
   try {
-    const products = await query('SELECT name FROM products WHERE id = ? AND is_active = 1', [req.params.id]);
-    const result = await query('UPDATE products SET is_active = 0 WHERE id = ?', [req.params.id]);
+    const products = await query('SELECT name FROM products WHERE id = ?', [req.params.id]);
+
+    if (!products[0]) {
+      return res.status(404).json({ message: 'Không tìm thấy sản phẩm' });
+    }
+
+    const result = await query('DELETE FROM products WHERE id = ?', [req.params.id]);
 
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: 'Không tìm thấy sản phẩm' });
     }
 
-    await logActivity(req.user?.id, 'Xóa sản phẩm', products[0]?.name || `ID ${req.params.id}`, 'Sản phẩm đã được ngừng hoạt động');
-    res.json({ message: 'Đã xóa sản phẩm' });
+    await logActivity(req.user?.id, 'Xóa sản phẩm', products[0].name, 'Sản phẩm đã được xóa khỏi MySQL');
+    res.json({ message: 'Đã xóa sản phẩm khỏi dữ liệu MySQL' });
   } catch (error) {
+    if (error.code === 'ER_ROW_IS_REFERENCED_2') {
+      return res.status(409).json({
+        message: 'Không thể xóa sản phẩm đã có lịch sử bán hàng hoặc nhập kho'
+      });
+    }
+
     res.status(500).json({ message: 'Không thể xóa sản phẩm', error: error.message });
   }
 }

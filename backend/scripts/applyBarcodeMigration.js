@@ -1,29 +1,33 @@
 import { query } from '../config/db.js';
 
-async function ignoreExistingColumn(error) {
-  if (error.code !== 'ER_DUP_FIELDNAME') throw error;
-}
-
-async function ignoreExistingIndex(error) {
-  if (error.code !== 'ER_DUP_KEYNAME') throw error;
-}
-
 async function run() {
-  await query('ALTER TABLE products ADD COLUMN sku VARCHAR(100) NULL AFTER id').catch(ignoreExistingColumn);
-  await query('ALTER TABLE products ADD COLUMN barcode VARCHAR(100) NULL AFTER sku').catch(ignoreExistingColumn);
-  await query("UPDATE products SET sku = NULL WHERE TRIM(COALESCE(sku, '')) = ''");
-  await query("UPDATE products SET barcode = NULL WHERE TRIM(COALESCE(barcode, '')) = ''");
-
-  const duplicateSku = await query('SELECT sku FROM products WHERE sku IS NOT NULL GROUP BY sku HAVING COUNT(*) > 1');
-  const duplicateBarcode = await query('SELECT barcode FROM products WHERE barcode IS NOT NULL GROUP BY barcode HAVING COUNT(*) > 1');
-
-  if (duplicateSku.length || duplicateBarcode.length) {
-    throw new Error('Có SKU hoặc barcode trùng; hãy xử lý dữ liệu trùng trước khi tạo unique index');
+  const columns = await query("SHOW COLUMNS FROM products LIKE 'barcode'");
+  if (!columns.length) {
+    await query('ALTER TABLE products ADD COLUMN barcode VARCHAR(50) NULL AFTER sku');
+  } else if (String(columns[0].Type).toLowerCase() !== 'varchar(50)') {
+    await query('ALTER TABLE products MODIFY COLUMN barcode VARCHAR(50) NULL');
   }
 
-  await query('CREATE UNIQUE INDEX uk_products_sku ON products (sku)').catch(ignoreExistingIndex);
-  await query('CREATE UNIQUE INDEX uk_products_barcode ON products (barcode)').catch(ignoreExistingIndex);
-  console.log('Đã thêm sku, barcode và unique index an toàn.');
+  await query("UPDATE products SET barcode = NULL WHERE TRIM(COALESCE(barcode, '')) = ''");
+
+  const indexes = await query("SHOW INDEX FROM products WHERE Column_name = 'barcode'");
+  if (!indexes.length) {
+    await query('CREATE UNIQUE INDEX uk_products_barcode ON products (barcode)');
+  }
+
+  await query("UPDATE products SET sku = 'PRD-0277' WHERE id = 277 AND sku IS NULL");
+  await query("UPDATE products SET sku = 'PRD-0278' WHERE id = 278 AND sku IS NULL");
+  await query("UPDATE products SET barcode = '194644197421' WHERE sku = 'PRD-0277'");
+  await query("UPDATE products SET barcode = '8938555972973' WHERE sku = 'PRD-0278'");
+
+  const products = await query(
+    "SELECT id, name, sku, barcode, price, stock_quantity AS stock FROM products WHERE sku IN ('PRD-0277', 'PRD-0278')"
+  );
+  console.table(products);
+
+  if (products.length !== 2) {
+    throw new Error('Không tìm thấy đủ 2 sản phẩm theo SKU PRD-0277 và PRD-0278');
+  }
 }
 
 run().catch((error) => {

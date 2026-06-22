@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
@@ -209,7 +209,10 @@ export default function POS() {
   const [quantityDrafts, setQuantityDrafts] = useState({});
   const [search, setSearch] = useState(routeSearch);
   const [scanCode, setScanCode] = useState('');
+  const [scanMode, setScanMode] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
+  const scanInputRef = useRef(null);
+  const scanModeRef = useRef(false);
   const [categoryId, setCategoryId] = useState('');
   const [deviceFamily, setDeviceFamily] = useState('');
   const [discount, setDiscount] = useState(0);
@@ -238,6 +241,31 @@ export default function POS() {
   const [transferCountdown, setTransferCountdown] = useState(TRANSFER_CONFIRM_TIMEOUT_SECONDS);
   const [pageError, setPageError] = useState('');
   const [isPageLoading, setIsPageLoading] = useState(true);
+
+  useEffect(() => {
+    scanModeRef.current = scanMode;
+    if (scanMode) {
+      requestAnimationFrame(() => scanInputRef.current?.focus());
+    }
+  }, [scanMode]);
+
+  useEffect(() => {
+    const pauseScanningForAnotherField = (event) => {
+      if (!scanModeRef.current || event.target === scanInputRef.current) return;
+      if (event.target.matches?.('input, textarea, select, [contenteditable="true"]')) {
+        setScanMode(false);
+      }
+    };
+
+    document.addEventListener('focusin', pauseScanningForAnotherField);
+    return () => document.removeEventListener('focusin', pauseScanningForAnotherField);
+  }, []);
+
+  useEffect(() => {
+    if (isConfirmOpen || isCustomerPickerOpen || isCustomerFormOpen || isPromotionOpen) {
+      setScanMode(false);
+    }
+  }, [isConfirmOpen, isCustomerPickerOpen, isCustomerFormOpen, isPromotionOpen]);
 
   useEffect(() => {
     if (!isMobileCartOpen) return undefined;
@@ -417,26 +445,39 @@ export default function POS() {
   const handleScanSubmit = async (event) => {
     event.preventDefault();
     const code = scanCode.trim();
-    if (!code || isScanning) return;
+    if (!scanMode || !code || isScanning) return;
 
     setIsScanning(true);
     try {
-      const response = await api.get(`/products/scan/${encodeURIComponent(code)}`);
+      const response = await api.get(`/products/barcode/${encodeURIComponent(code)}`);
       const product = response.data;
 
       if (Number(product.stock_quantity) <= 0) {
         toast.error('Sản phẩm đã hết hàng');
+        setScanCode('');
+        return;
+      }
+
+      const existingItem = cart.find((item) => item.id === product.id);
+      if (existingItem && existingItem.quantity >= Number(product.stock_quantity)) {
+        toast.error('Không đủ tồn kho');
+        setScanCode('');
         return;
       }
 
       addToCart(product);
+      toast.success('Đã thêm sản phẩm vào giỏ hàng');
       setScanCode('');
     } catch (error) {
+      setScanCode('');
       toast.error(error.response?.status === 404
-        ? 'Không tìm thấy sản phẩm'
+        ? 'Không tìm thấy sản phẩm với mã vạch này'
         : error.response?.data?.message || 'Không thể kiểm tra mã sản phẩm');
     } finally {
       setIsScanning(false);
+      if (scanModeRef.current) {
+        requestAnimationFrame(() => scanInputRef.current?.focus());
+      }
     }
   };
 
@@ -694,16 +735,30 @@ export default function POS() {
     <div className="no-print grid min-h-0 overflow-visible border border-[#c3c6d7] bg-[#f7f9fb] xl:h-[calc(100vh-6.5rem)] xl:min-h-[680px] xl:overflow-hidden xl:grid-cols-[minmax(0,1fr)_minmax(360px,420px)]">
       <section className="flex min-w-0 flex-col overflow-visible p-3 pb-24 sm:p-4 sm:pb-24 xl:overflow-hidden xl:p-5">
         <form onSubmit={handleScanSubmit} className="mb-3">
-          <div className="relative">
-            <ScanLine className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-brand-strong" />
-            <input
-              value={scanCode}
-              onChange={(event) => setScanCode(event.target.value)}
-              disabled={isScanning}
-              autoComplete="off"
-              className="h-11 w-full border border-brand bg-white pl-10 pr-4 text-sm font-semibold text-[#191c1e] outline-none focus:ring-2 focus:ring-brand-soft disabled:opacity-60"
-              placeholder="Quét mã sản phẩm"
-            />
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_150px]">
+            <div className="relative">
+              <ScanLine className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-brand-strong" />
+              <input
+                ref={scanInputRef}
+                value={scanCode}
+                onChange={(event) => setScanCode(event.target.value)}
+                disabled={isScanning}
+                readOnly={!scanMode}
+                inputMode="none"
+                autoComplete="off"
+                aria-label="Ô nhập mã vạch"
+                className={`h-11 w-full border bg-white pl-10 pr-4 text-sm font-semibold text-[#191c1e] outline-none focus:ring-2 focus:ring-brand-soft disabled:opacity-60 ${scanMode ? 'border-brand' : 'cursor-default border-[#c3c6d7]'}`}
+                placeholder={scanMode ? 'Đang sẵn sàng quét' : 'Bấm “Quét sản phẩm” để bắt đầu'}
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => setScanMode((current) => !current)}
+              aria-pressed={scanMode}
+              className={`h-11 border px-4 text-sm font-bold ${scanMode ? 'border-[#ba1a1a] bg-red-50 text-[#ba1a1a]' : 'border-brand bg-brand text-brand-ink'}`}
+            >
+              {scanMode ? 'Tắt quét' : 'Quét sản phẩm'}
+            </button>
           </div>
         </form>
 
@@ -898,7 +953,7 @@ export default function POS() {
             </div>
           </div>
 
-          <div className="max-h-[52dvh] min-h-[240px] flex-1 space-y-2 overflow-y-auto pr-1 xl:max-h-none xl:min-h-[230px]">
+          <div className="max-h-[52dvh] min-h-0 flex-1 touch-pan-y space-y-2 overflow-y-auto overscroll-contain pr-1 xl:max-h-none">
             {cart.length === 0 ? (
               <div className="rounded-xl border border-dashed border-[#c3c6d7] bg-[#f7f9fb] p-6 text-center text-sm font-medium text-[#737686]">
                 Chưa có sản phẩm trong giỏ hàng

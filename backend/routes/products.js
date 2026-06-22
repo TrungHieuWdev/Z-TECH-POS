@@ -12,6 +12,7 @@ const upload = multer({
 router.get('/', auth, getAll);
 router.post('/import-images', auth, requireFullAccess, upload.single('file'), importImages);
 router.post('/import', auth, requireFullAccess, importProducts);
+router.get('/barcode/:barcode', auth, scan);
 router.get('/scan/:barcode', auth, scan);
 router.get('/:id', auth, getById);
 router.post('/', auth, requireFullAccess, create);
