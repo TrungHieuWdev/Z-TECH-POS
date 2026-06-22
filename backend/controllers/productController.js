@@ -209,6 +209,8 @@ function normalizeProductBody(body, existing = {}) {
   });
 
   return {
+    sku: String(body.sku ?? existing.sku ?? '').trim() || null,
+    barcode: String(body.barcode ?? existing.barcode ?? '').trim() || null,
     category_id: body.category_id === '' ? null : Number(body.category_id ?? existing.category_id ?? 0),
     device_model_id: body.device_model_id === '' ? null : Number(body.device_model_id ?? existing.device_model_id ?? 0),
     name: body.name?.trim() ?? existing.name,
@@ -359,6 +361,44 @@ export async function getById(req, res) {
   }
 }
 
+export async function scan(req, res) {
+  try {
+    const code = String(req.params.barcode || '').trim();
+
+    if (!code) {
+      return res.status(404).json({ message: 'Không tìm thấy sản phẩm' });
+    }
+
+    const products = await query(
+      `${productSelect}
+       WHERE p.is_active = 1 AND (p.barcode = ? OR p.sku = ?)
+       LIMIT 1`,
+      [code, code]
+    );
+    const product = products[0];
+
+    if (!product) {
+      return res.status(404).json({ message: 'Không tìm thấy sản phẩm' });
+    }
+
+    res.json({
+      id: product.id,
+      name: product.name,
+      sku: product.sku,
+      barcode: product.barcode,
+      price: product.price,
+      stock_quantity: product.stock_quantity,
+      image_url: product.image_url,
+      category: product.category_name || null,
+      warranty_months: Number(product.warranty_period_days || 0) > 0
+        ? Math.round(Number(product.warranty_period_days) / 30)
+        : 0
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Không thể quét mã sản phẩm', error: error.message });
+  }
+}
+
 export async function create(req, res) {
   try {
     const product = normalizeProductBody(await withResolvedDeviceModel(req.body));
@@ -370,10 +410,12 @@ export async function create(req, res) {
 
     const result = await query(
       `INSERT INTO products
-        (category_id, device_model_id, name, description, price, cost_price, stock_quantity, min_stock, image_url,
+        (sku, barcode, category_id, device_model_id, name, description, price, cost_price, stock_quantity, min_stock, image_url,
          warranty_enabled, warranty_period_days, warranty_type, warranty_conditions, warranty_exclusions, warranty_note)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
+        product.sku,
+        product.barcode,
         product.category_id,
         product.device_model_id,
         product.name,
@@ -559,11 +601,13 @@ export async function update(req, res) {
 
     await query(
       `UPDATE products
-       SET category_id = ?, device_model_id = ?, name = ?, description = ?, price = ?, cost_price = ?,
+       SET sku = ?, barcode = ?, category_id = ?, device_model_id = ?, name = ?, description = ?, price = ?, cost_price = ?,
            stock_quantity = ?, min_stock = ?, image_url = ?, warranty_enabled = ?, warranty_period_days = ?,
            warranty_type = ?, warranty_conditions = ?, warranty_exclusions = ?, warranty_note = ?
        WHERE id = ?`,
       [
+        product.sku,
+        product.barcode,
         product.category_id,
         product.device_model_id,
         product.name,

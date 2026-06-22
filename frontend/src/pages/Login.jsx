@@ -28,7 +28,11 @@ export default function Login() {
       toast.success('Đăng nhập thành công');
       navigate(isFullAccessRole(user?.role) ? '/' : '/pos');
     } catch (error) {
-      const message = error.response?.data?.error || error.response?.data?.message || 'Không thể đăng nhập';
+      const message = error.code === 'ECONNABORTED'
+        ? 'Máy chủ phản hồi quá chậm. Vui lòng kiểm tra backend đang chạy.'
+        : !error.response
+          ? 'Không kết nối được máy chủ. Vui lòng kiểm tra backend và kết nối mạng.'
+          : error.response?.data?.error || error.response?.data?.message || 'Không thể đăng nhập';
       toast.error(message);
     } finally {
       setLoading(false);

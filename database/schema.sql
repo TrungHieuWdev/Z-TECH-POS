@@ -40,6 +40,8 @@ CREATE TABLE device_models (
 
 CREATE TABLE products (
   id INT AUTO_INCREMENT PRIMARY KEY,
+  sku VARCHAR(100) NULL,
+  barcode VARCHAR(100) NULL,
   category_id INT NOT NULL,
   device_model_id INT NOT NULL,
   name VARCHAR(200) NOT NULL,
@@ -61,6 +63,8 @@ CREATE TABLE products (
   INDEX idx_products_category (category_id),
   INDEX idx_products_device_model (device_model_id),
   INDEX idx_products_active (is_active),
+  UNIQUE KEY uk_products_sku (sku),
+  UNIQUE KEY uk_products_barcode (barcode),
   CHECK (price >= 0),
   CHECK (cost_price IS NULL OR cost_price >= 0),
   CHECK (stock_quantity >= 0),

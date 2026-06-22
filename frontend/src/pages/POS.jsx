@@ -11,6 +11,7 @@ import {
   Plus,
   Printer,
   ReceiptText,
+  ScanLine,
   Search,
   Smartphone,
   UserSearch,
@@ -207,6 +208,8 @@ export default function POS() {
   const [cart, setCart] = useState([]);
   const [quantityDrafts, setQuantityDrafts] = useState({});
   const [search, setSearch] = useState(routeSearch);
+  const [scanCode, setScanCode] = useState('');
+  const [isScanning, setIsScanning] = useState(false);
   const [categoryId, setCategoryId] = useState('');
   const [deviceFamily, setDeviceFamily] = useState('');
   const [discount, setDiscount] = useState(0);
@@ -409,6 +412,32 @@ export default function POS() {
 
       return [...current, { ...product, quantity: 1 }];
     });
+  };
+
+  const handleScanSubmit = async (event) => {
+    event.preventDefault();
+    const code = scanCode.trim();
+    if (!code || isScanning) return;
+
+    setIsScanning(true);
+    try {
+      const response = await api.get(`/products/scan/${encodeURIComponent(code)}`);
+      const product = response.data;
+
+      if (Number(product.stock_quantity) <= 0) {
+        toast.error('Sản phẩm đã hết hàng');
+        return;
+      }
+
+      addToCart(product);
+      setScanCode('');
+    } catch (error) {
+      toast.error(error.response?.status === 404
+        ? 'Không tìm thấy sản phẩm'
+        : error.response?.data?.message || 'Không thể kiểm tra mã sản phẩm');
+    } finally {
+      setIsScanning(false);
+    }
   };
 
   const updateQuantity = (productId, nextQuantity) => {
@@ -664,6 +693,20 @@ export default function POS() {
     )}
     <div className="no-print grid min-h-0 overflow-visible border border-[#c3c6d7] bg-[#f7f9fb] xl:h-[calc(100vh-6.5rem)] xl:min-h-[680px] xl:overflow-hidden xl:grid-cols-[minmax(0,1fr)_minmax(360px,420px)]">
       <section className="flex min-w-0 flex-col overflow-visible p-3 pb-24 sm:p-4 sm:pb-24 xl:overflow-hidden xl:p-5">
+        <form onSubmit={handleScanSubmit} className="mb-3">
+          <div className="relative">
+            <ScanLine className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-brand-strong" />
+            <input
+              value={scanCode}
+              onChange={(event) => setScanCode(event.target.value)}
+              disabled={isScanning}
+              autoComplete="off"
+              className="h-11 w-full border border-brand bg-white pl-10 pr-4 text-sm font-semibold text-[#191c1e] outline-none focus:ring-2 focus:ring-brand-soft disabled:opacity-60"
+              placeholder="Quét mã sản phẩm"
+            />
+          </div>
+        </form>
+
         <div className="mb-3 grid gap-3 xl:grid-cols-[minmax(0,1fr)_260px]">
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-[#737686]" />

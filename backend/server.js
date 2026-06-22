@@ -22,14 +22,28 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 const allowedOrigins = new Set([
-  process.env.FRONTEND_ORIGIN || 'http://172.31.98.205:5173',
+  process.env.FRONTEND_ORIGIN,
   'http://localhost:5173',
   'http://127.0.0.1:5173'
-]);
+].filter(Boolean));
+
+function isAllowedOrigin(origin) {
+  if (!origin || allowedOrigins.has(origin)) return true;
+  try {
+    const url = new URL(origin);
+    return url.protocol === 'http:' && url.port === '5173' && (
+      /^10\./.test(url.hostname) ||
+      /^192\.168\./.test(url.hostname) ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(url.hostname)
+    );
+  } catch {
+    return false;
+  }
+}
 
 app.use(cors({
   origin(origin, callback) {
-    if (!origin || allowedOrigins.has(origin)) return callback(null, true);
+    if (isAllowedOrigin(origin)) return callback(null, true);
     return callback(new Error('Origin không được CORS cho phép'));
   },
   credentials: true

@@ -1,8 +1,17 @@
 import axios from 'axios';
 import { getToken } from '../utils/auth';
 
+function getApiBaseUrl() {
+  const configuredUrl = String(import.meta.env.VITE_API_URL || '').trim();
+  if (configuredUrl) return configuredUrl.replace(/\/$/, '');
+
+  const { protocol, hostname } = window.location;
+  return `${protocol}//${hostname}:5000/api`;
+}
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL
+  baseURL: getApiBaseUrl(),
+  timeout: 8000
 });
 
 api.interceptors.request.use((config) => {
