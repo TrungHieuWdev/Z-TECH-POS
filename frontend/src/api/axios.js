@@ -2,8 +2,11 @@ import axios from 'axios';
 import { getToken } from '../utils/auth';
 
 function getApiBaseUrl() {
-  const configuredUrl = String(import.meta.env.VITE_API_URL || '').trim();
-  if (configuredUrl) return configuredUrl.replace(/\/$/, '');
+  const configuredUrl = String(import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '').trim();
+  if (configuredUrl) {
+    const cleanUrl = configuredUrl.replace(/\/$/, '');
+    return cleanUrl.endsWith('/api') ? cleanUrl : `${cleanUrl}/api`;
+  }
 
   const { protocol, hostname } = window.location;
   return `${protocol}//${hostname}:5000/api`;
