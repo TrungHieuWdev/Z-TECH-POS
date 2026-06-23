@@ -39,11 +39,6 @@ export default function WarrantyQr({ warrantyCode, publicToken }) {
 
       <p className="mt-1 text-[11px] text-gray-500">{warrantyCode}</p>
 
-      {lookupUrl && (
-        <p className="mt-1 break-all text-[10px] text-gray-400">
-          {lookupUrl}
-        </p>
-      )}
     </div>
   );
 }
