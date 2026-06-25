@@ -45,6 +45,7 @@ export async function getAll(req, res) {
         c.*,
         COALESCE(SUM(CASE WHEN o.status = 'completed' THEN o.total ELSE 0 END), 0) AS total_spent,
         COUNT(CASE WHEN o.status = 'completed' THEN o.id END) AS order_count,
+        MAX(CASE WHEN o.status = 'completed' THEN o.created_at END) AS last_purchase_at,
         c.loyalty_points AS points
       FROM customers c
       LEFT JOIN orders o ON o.customer_id = c.id
@@ -62,6 +63,45 @@ export async function getAll(req, res) {
     res.json(customers);
   } catch (error) {
     res.status(500).json({ message: 'Không thể lấy khách hàng', error: error.message });
+  }
+}
+
+export async function getDetails(req, res) {
+  try {
+    const customers = await query(
+      `SELECT c.*, c.loyalty_points AS points,
+        COALESCE(SUM(CASE WHEN o.status = 'completed' THEN o.total ELSE 0 END), 0) AS total_spent,
+        COUNT(CASE WHEN o.status = 'completed' THEN o.id END) AS order_count,
+        MAX(CASE WHEN o.status = 'completed' THEN o.created_at END) AS last_purchase_at
+       FROM customers c
+       LEFT JOIN orders o ON o.customer_id = c.id
+       WHERE c.id = ?
+       GROUP BY c.id`,
+      [req.params.id]
+    );
+    if (!customers[0]) return res.status(404).json({ message: 'Không tìm thấy khách hàng' });
+
+    const orders = await query(
+      `SELECT id, order_number, total, status, points_used, points_earned, payment_method, created_at
+       FROM orders WHERE customer_id = ? ORDER BY created_at DESC LIMIT 30`,
+      [req.params.id]
+    );
+    const warranties = await query(
+      `SELECT oi.id, o.order_number, o.created_at AS purchased_at, p.name AS product_name,
+        COALESCE(oi.warranty_enabled_snapshot, p.warranty_enabled) AS warranty_enabled,
+        COALESCE(oi.warranty_period_days_snapshot, p.warranty_period_days) AS warranty_period_days
+       FROM orders o
+       JOIN order_items oi ON oi.order_id = o.id
+       JOIN products p ON p.id = oi.product_id
+       WHERE o.customer_id = ?
+         AND COALESCE(oi.warranty_enabled_snapshot, p.warranty_enabled) = 1
+       ORDER BY o.created_at DESC LIMIT 30`,
+      [req.params.id]
+    );
+
+    res.json({ customer: customers[0], orders, warranties });
+  } catch (error) {
+    res.status(500).json({ message: 'Không thể lấy chi tiết khách hàng', error: error.message });
   }
 }
 

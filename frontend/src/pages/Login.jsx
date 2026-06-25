@@ -68,14 +68,14 @@ function LoginCard({ form, loading, remember, showPassword, onFormChange, onReme
       </div>
 
       <form onSubmit={onSubmit} className="space-y-4 sm:space-y-5">
-        <Field label="Tên đăng nhập hoặc email" icon={UserRound}>
+        <Field label="Mã đăng nhập hoặc email" icon={UserRound}>
           <input
             data-preserve-radius="login-control"
             value={form.employeeCode}
             onChange={(event) => onFormChange('employeeCode', event.target.value.toUpperCase())}
             autoComplete="username"
             className={inputClass}
-            placeholder="Nhập tên đăng nhập hoặc email"
+            placeholder="Nhập mã đăng nhập hoặc email"
             required
           />
         </Field>

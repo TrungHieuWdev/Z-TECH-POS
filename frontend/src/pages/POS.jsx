@@ -14,6 +14,7 @@ import {
   ScanLine,
   Search,
   Smartphone,
+  UserRound,
   UserSearch,
   WalletCards,
   X
@@ -230,6 +231,7 @@ export default function POS() {
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [customerName, setCustomerName] = useState('Chọn khách hàng');
   const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [customerMode, setCustomerMode] = useState(null);
   const [customerLookup, setCustomerLookup] = useState('');
   const [customerForm, setCustomerForm] = useState(initialCustomerForm);
   const [loading, setLoading] = useState(false);
@@ -608,6 +610,7 @@ export default function POS() {
 
   const selectWalkInCustomer = () => {
     setUsedPoints(0);
+    setCustomerMode('regular');
     setSelectedCustomer(null);
     setCustomerName('Khách lẻ');
     setIsCustomerPickerOpen(false);
@@ -615,6 +618,7 @@ export default function POS() {
 
   const selectCustomer = (customer) => {
     setUsedPoints(0);
+    setCustomerMode('member');
     setSelectedCustomer(customer);
     setCustomerName(customer.name || 'Khách lẻ');
     setIsCustomerPickerOpen(false);
@@ -934,35 +938,34 @@ export default function POS() {
         <div className={`border-b border-[#c3c6d7] bg-white px-2.5 py-2 xl:block ${mobileCartView === 'checkout' ? 'hidden' : 'block'}`}>
           <div className="mb-1 flex items-center justify-between">
             <span className="text-sm font-bold text-[#191c1e]">Khách hàng</span>
-            <div className="flex items-center gap-3">
-              {selectedCustomer && <button type="button" onClick={selectWalkInCustomer} className="text-xs font-bold text-[#737686]">Khách lẻ</button>}
-              <button type="button" onClick={openCustomerForm} className="text-xs font-bold text-brand-strong">Thêm mới (+)</button>
-            </div>
+            <button type="button" onClick={openCustomerForm} className="text-xs font-bold text-brand-strong">Thêm mới (+)</button>
           </div>
-          <button
-            type="button"
-            onClick={() => setIsCustomerPickerOpen(true)}
-            className="flex h-12 w-full items-center gap-2 border border-[#c3c6d7] bg-[#f7f9fb] px-2.5 text-left outline-none transition focus:border-brand focus:ring-2 focus:ring-brand-soft"
-          >
-            <UserSearch className="h-5 w-5 shrink-0 text-[#737686]" />
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-bold leading-5 text-[#191c1e]">{customerName}</span>
-              {selectedCustomer ? (
-                <span className="block truncate text-xs font-semibold leading-4 text-[#737686]">
-                  {selectedCustomer.phone || 'Chưa có SĐT'} · {Number(selectedCustomer.points || 0).toLocaleString('vi-VN')} điểm
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={selectWalkInCustomer}
+              className={`flex min-h-14 items-center gap-2 border px-2.5 text-left text-[#191c1e] transition ${customerMode === 'regular' ? 'border-[#69afd6] bg-[#69afd6]' : 'border-[#c3c6d7] bg-white hover:bg-[#f7f9fb]'}`}
+            >
+              <UserRound className="h-5 w-5 shrink-0" />
+              <span><span className="block text-sm font-bold">Khách thường</span><span className="block text-[11px] font-semibold opacity-75">Không tích điểm</span></span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setCustomerMode('member');
+                setIsCustomerPickerOpen(true);
+              }}
+              className={`flex min-h-14 items-center gap-2 border px-2.5 text-left text-[#191c1e] transition ${customerMode === 'member' ? 'border-[#69afd6] bg-[#69afd6]' : 'border-[#c3c6d7] bg-white hover:bg-[#f7f9fb]'}`}
+            >
+              <UserSearch className="h-5 w-5 shrink-0" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-bold">{selectedCustomer ? customerName : 'Thành viên'}</span>
+                <span className="block truncate text-[11px] font-semibold opacity-75">
+                  {selectedCustomer ? `${selectedCustomer.phone || 'Chưa có SĐT'} · ${Number(selectedCustomer.points || 0).toLocaleString('vi-VN')} điểm` : 'Chọn khách tích điểm'}
                 </span>
-              ) : (
-                <span className="block truncate text-xs font-semibold leading-4 text-[#737686]">
-            
-                </span>
-              )}
-            </span>
-            {selectedCustomer && (
-              <span className="bg-brand-soft px-2 py-1 text-xs font-extrabold text-brand-strong">
-                {Number(selectedCustomer.points || 0).toLocaleString('vi-VN')} điểm
               </span>
-            )}
-          </button>
+            </button>
+          </div>
         </div>
 
         <div className={`min-h-0 flex-none flex-col overflow-hidden px-2.5 py-2 xl:flex xl:flex-1 ${mobileCartView === 'checkout' ? 'hidden' : 'flex'}`}>
@@ -1262,18 +1265,6 @@ export default function POS() {
             placeholder="Tìm tên hoặc số điện thoại"
           />
         </div>
-
-        <button
-          type="button"
-          onClick={selectWalkInCustomer}
-          className="flex w-full items-center justify-between rounded-lg border border-[#c3c6d7] bg-[#f7f9fb] p-3 text-left"
-        >
-          <span>
-            <span className="block text-sm font-bold text-[#191c1e]">Khách chưa đăng ký</span>
-            <span className="text-xs font-semibold text-[#737686]">Không lưu thông tin và không tích điểm</span>
-          </span>
-          <span className="text-xs font-extrabold text-[#737686]">0 điểm</span>
-        </button>
 
         <div className="max-h-[360px] space-y-2 overflow-y-auto pr-1">
           {customers.length === 0 ? (

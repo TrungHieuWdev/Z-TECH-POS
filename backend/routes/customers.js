@@ -1,10 +1,11 @@
 import express from 'express';
 import auth, { requireFullAccess } from '../middleware/auth.js';
-import { getAll, getById, create, update, remove } from '../controllers/customerController.js';
+import { getAll, getById, getDetails, create, update, remove } from '../controllers/customerController.js';
 
 const router = express.Router();
 
 router.get('/', auth, getAll);
+router.get('/:id/details', auth, getDetails);
 router.get('/:id', auth, getById);
 router.post('/', auth, create);
 router.put('/:id', auth, update);
