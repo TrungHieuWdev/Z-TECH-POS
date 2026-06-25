@@ -1,7 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import * as XLSX from 'xlsx';
-import { Download, Edit, FileSpreadsheet, Plus, Search, Trash2, Upload } from 'lucide-react';
+import {
+  AlertTriangle,
+  Barcode,
+  Boxes,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Edit,
+  FileSpreadsheet,
+  Package,
+  Plus,
+  Search,
+  Trash2,
+  Upload
+} from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import api from '../api/axios';
 import Modal from '../components/Modal';
@@ -18,6 +32,28 @@ const deviceFamilyOptions = [
   { value: 'oppo', label: 'Oppo' },
   { value: 'xiaomi', label: 'Xiaomi / Redmi' }
 ];
+
+const PAGE_SIZE = 8;
+const quickTabs = [
+  { value: 'all', label: 'Tất cả' },
+  { value: 'low', label: 'Sắp hết hàng' },
+  { value: 'out', label: 'Hết hàng' },
+  { value: 'no-code', label: 'Chưa có mã vạch' },
+  { value: 'warranty', label: 'Có bảo hành' }
+];
+
+function getStockState(product) {
+  const stock = Number(product.stock_quantity || 0);
+  const minimum = Number(product.min_stock || 0);
+  if (stock <= 0) return 'out';
+  if (stock <= minimum) return 'low';
+  return 'available';
+}
+
+function getProductStatus(product) {
+  if (product.status) return product.status;
+  return Number(product.is_active ?? 1) === 1 ? 'active' : 'hidden';
+}
 
 const initialForm = {
   category_id: '',
@@ -121,12 +157,18 @@ function getWarrantyBadgeClass(product) {
 export default function Products() {
   const [searchParams, setSearchParams] = useSearchParams();
   const hasFullAccess = isFullAccessRole(getUser()?.role);
+  const lowStockOnly = searchParams.get('lowStock') === '1';
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [deviceModels, setDeviceModels] = useState([]);
   const [search, setSearch] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [deviceFamily, setDeviceFamily] = useState('');
+  const [stockFilter, setStockFilter] = useState('');
+  const [warrantyFilter, setWarrantyFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [activeTab, setActiveTab] = useState(lowStockOnly ? 'low' : 'all');
+  const [currentPage, setCurrentPage] = useState(1);
   const [isOpen, setIsOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [form, setForm] = useState(initialForm);
@@ -135,7 +177,60 @@ export default function Products() {
   const [importRows, setImportRows] = useState([]);
   const [importFileName, setImportFileName] = useState('');
   const [isImporting, setIsImporting] = useState(false);
-  const lowStockOnly = searchParams.get('lowStock') === '1';
+
+  const productStats = useMemo(() => ({
+    total: products.length,
+    inventoryValue: products.reduce((sum, product) => {
+      const unitValue = Number(product.cost_price ?? product.price ?? 0);
+      return sum + Number(product.stock_quantity || 0) * unitValue;
+    }, 0),
+    low: products.filter((product) => getStockState(product) === 'low').length,
+    out: products.filter((product) => getStockState(product) === 'out').length,
+    noCode: products.filter((product) => !String(product.sku || '').trim() && !String(product.barcode || '').trim()).length
+  }), [products]);
+
+  const filteredProducts = useMemo(() => {
+    const keyword = search.trim().toLowerCase();
+
+    return products.filter((product) => {
+      const stockState = getStockState(product);
+      const warrantyEnabled = Boolean(Number(product.warranty_enabled));
+      const warrantyType = product.warranty_type || 'none';
+      const searchable = [
+        product.name,
+        product.sku,
+        product.barcode,
+        product.device_model,
+        product.device_series,
+        product.category_name
+      ].join(' ').toLowerCase();
+
+      if (keyword && !searchable.includes(keyword)) return false;
+      if (deviceFamily && product.device_family !== deviceFamily) return false;
+      if (categoryId && String(product.category_id) !== String(categoryId)) return false;
+      if (stockFilter && stockState !== stockFilter) return false;
+      if (warrantyFilter === 'yes' && (!warrantyEnabled || warrantyType === 'initial_exchange')) return false;
+      if (warrantyFilter === 'none' && warrantyEnabled) return false;
+      if (warrantyFilter === 'exchange' && warrantyType !== 'initial_exchange') return false;
+      if (statusFilter && getProductStatus(product) !== statusFilter) return false;
+      if (activeTab === 'low' && stockState !== 'low') return false;
+      if (activeTab === 'out' && stockState !== 'out') return false;
+      if (activeTab === 'no-code' && (product.sku || product.barcode)) return false;
+      if (activeTab === 'warranty' && !warrantyEnabled) return false;
+      return true;
+    });
+  }, [products, search, deviceFamily, categoryId, stockFilter, warrantyFilter, statusFilter, activeTab]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE));
+  const paginatedProducts = filteredProducts.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, deviceFamily, categoryId, stockFilter, warrantyFilter, statusFilter, activeTab]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
 
   const formDeviceModels = useMemo(() => {
     if (!form.device_family) return deviceModels;
@@ -294,19 +389,9 @@ export default function Products() {
   };
 
   async function loadProducts() {
-    const params = new URLSearchParams();
-
-    if (search) params.set('search', search);
-    if (categoryId) params.set('category_id', categoryId);
-    if (deviceFamily) params.set('device_family', deviceFamily);
-
-    const response = await api.get(`/products?${params.toString()}`);
+    const response = await api.get('/products');
     const allProducts = Array.isArray(response.data) ? response.data : [];
-    setProducts(
-      lowStockOnly
-        ? allProducts.filter((product) => Number(product.stock_quantity || 0) <= Number(product.min_stock || 0))
-        : allProducts
-    );
+    setProducts(allProducts);
   }
 
   useEffect(() => {
@@ -321,7 +406,11 @@ export default function Products() {
 
   useEffect(() => {
     loadProducts();
-  }, [search, categoryId, deviceFamily, lowStockOnly]);
+  }, []);
+
+  useEffect(() => {
+    if (lowStockOnly) setActiveTab('low');
+  }, [lowStockOnly]);
 
   const openCreate = () => {
     setEditingProduct(null);
@@ -426,11 +515,11 @@ export default function Products() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-950">Sản phẩm</h1>
-          <p className="mt-1 text-sm text-gray-500">Quản lý hàng hóa theo danh mục và model máy</p>
+          <h1 className="text-2xl font-extrabold text-gray-950">Sản phẩm</h1>
+          <p className="mt-1 text-sm font-medium text-gray-500">Quản lý hàng hóa, tồn kho, mã vạch và bảo hành</p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2" style={{ display: hasFullAccess ? undefined : 'none' }}>
           <button
@@ -441,126 +530,93 @@ export default function Products() {
             <FileSpreadsheet size={18} />
             <span>Nhập từ Excel</span>
           </button>
-        <button
-          type="button"
-          onClick={openCreate}
-          style={{ display: hasFullAccess ? undefined : 'none' }}
-          className="flex items-center gap-2 rounded-lg bg-[#74B8E0] px-4 py-2.5 font-semibold text-white transition hover:bg-[#74B8E0] active:bg-[#74B8E0]"
-        >
-          <Plus size={18} />
-          <span>Thêm sản phẩm</span>
-        </button>
-        </div>
-      </div>
-
-      <div className="grid gap-3 rounded-lg bg-white p-4 shadow-sm md:grid-cols-[1fr_220px_220px]">
-        <div className="flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2">
-          <Search size={18} className="text-gray-400" />
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            className="w-full outline-none"
-            placeholder="Tìm tên, model hoặc mô tả"
-          />
-        </div>
-        <select
-          value={deviceFamily}
-          onChange={(event) => setDeviceFamily(event.target.value)}
-          className="rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-brand"
-        >
-          <option value="">Tất cả dòng máy</option>
-          {deviceFamilyOptions.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-        <select
-          value={categoryId}
-          onChange={(event) => setCategoryId(event.target.value)}
-          className="rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-brand"
-        >
-          <option value="">Tất cả danh mục</option>
-          {categories.map((category) => (
-            <option key={category.id} value={category.id}>
-              {category.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {lowStockOnly && (
-        <div className="flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
-          <p className="text-sm font-medium text-amber-800">
-            Đang lọc các sản phẩm có tồn kho nhỏ hơn hoặc bằng mức tồn tối thiểu.
-          </p>
-          <button
-            type="button"
-            onClick={() => setSearchParams({})}
-            className="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm font-semibold text-amber-800 transition hover:bg-amber-100"
-          >
-            Xóa bộ lọc
+          <button type="button" onClick={openCreate} className="flex items-center gap-2 rounded-lg bg-brand px-4 py-2.5 font-semibold text-white transition hover:bg-brand-strong">
+            <Plus size={18} /><span>Thêm sản phẩm</span>
           </button>
         </div>
-      )}
+      </div>
 
-      <section className="rounded-lg bg-white shadow-sm">
+      <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        {[
+          { label: 'Tổng sản phẩm', value: productStats.total, note: `${productStats.noCode} chưa có SKU/mã vạch`, icon: Package, tone: 'bg-brand-surface text-brand-strong' },
+          { label: 'Giá trị tồn kho', value: formatCurrency(productStats.inventoryValue), note: 'Tính theo số lượng và giá vốn', icon: Boxes, tone: 'bg-emerald-50 text-emerald-700' },
+          { label: 'Sắp hết hàng', value: productStats.low, note: 'Đã chạm mức tồn tối thiểu', icon: AlertTriangle, tone: 'bg-amber-50 text-amber-700' },
+          { label: 'Hết hàng', value: productStats.out, note: 'Cần nhập thêm hàng', icon: Barcode, tone: 'bg-red-50 text-red-700' }
+        ].map((card) => (
+          <article key={card.label} className="flex min-w-0 items-center gap-3 border border-gray-200 bg-white p-4 shadow-sm">
+            <div className={`grid h-11 w-11 shrink-0 place-items-center ${card.tone}`}><card.icon size={21} /></div>
+            <div className="min-w-0">
+              <p className="truncate text-xs font-bold uppercase tracking-wide text-gray-500">{card.label}</p>
+              <p className="mt-1 text-2xl font-extrabold text-gray-950">{card.value}</p>
+              <p className="mt-0.5 truncate text-xs text-gray-500">{card.note}</p>
+            </div>
+          </article>
+        ))}
+      </section>
+
+      <section className="border border-gray-200 bg-white shadow-sm">
+        <div className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-5">
+          <div className="relative xl:col-span-2">
+            <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input value={search} onChange={(event) => setSearch(event.target.value)} className="h-10 w-full border border-gray-300 pl-10 pr-3 text-sm outline-none focus:border-brand" placeholder="Tìm tên, SKU, mã vạch, model" />
+          </div>
+          <select value={deviceFamily} onChange={(event) => setDeviceFamily(event.target.value)} className="h-10 border border-gray-300 px-3 text-sm outline-none focus:border-brand">
+            <option value="">Tất cả dòng máy</option>
+            {deviceFamilyOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+          <select value={categoryId} onChange={(event) => setCategoryId(event.target.value)} className="h-10 border border-gray-300 px-3 text-sm outline-none focus:border-brand">
+            <option value="">Tất cả danh mục</option>
+            {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+          </select>
+          <select value={stockFilter} onChange={(event) => setStockFilter(event.target.value)} className="h-10 border border-gray-300 px-3 text-sm outline-none focus:border-brand">
+            <option value="">Tất cả tồn kho</option><option value="available">Còn hàng</option><option value="low">Sắp hết</option><option value="out">Hết hàng</option>
+          </select>
+          <select value={warrantyFilter} onChange={(event) => setWarrantyFilter(event.target.value)} className="h-10 border border-gray-300 px-3 text-sm outline-none focus:border-brand">
+            <option value="">Tất cả bảo hành</option><option value="yes">Có bảo hành</option><option value="none">Không bảo hành</option><option value="exchange">Chỉ đổi lỗi ban đầu</option>
+          </select>
+          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="h-10 border border-gray-300 px-3 text-sm outline-none focus:border-brand">
+            <option value="">Tất cả trạng thái</option><option value="active">Đang bán</option><option value="hidden">Tạm ẩn</option><option value="stopped">Ngừng bán</option>
+          </select>
+        </div>
+        <div className="flex gap-1 overflow-x-auto border-t border-gray-100 px-4 pt-2">
+          {quickTabs.map((tab) => (
+            <button key={tab.value} type="button" onClick={() => { setActiveTab(tab.value); if (lowStockOnly) setSearchParams({}); }} className={`shrink-0 border-b-2 px-3 py-2 text-sm font-bold ${activeTab === tab.value ? 'border-brand-strong text-brand-strong' : 'border-transparent text-gray-500'}`}>{tab.label}</button>
+          ))}
+        </div>
+      </section>
+
+      <section className="border border-gray-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1160px] text-left text-sm">
-            <thead className="bg-gray-50 text-gray-500">
+          <table className="w-full min-w-[1320px] text-left text-sm">
+            <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
               <tr>
-                <th className="px-4 py-3 font-semibold">Ảnh</th>
-                <th className="px-4 py-3 font-semibold">Tên</th>
-                <th className="px-4 py-3 font-semibold">Dòng máy</th>
-                <th className="px-4 py-3 font-semibold">Danh mục</th>
-                <th className="px-4 py-3 font-semibold">Bảo hành</th>
-                <th className="px-4 py-3 font-semibold">Giá</th>
-                <th className="px-4 py-3 font-semibold">Tồn kho</th>
-                <th className="px-4 py-3 font-semibold text-right">Thao tác</th>
+                <th className="px-4 py-3 font-bold">Sản phẩm</th><th className="px-4 py-3 font-bold">SKU / Mã vạch</th><th className="px-4 py-3 font-bold">Dòng máy</th><th className="px-4 py-3 font-bold">Danh mục</th><th className="px-4 py-3 font-bold">Giá bán</th><th className="px-4 py-3 font-bold">Tồn kho</th><th className="px-4 py-3 font-bold">Bảo hành</th><th className="px-4 py-3 font-bold">Trạng thái</th><th className="px-4 py-3 text-right font-bold">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {products.map((product) => {
-                const isLowStock = Number(product.stock_quantity) <= Number(product.min_stock);
+              {paginatedProducts.map((product) => {
+                const stockState = getStockState(product);
+                const status = getProductStatus(product);
 
                 return (
-                  <tr key={product.id}>
-                    <td className="px-4 py-3">
-                      <div className="h-12 w-12 overflow-hidden rounded-lg border border-[#d7eef3]">
-                        <ProductImage product={product} iconSize={22} compact />
+                  <tr key={product.id} className="hover:bg-brand-surface/50">
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-3">
+                        <div className="h-11 w-11 shrink-0 overflow-hidden border border-[#d7eef3]"><ProductImage product={product} iconSize={20} compact /></div>
+                        <div className="max-w-[260px] min-w-0"><p className="truncate font-bold text-gray-950">{product.name}</p><p className="mt-0.5 truncate text-xs text-gray-500">{product.device_model || 'Phụ kiện dùng chung'}</p></div>
                       </div>
                     </td>
-                    <td className="px-4 py-3 font-medium text-gray-950">{product.name}</td>
-                    <td className="px-4 py-3 text-gray-600">
-                      <div className="font-semibold text-gray-800">
-                        {product.device_series === 'Phụ kiện chung' ? 'Phụ kiện chung' : getDeviceFamilyLabel(product.device_family)}
-                      </div>
-                      <div className="text-xs text-gray-500">{product.device_model}</div>
+                    <td className="px-4 py-2.5"><p className="font-semibold text-gray-800">{product.sku || 'Chưa có SKU'}</p><p className={`mt-0.5 text-xs ${product.barcode ? 'text-gray-500' : 'font-semibold text-amber-700'}`}>{product.barcode || 'Chưa có mã vạch'}</p></td>
+                    <td className="px-4 py-2.5"><p className="font-semibold text-gray-800">{getDeviceFamilyLabel(product.device_family)}</p><p className="text-xs text-gray-500">{product.device_model || '-'}</p></td>
+                    <td className="px-4 py-2.5 text-gray-600">{product.category_name || '-'}</td>
+                    <td className="whitespace-nowrap px-4 py-2.5 font-bold text-gray-950">{formatCurrency(product.price)}</td>
+                    <td className="px-4 py-2.5">
+                      <p className="font-bold text-gray-950">{Number(product.stock_quantity || 0)} <span className="font-medium text-gray-400">/ tối thiểu {Number(product.min_stock || 0)}</span></p>
+                      <span className={`mt-1 inline-flex px-2 py-0.5 text-[11px] font-bold ${stockState === 'out' ? 'bg-red-100 text-red-700' : stockState === 'low' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-700'}`}>{stockState === 'out' ? 'Hết hàng' : stockState === 'low' ? 'Sắp hết' : 'Còn hàng'}</span>
                     </td>
-                    <td className="px-4 py-3 text-gray-600">{product.category_name}</td>
-                    <td className="px-4 py-3">
-                      <div className="space-y-1">
-                        <span className={`inline-flex rounded px-2.5 py-1 text-xs font-semibold ${getWarrantyBadgeClass(product)}`}>
-                          {getWarrantyLabel(product)}
-                        </span>
-                        <div className="text-xs text-gray-500">
-                          {Number(product.warranty_period_days || 0) > 0
-                            ? `${Number(product.warranty_period_days).toLocaleString('vi-VN')} ngày`
-                            : warrantyTypes[product.warranty_type] || 'Chưa có'}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-gray-950">{formatCurrency(product.price)}</td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                          isLowStock ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'
-                        }`}
-                      >
-                        {product.stock_quantity}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-2.5"><span className={`inline-flex px-2 py-1 text-xs font-bold ${getWarrantyBadgeClass(product)}`}>{getWarrantyLabel(product)}</span><p className="mt-1 text-xs text-gray-500">{product.warranty_type === 'initial_exchange' ? `Chỉ đổi lỗi ban đầu ${Number(product.warranty_period_days || 1)} ngày` : Number(product.warranty_enabled) ? `Có bảo hành ${Number(product.warranty_period_days || 0)} ngày` : 'Không bảo hành'}</p></td>
+                    <td className="px-4 py-2.5"><span className={`inline-flex px-2.5 py-1 text-xs font-bold ${status === 'active' ? 'bg-brand-surface text-brand-deep' : status === 'hidden' ? 'bg-gray-100 text-gray-600' : 'bg-red-50 text-red-700'}`}>{status === 'active' ? 'Đang bán' : status === 'hidden' ? 'Tạm ẩn' : 'Ngừng bán'}</span></td>
+                    <td className="px-4 py-2.5">
                       <div className="flex justify-end gap-2">
                         <button
                           type="button"
@@ -587,8 +643,19 @@ export default function Products() {
                   </tr>
                 );
               })}
+              {paginatedProducts.length === 0 && <tr><td colSpan="9" className="px-4 py-12 text-center text-gray-500">Không tìm thấy sản phẩm phù hợp.</td></tr>}
             </tbody>
           </table>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 px-4 py-3">
+          <p className="text-sm text-gray-500">Hiển thị {filteredProducts.length ? (currentPage - 1) * PAGE_SIZE + 1 : 0}–{Math.min(currentPage * PAGE_SIZE, filteredProducts.length)} trong {filteredProducts.length} sản phẩm</p>
+          <div className="flex items-center gap-1">
+            <button type="button" disabled={currentPage === 1} onClick={() => setCurrentPage((page) => page - 1)} className="grid h-8 w-8 place-items-center border border-gray-200 disabled:opacity-40"><ChevronLeft size={17} /></button>
+            {Array.from({ length: totalPages }, (_, index) => index + 1).filter((page) => page === 1 || page === totalPages || Math.abs(page - currentPage) <= 1).map((page, index, pages) => (
+              <span key={page} className="contents">{index > 0 && page - pages[index - 1] > 1 && <span className="px-1 text-gray-400">…</span>}<button type="button" onClick={() => setCurrentPage(page)} className={`h-8 min-w-8 border px-2 text-sm font-bold ${currentPage === page ? 'border-brand bg-brand text-white' : 'border-gray-200 text-gray-600'}`}>{page}</button></span>
+            ))}
+            <button type="button" disabled={currentPage === totalPages} onClick={() => setCurrentPage((page) => page + 1)} className="grid h-8 w-8 place-items-center border border-gray-200 disabled:opacity-40"><ChevronRight size={17} /></button>
+          </div>
         </div>
       </section>
 

@@ -1,6 +1,7 @@
 import QRCode from 'qrcode';
 import { QRPay } from 'vietnam-qr-pay';
 import bankConfig from '../config/bank';
+import api from '../api/axios';
 
 export const bankOptions = [
   { bankId: '970422', bankName: 'MB Bank - Ngân hàng TMCP Quân đội' },
@@ -19,13 +20,46 @@ export const defaultBankTransferSettings = {
   accountNo: bankConfig.accountNumber,
   accountName: bankConfig.accountName
 };
+let cachedBankTransferSettings = { ...defaultBankTransferSettings };
 
 export function getBankById(bankId) {
   return bankOptions.find((bank) => bank.bankId === bankId);
 }
 
+export function validateBankName(value) {
+  const bankName = String(value || '').trim().replace(/\s+/g, ' ');
+
+  if (bankName.length < 3 || bankName.length > 150) {
+    return 'Tên ngân hàng phải có từ 3 đến 150 ký tự';
+  }
+  if (!/^[\p{L}\p{N}][\p{L}\p{N}\s.&,'’()/-]*$/u.test(bankName)) {
+    return 'Tên ngân hàng chỉ được chứa chữ, số và dấu câu thông dụng';
+  }
+  if (!/\p{L}/u.test(bankName)) {
+    return 'Tên ngân hàng phải có chữ cái';
+  }
+  if (!/(ngân\s*hàng|bank|tmcp|tnhh|credit\s*union|finance)/iu.test(bankName)) {
+    return 'Tên chưa đúng định dạng ngân hàng, ví dụ: ABC Bank hoặc Ngân hàng TMCP ABC';
+  }
+
+  return '';
+}
+
 export function getBankTransferSettings() {
-  return { ...defaultBankTransferSettings };
+  return { ...cachedBankTransferSettings };
+}
+
+export async function loadBankTransferSettings() {
+  const { data } = await api.get('/settings/bank-transfer');
+  cachedBankTransferSettings = { ...defaultBankTransferSettings, ...data };
+  return getBankTransferSettings();
+}
+
+export async function saveBankTransferSettings(settings) {
+  const { data } = await api.put('/settings/bank-transfer', settings);
+  cachedBankTransferSettings = { ...defaultBankTransferSettings, ...data };
+  window.dispatchEvent(new CustomEvent('bank-transfer-settings-updated', { detail: getBankTransferSettings() }));
+  return getBankTransferSettings();
 }
 
 export function isBankTransferConfigured(settings = getBankTransferSettings()) {

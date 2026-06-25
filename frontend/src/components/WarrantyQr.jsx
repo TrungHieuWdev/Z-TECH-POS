@@ -9,7 +9,7 @@ export default function WarrantyQr({ warrantyCode, publicToken }) {
 
     const envBaseUrl = import.meta.env.VITE_PUBLIC_BASE_URL;
 
-    const baseUrl = envBaseUrl || window.location.origin;
+    const baseUrl = (envBaseUrl || window.location.origin).replace(/\/$/, '');
 
     return `${baseUrl}/tra-cuu-bao-hanh/${encodeURIComponent(publicToken)}`;
   }, [publicToken]);

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Bell, Menu, Search, Settings } from 'lucide-react';
+import { Bell, Clock3, Menu, Search, Settings } from 'lucide-react';
 import Sidebar from './Sidebar';
 import SettingsModal from './SettingsModal';
 import NotificationCenter from './NotificationCenter';
@@ -16,6 +16,12 @@ export default function Layout() {
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [notificationCount, setNotificationCount] = useState(0);
+  const [currentTime, setCurrentTime] = useState(() => new Date());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);
@@ -51,6 +57,22 @@ export default function Layout() {
           </div>
 
           <div className="flex items-center gap-3">
+            <div
+              className="hidden h-9 items-center gap-2 rounded-lg bg-brand-surface px-3 text-brand-strong ring-1 ring-brand-soft md:flex"
+              title="Giờ Việt Nam"
+              aria-label="Giờ Việt Nam hiện tại"
+            >
+              <Clock3 size={17} className="shrink-0" />
+              <time className="min-w-[68px] text-center text-sm font-bold tabular-nums">
+                {new Intl.DateTimeFormat('vi-VN', {
+                  timeZone: 'Asia/Ho_Chi_Minh',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  second: '2-digit',
+                  hour12: false,
+                }).format(currentTime)}
+              </time>
+            </div>
             <button
               type="button"
               onClick={() => setIsNotificationsOpen(true)}

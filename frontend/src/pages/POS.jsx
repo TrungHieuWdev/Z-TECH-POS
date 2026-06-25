@@ -25,7 +25,8 @@ import {
   buildTransferMemo,
   buildVietQrDataUrl,
   getBankTransferSettings,
-  isBankTransferConfigured
+  isBankTransferConfigured,
+  loadBankTransferSettings
 } from '../utils/bankTransfer';
 import { formatCurrency } from '../utils/format';
 import { getWarrantyLabel } from '../utils/warrantyPolicy';
@@ -246,6 +247,16 @@ export default function POS() {
   const [transferCountdown, setTransferCountdown] = useState(TRANSFER_CONFIRM_TIMEOUT_SECONDS);
   const [pageError, setPageError] = useState('');
   const [isPageLoading, setIsPageLoading] = useState(true);
+
+  useEffect(() => {
+    loadBankTransferSettings()
+      .then(setBankTransfer)
+      .catch(() => {});
+
+    const handleBankSettingsUpdate = (event) => setBankTransfer(event.detail);
+    window.addEventListener('bank-transfer-settings-updated', handleBankSettingsUpdate);
+    return () => window.removeEventListener('bank-transfer-settings-updated', handleBankSettingsUpdate);
+  }, []);
 
   useEffect(() => {
     scanModeRef.current = scanMode;

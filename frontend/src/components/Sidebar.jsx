@@ -20,7 +20,7 @@ import ztechLogo from '../assets/images/1111.png';
 import { getUser, isFullAccessRole, logout } from '../utils/auth';
 
 const primaryItems = [
-  { to: '/', label: 'Tổng quan', icon: LayoutDashboard },
+  { to: '/', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/pos', label: 'Bán hàng', icon: ShoppingCart },
   { to: '/products', label: 'Sản phẩm', icon: Package },
   { to: '/inventory', label: 'Kho hàng', icon: Boxes },

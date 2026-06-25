@@ -26,6 +26,18 @@
   border-radius: 0.75rem !important;
 }
 
+[data-preserve-radius='login-card'] {
+  border-radius: 1.5rem !important;
+}
+
+[data-preserve-radius='login-control'] {
+  border-radius: 0.65rem !important;
+}
+
+[data-preserve-radius='login-checkbox'] {
+  border-radius: 0.25rem !important;
+}
+
 *::-webkit-scrollbar {
   display: none;
 }
