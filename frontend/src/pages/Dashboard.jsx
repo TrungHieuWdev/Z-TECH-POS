@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  ArrowRight,
+  CalendarCheck,
   ChevronDown,
-  MoreVertical,
+  CreditCard,
   PackageCheck,
   PackageOpen,
   ReceiptText,
   TrendingUp,
+  UsersRound,
   WalletCards
 } from 'lucide-react';
 import api from '../api/axios';
@@ -28,20 +31,11 @@ const cardTones = {
   slate: 'bg-[#eef7fc] text-brand-deep'
 };
 
-const statusStyles = {
-  completed: 'bg-emerald-50 text-emerald-700 ring-emerald-100',
-  cancelled: 'bg-rose-50 text-rose-700 ring-rose-100'
-};
-
-const statusLabels = {
-  completed: 'Hoàn tất',
-  cancelled: 'Đã hủy'
-};
-
 function formatPercent(value) {
   const numberValue = Number(value || 0);
-  const prefix = numberValue > 0 ? '+' : '';
-  return `${prefix}${numberValue.toLocaleString('vi-VN')}%`;
+  const cappedValue = Math.max(-100, Math.min(100, numberValue));
+  const prefix = cappedValue > 0 ? '+' : '';
+  return `${prefix}${cappedValue.toLocaleString('vi-VN')}%`;
 }
 
 function getTodayGrowthCaption(value) {
@@ -56,6 +50,52 @@ function getTodayGrowthCaption(value) {
 function safeNumber(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : 0;
+}
+
+function polarToCartesian(centerX, centerY, radius, angleInDegrees) {
+  const angleInRadians = ((angleInDegrees - 90) * Math.PI) / 180;
+
+  return {
+    x: centerX + radius * Math.cos(angleInRadians),
+    y: centerY + radius * Math.sin(angleInRadians)
+  };
+}
+
+function describeDonutSegment(centerX, centerY, outerRadius, innerRadius, startAngle, endAngle) {
+  const outerStart = polarToCartesian(centerX, centerY, outerRadius, endAngle);
+  const outerEnd = polarToCartesian(centerX, centerY, outerRadius, startAngle);
+  const innerStart = polarToCartesian(centerX, centerY, innerRadius, startAngle);
+  const innerEnd = polarToCartesian(centerX, centerY, innerRadius, endAngle);
+  const largeArcFlag = endAngle - startAngle <= 180 ? '0' : '1';
+
+  return [
+    `M ${outerStart.x} ${outerStart.y}`,
+    `A ${outerRadius} ${outerRadius} 0 ${largeArcFlag} 0 ${outerEnd.x} ${outerEnd.y}`,
+    `L ${innerStart.x} ${innerStart.y}`,
+    `A ${innerRadius} ${innerRadius} 0 ${largeArcFlag} 1 ${innerEnd.x} ${innerEnd.y}`,
+    'Z'
+  ].join(' ');
+}
+
+function getConnectorPoints(centerX, centerY, radius, angle, side = 'right') {
+  const start = polarToCartesian(centerX, centerY, radius - 4, angle);
+  const elbow = polarToCartesian(centerX, centerY, radius + 20, angle);
+  const end = {
+    x: elbow.x + (side === 'right' ? 28 : -28),
+    y: elbow.y
+  };
+
+  return `${start.x},${start.y} ${elbow.x},${elbow.y} ${end.x},${end.y}`;
+}
+
+function getConnectorLabelPoint(centerX, centerY, radius, angle, side = 'right') {
+  const elbow = polarToCartesian(centerX, centerY, radius + 20, angle);
+  const endX = elbow.x + (side === 'right' ? 28 : -28);
+
+  return {
+    x: endX + (side === 'right' ? 8 : -8),
+    y: elbow.y
+  };
 }
 
 function getRevenueCaption(currentRevenue, previousRevenue) {
@@ -78,16 +118,6 @@ function getCountCaption(currentValue, previousValue, noun) {
   const delta = current - previous;
   if (delta === 0) return 'Bằng kỳ trước';
   return `${delta > 0 ? '+' : '-'}${Math.abs(delta).toLocaleString('vi-VN')} ${noun} so với kỳ trước`;
-}
-
-function getInitials(name = '') {
-  const words = name.trim().split(/\s+/).filter(Boolean);
-
-  if (words.length === 0) {
-    return 'KL';
-  }
-
-  return words.slice(-2).map((word) => word[0]).join('').toUpperCase();
 }
 
 export default function Dashboard() {
@@ -192,13 +222,71 @@ export default function Dashboard() {
     }
   ];
 
+  const paymentStats = useMemo(() => {
+    const totals = recentOrders.reduce((result, order) => {
+      const key = order.payment_method || 'cash';
+      const amount = safeNumber(order.total);
+
+      if (key === 'cash') {
+        result.cash += amount;
+      } else {
+        result.transfer += amount;
+      }
+
+      return result;
+    }, { cash: 0, transfer: 0 });
+    const total = totals.cash + totals.transfer;
+    const cashPercent = total > 0 ? Math.round((totals.cash / total) * 100) : 0;
+    const transferPercent = total > 0 ? 100 - cashPercent : 0;
+
+    return {
+      ...totals,
+      total,
+      cashPercent,
+      transferPercent
+    };
+  }, [recentOrders]);
+
+  const staffStats = useMemo(() => {
+    const totals = recentOrders.reduce((map, order) => {
+      const key = order.cashier_name || 'Nhân viên';
+      const normalizedName = key.trim().toLowerCase();
+      if (['quản lý', 'quan ly', 'admin', 'administrator'].includes(normalizedName)) {
+        return map;
+      }
+
+      const current = map.get(key) || { name: key, total: 0, count: 0 };
+      current.total += safeNumber(order.total);
+      current.count += 1;
+      map.set(key, current);
+      return map;
+    }, new Map());
+
+    return Array.from(totals.values()).sort((a, b) => b.total - a.total).slice(0, 3);
+  }, [recentOrders]);
+
+  const paymentChart = useMemo(() => {
+    const cashAngle = Math.min(356, Math.max(4, paymentStats.cashPercent * 3.6));
+    const cashConnectorAngle = Math.max(18, cashAngle / 2);
+    const transferConnectorAngle = cashAngle + ((360 - cashAngle) / 2);
+
+    return {
+      cashEnd: cashAngle - 2,
+      transferStart: cashAngle + 2,
+      cashConnectorAngle,
+      transferConnectorAngle,
+      cashLabel: getConnectorLabelPoint(150, 86, 58, cashConnectorAngle, 'right'),
+      transferLabel: getConnectorLabelPoint(150, 86, 58, transferConnectorAngle, 'left')
+    };
+  }, [paymentStats.cashPercent]);
+
   return (
     <div className="space-y-6">
-      <section className="flex flex-col gap-3 rounded-lg border border-[#dce8f0] bg-gradient-to-r from-white to-[#f3f9fd] p-4 shadow-[0_1px_3px_rgba(25,28,29,0.06)] sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-[#191c1d]">Tổng quan cửa hàng</h1>
-          <p className="mt-1 text-sm font-medium text-[#73777d]">
-            Toàn bộ số liệu đang hiển thị theo kỳ: {dashboardPeriodLabel.toLowerCase()}
+          <h1 className="text-2xl font-extrabold text-gray-950">Dashboard</h1>
+          <p className="mt-1 text-sm font-medium text-gray-500">
+            Theo dõi doanh thu, đơn hàng, tồn kho và hiệu suất bán hàng.
           </p>
         </div>
         <label className="relative w-full sm:w-[180px]">
@@ -206,7 +294,7 @@ export default function Dashboard() {
           <select
             value={dashboardPeriod}
             onChange={(event) => setDashboardPeriod(event.target.value)}
-            className="h-11 w-full appearance-none rounded-lg border border-[#b9d5e7] bg-white pl-3 pr-10 text-sm font-bold text-brand-ink outline-none transition hover:border-brand-strong focus:border-brand-strong focus:ring-2 focus:ring-brand-soft"
+            className="h-11 w-full appearance-none border border-[#b9d5e7] bg-white pl-3 pr-10 text-sm font-bold text-brand-ink outline-none transition hover:border-brand-strong focus:border-brand-strong focus:ring-2 focus:ring-brand-soft"
           >
             {dashboardPeriodOptions.map((option) => (
               <option key={option.value} value={option.value}>{option.label}</option>
@@ -214,7 +302,7 @@ export default function Dashboard() {
           </select>
           <ChevronDown className="pointer-events-none absolute bottom-3 right-3 text-brand-ink" size={18} />
         </label>
-      </section>
+      </div>
 
       {error && (
         <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
@@ -222,7 +310,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         {cards.map((card) => {
           const Icon = card.icon;
           const CardWrapper = card.to ? Link : 'article';
@@ -231,20 +319,20 @@ export default function Dashboard() {
             <CardWrapper
               key={card.label}
               to={card.to}
-              className={`rounded-lg border bg-white p-3 shadow-[0_1px_3px_rgba(25,28,29,0.08)] ${card.tone === 'amber' && summary.lowStockCount > 0 ? 'border-red-500' : 'border-[#e1e3e4]'} ${
+              className={`rounded-lg border bg-white p-4 shadow-[0_1px_3px_rgba(25,28,29,0.08)] ${card.tone === 'amber' && summary.lowStockCount > 0 ? 'border-red-500' : 'border-[#e1e3e4]'} ${
                 card.to ? 'block transition hover:border-[#c8dff0] hover:shadow-[0_8px_24px_rgba(116,184,224,0.18)]' : ''
               }`}
             >
-              <div className="flex items-start justify-between gap-2">
+              <div className="flex min-h-[92px] items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className={`truncate text-xs font-semibold ${card.tone === 'amber' && summary.lowStockCount > 0 ? 'text-red-700' : 'text-[#73777d]'}`}>{card.label}</p>
-                  <p className="mt-2 text-lg font-bold leading-6 text-[#191c1d]">
+                  <p className={`truncate text-sm font-semibold ${card.tone === 'amber' && summary.lowStockCount > 0 ? 'text-red-700' : 'text-[#73777d]'}`}>{card.label}</p>
+                  <p className="mt-3 text-xl font-bold leading-7 text-[#191c1d]">
                     {isLoading ? '...' : card.value}
                   </p>
-                  <p className="mt-1 line-clamp-2 text-xs font-medium leading-4 text-[#43474d]">{card.caption}</p>
+                  <p className="mt-1.5 line-clamp-2 text-sm font-medium leading-5 text-[#43474d]">{card.caption}</p>
                 </div>
-                <div className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${cardTones[card.tone]}`}>
-                  <Icon size={17} />
+                <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-lg ${cardTones[card.tone]}`}>
+                  <Icon size={20} />
                 </div>
               </div>
             </CardWrapper>
@@ -290,79 +378,116 @@ export default function Dashboard() {
         </article>
       </section>
 
-      <section className="rounded-lg border border-[#e1e3e4] bg-white shadow-[0_1px_3px_rgba(25,28,29,0.08)]">
-        <div className="flex items-center justify-between gap-4 border-b border-[#e1e3e4] px-4 py-3">
-          <h2 className="text-lg font-semibold leading-6 text-[#191c1d]">Đơn hàng gần đây</h2>
-          <Link
-            to="/orders"
-            className="rounded-lg px-3 py-1.5 text-sm font-semibold text-brand-strong transition hover:bg-brand-surface"
-          >
-            Xem tất cả
-          </Link>
-        </div>
+      <section className="grid gap-4 xl:grid-cols-3">
+        <article className="rounded-lg border border-[#e1e3e4] bg-white p-4 shadow-[0_1px_3px_rgba(25,28,29,0.08)]">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="text-sm font-bold leading-5 text-[#191c1d]">Phương thức thanh toán</h2>
+            <CreditCard size={18} className="text-brand-strong" />
+          </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[920px] text-left">
-            <thead className="text-sm font-bold uppercase tracking-wide text-[#73777d]">
-              <tr>
-                <th className="px-4 py-2.5 font-bold">Mã đơn</th>
-                <th className="px-4 py-2.5 font-bold">Khách hàng</th>
-                <th className="px-4 py-2.5 font-bold">Ngày tạo</th>
-                <th className="px-4 py-2.5 font-bold text-right">Tổng tiền</th>
-                <th className="px-4 py-2.5 font-bold text-center">Trạng thái</th>
-                <th className="px-4 py-2.5 font-bold text-right">Hành động</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#e1e3e4]">
-              {recentOrders.length === 0 && (
-                <tr>
-                  <td colSpan="6" className="px-4 py-8 text-center text-sm font-medium text-[#73777d]">
-                    Chưa có đơn hàng gần đây.
-                  </td>
-                </tr>
+          <div className="min-h-[142px]">
+            <svg viewBox="0 0 300 170" className="h-[170px] w-full overflow-visible" role="img" aria-label="Biểu đồ phương thức thanh toán">
+              {paymentStats.total > 0 ? (
+                <>
+                  <path
+                    d={describeDonutSegment(150, 86, 58, 27, 0, paymentChart.cashEnd)}
+                    fill="#2f8cf0"
+                    stroke="#ffffff"
+                    strokeWidth="3"
+                  />
+                  <path
+                    d={describeDonutSegment(150, 86, 58, 27, paymentChart.transferStart, 360)}
+                    fill="#f59e0b"
+                    stroke="#ffffff"
+                    strokeWidth="3"
+                  />
+                  <polyline
+                    points={getConnectorPoints(150, 86, 58, paymentChart.cashConnectorAngle, 'right')}
+                    fill="none"
+                    stroke="#2f8cf0"
+                    strokeWidth="1.4"
+                  />
+                  <polyline
+                    points={getConnectorPoints(150, 86, 58, paymentChart.transferConnectorAngle, 'left')}
+                    fill="none"
+                    stroke="#f59e0b"
+                    strokeWidth="1.4"
+                  />
+                  <text x={paymentChart.cashLabel.x} y={paymentChart.cashLabel.y - 4} className="fill-[#191c1d] text-[12px] font-semibold">Tiền mặt</text>
+                  <text x={paymentChart.cashLabel.x} y={paymentChart.cashLabel.y + 11} className="fill-[#73777d] text-[11px] font-bold">{paymentStats.cashPercent}%</text>
+                  <text x={paymentChart.transferLabel.x} y={paymentChart.transferLabel.y - 4} textAnchor="end" className="fill-[#191c1d] text-[12px] font-semibold">Chuyển khoản</text>
+                  <text x={paymentChart.transferLabel.x} y={paymentChart.transferLabel.y + 11} textAnchor="end" className="fill-[#73777d] text-[11px] font-bold">{paymentStats.transferPercent}%</text>
+                </>
+              ) : (
+                <>
+                  <circle cx="150" cy="86" r="58" fill="#edf2f5" />
+                  <circle cx="150" cy="86" r="27" fill="#ffffff" />
+                  <text x="150" y="91" textAnchor="middle" className="fill-[#73777d] text-[12px] font-semibold">Chưa có dữ liệu</text>
+                </>
               )}
-              {recentOrders.slice(0, 4).map((order) => (
-                <tr key={order.id} className="text-base transition hover:bg-[#f8f9fa]">
-                  <td className="px-4 py-2.5 align-middle font-bold text-[#191c1d]">{order.order_number}</td>
-                  <td className="px-4 py-2.5 align-middle">
-                    <div className="flex items-center gap-3">
-                      <div className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-brand-soft text-[10px] font-bold text-brand-ink">
-                        {getInitials(order.customer_name)}
-                      </div>
-                      <span className="font-medium text-[#43474d]">{order.customer_name}</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-2.5 align-middle text-[#43474d]">
-                    <span className="font-medium">{formatTime(order.created_at)}</span>
-                    <span className="ml-1 text-xs text-[#73777d]">{formatDate(order.created_at)}</span>
-                  </td>
-                  <td className="px-4 py-2.5 align-middle text-right font-bold text-[#191c1d]">
-                    {formatCurrency(order.total)}
-                  </td>
-                  <td className="px-4 py-2.5 align-middle text-center">
-                    <span
-                      className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ring-1 ${
-                        statusStyles[order.status] || statusStyles.cancelled
-                      }`}
-                    >
-                      {statusLabels[order.status] || order.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5 align-middle">
-                    <button
-                      type="button"
-                      className="ml-auto grid h-7 w-7 place-items-center rounded-full text-[#73777d] transition hover:bg-brand-surface hover:text-brand-strong"
-                      title="Thao tác"
-                      aria-label="Thao tác"
-                    >
-                      <MoreVertical size={18} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            </svg>
+          </div>
+        </article>
+
+        <article className="rounded-lg border border-[#e1e3e4] bg-white p-4 shadow-[0_1px_3px_rgba(25,28,29,0.08)]">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="text-sm font-bold leading-5 text-[#191c1d]">Hiệu suất bán hàng nhân viên</h2>
+            <UsersRound size={18} className="text-brand-strong" />
+          </div>
+
+          <div className="space-y-3">
+            {staffStats.length === 0 && (
+              <p className="py-5 text-sm font-medium text-[#73777d]">Chưa có dữ liệu nhân viên.</p>
+            )}
+            {staffStats.map((staff) => (
+              <div key={staff.name} className="flex items-center justify-between gap-3 text-sm">
+                <span className="truncate font-medium text-[#43474d]">{staff.name}</span>
+                <span className="shrink-0 text-xs font-semibold text-[#191c1d]">
+                  {staff.count} đơn - {formatCurrency(staff.total)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </article>
+
+        <article className="rounded-lg border border-[#e1e3e4] bg-white p-4 shadow-[0_1px_3px_rgba(25,28,29,0.08)]">
+          <div className="mb-3 flex items-center justify-between gap-4 border-b border-[#e1e3e4] pb-3">
+            <h2 className="text-sm font-bold leading-5 text-[#191c1d]">Đơn hàng gần đây</h2>
+          </div>
+
+          <div className="divide-y divide-[#eef1f3]">
+            {recentOrders.length === 0 && (
+              <p className="py-8 text-center text-sm font-medium text-[#73777d]">
+                Chưa có đơn hàng gần đây.
+              </p>
+            )}
+            {recentOrders.slice(0, 2).map((order) => (
+              <div key={order.id} className="grid grid-cols-[28px_minmax(0,1fr)_minmax(82px,0.65fr)_auto] items-center gap-2.5 py-2.5">
+                <div className="grid h-6 w-6 place-items-center rounded bg-brand-surface text-brand-strong">
+                  <CalendarCheck size={14} />
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-bold text-brand-strong">{order.order_number}</p>
+                  <p className="mt-0.5 text-[11px] font-medium text-[#73777d]">
+                    {formatTime(order.created_at)} {formatDate(order.created_at)}
+                  </p>
+                </div>
+                <p className="truncate text-xs font-medium text-[#43474d]">{order.customer_name}</p>
+                <p className="whitespace-nowrap text-right text-xs font-bold text-[#191c1d]">{formatCurrency(order.total)}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="pt-2">
+            <Link
+              to="/orders"
+              className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-strong transition hover:text-brand-deep"
+            >
+              <span>Xem tất cả</span>
+              <ArrowRight size={15} />
+            </Link>
+          </div>
+        </article>
       </section>
     </div>
   );

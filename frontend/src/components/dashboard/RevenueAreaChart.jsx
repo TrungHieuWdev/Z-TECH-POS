@@ -10,6 +10,7 @@ import {
 import { formatCurrency } from '../../utils/format';
 
 const shapeValues = [0, 65000, 65000, 165000, 280000, 390000, 350000, 350000];
+const todayHours = Array.from({ length: 14 }, (_, index) => index + 8);
 
 const periodDays = {
   today: 1,
@@ -17,6 +18,29 @@ const periodDays = {
   '14days': 14,
   '30days': 30,
   '90days': 90
+};
+
+const chartDisplayDays = {
+  '90days': 30
+};
+
+const periodYAxisConfigs = {
+  '7days': {
+    max: 50000000,
+    step: 10000000
+  },
+  '14days': {
+    max: 100000000,
+    step: 20000000
+  },
+  '30days': {
+    max: 200000000,
+    step: 50000000
+  },
+  '90days': {
+    max: 200000000,
+    step: 50000000
+  }
 };
 
 function safeNumber(value) {
@@ -29,29 +53,85 @@ function formatYAxis(value) {
   return `${Math.round(value / 1000)}k`;
 }
 
+function formatMillionYAxis(value) {
+  if (value === 0) return '0';
+  return `${Math.round(value / 1000000)} triệu`;
+}
+
 function formatDateLabel(date) {
-  return new Intl.DateTimeFormat('vi-VN', {
-    day: '2-digit',
-    month: '2-digit'
-  }).format(date);
+  const day = date.getDate().toString().padStart(2, '0');
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  return `${day}/${month}`;
 }
 
 function buildDateLabels(period) {
-  const days = periodDays[period] || periodDays.today;
-  const pointCount = shapeValues.length;
+  const days = chartDisplayDays[period] || periodDays[period] || periodDays.today;
   const today = new Date();
 
   if (days === 1) {
     return shapeValues.map(() => formatDateLabel(today));
   }
 
-  return shapeValues.map((_, index) => {
-    const ratio = pointCount === 1 ? 0 : index / (pointCount - 1);
-    const daysAgo = Math.round((days - 1) * (1 - ratio));
+  return Array.from({ length: days }, (_, index) => {
     const date = new Date(today);
-    date.setDate(today.getDate() - daysAgo);
+    date.setDate(today.getDate() - (days - 1 - index));
     return formatDateLabel(date);
   });
+}
+
+function interpolateShapeValue(index, pointCount) {
+  if (pointCount <= 1) return shapeValues[0];
+
+  const sourcePosition = (index / (pointCount - 1)) * (shapeValues.length - 1);
+  const lowerIndex = Math.floor(sourcePosition);
+  const upperIndex = Math.min(shapeValues.length - 1, Math.ceil(sourcePosition));
+  const progress = sourcePosition - lowerIndex;
+
+  return shapeValues[lowerIndex] + (shapeValues[upperIndex] - shapeValues[lowerIndex]) * progress;
+}
+
+function buildChartData(totalRevenue, period) {
+  const basePeak = Math.max(...shapeValues);
+  const scale = totalRevenue > 0 ? Math.max(totalRevenue, 376000) / basePeak : 1;
+
+  if (period === 'today') {
+    return todayHours.map((hour, index) => ({
+      date: `${hour.toString().padStart(2, '0')}:00`,
+      revenue: Math.round(interpolateShapeValue(index, todayHours.length) * scale)
+    }));
+  }
+
+  const labels = buildDateLabels(period);
+
+  return labels.map((label, index) => ({
+    date: label,
+    revenue: Math.round(interpolateShapeValue(index, labels.length) * scale)
+  }));
+}
+
+function buildPeriodYAxisConfig(period) {
+  const config = periodYAxisConfigs[period];
+
+  if (!config) {
+    return {
+      width: 42,
+      domain: [0, 400000],
+      ticks: [0, 100000, 200000, 300000, 400000],
+      tickFormatter: formatYAxis
+    };
+  }
+
+  const ticks = [];
+  for (let value = 0; value <= config.max; value += config.step) {
+    ticks.push(value);
+  }
+
+  return {
+    width: 72,
+    domain: [0, config.max],
+    ticks,
+    tickFormatter: formatMillionYAxis
+  };
 }
 
 export default function RevenueAreaChart({
@@ -62,20 +142,30 @@ export default function RevenueAreaChart({
 }) {
   const safeTotal = safeNumber(totalRevenue);
   const safeComparison = safeNumber(comparisonAmount);
-  const labels = buildDateLabels(period);
-  const basePeak = Math.max(...shapeValues);
-  const scale = safeTotal > 0 ? Math.max(safeTotal, 376000) / basePeak : 1;
-  const data = shapeValues.map((value, index) => ({
-    date: labels[index],
-    revenue: Math.round(value * scale)
-  }));
+  const isToday = period === 'today';
+  const data = buildChartData(safeTotal, period);
+  const shouldShowEveryDate = period === '14days' || period === '30days';
+  const shouldAngleDateLabels = period === '30days';
+  const xAxisTicks = period === '90days'
+    ? data.filter((_, index) => index % 7 === 0 || index === data.length - 1).map((item) => item.date)
+    : undefined;
+  const yAxisConfig = isToday
+    ? {
+        width: 64,
+        domain: [0, 10000000],
+        ticks: [0, 2500000, 5000000, 7500000, 10000000],
+        tickFormatter: formatMillionYAxis
+      }
+    : buildPeriodYAxisConfig(period);
 
   return (
     <article className="rounded-lg border border-[#e1e3e4] bg-white p-4 shadow-[0_1px_3px_rgba(25,28,29,0.08)]">
       <div className="mb-4 flex items-start justify-between gap-4">
         <div>
           <h2 className="text-lg font-semibold leading-6 text-[#191c1d]">Cơ cấu doanh thu</h2>
-          <p className="mt-0.5 text-xs font-medium text-[#73777d]">Doanh thu phát sinh theo ngày</p>
+          <p className="mt-0.5 text-xs font-medium text-[#73777d]">
+            {isToday ? 'Doanh thu phát sinh theo giờ' : 'Doanh thu phát sinh theo ngày'}
+          </p>
         </div>
         <span className="rounded-lg bg-brand-surface px-3 py-2 text-sm font-semibold text-brand-ink">
           {periodLabel}
@@ -96,21 +186,27 @@ export default function RevenueAreaChart({
               dataKey="date"
               axisLine={{ stroke: '#e1e7ec' }}
               tickLine={false}
-              tick={{ fill: '#5f6b76', fontSize: 12, fontWeight: 600 }}
+              tick={{ fill: '#5f6b76', fontSize: shouldAngleDateLabels ? 11 : 12, fontWeight: 600 }}
+              ticks={xAxisTicks}
+              interval={shouldShowEveryDate ? 0 : undefined}
+              minTickGap={shouldShowEveryDate ? 0 : undefined}
+              angle={shouldAngleDateLabels ? -35 : 0}
+              textAnchor={shouldAngleDateLabels ? 'end' : 'middle'}
+              height={shouldAngleDateLabels ? 58 : 30}
               dy={8}
             />
             <YAxis
-              width={42}
-              domain={[0, 400000]}
-              ticks={[0, 100000, 200000, 300000, 400000]}
+              width={yAxisConfig.width}
+              domain={yAxisConfig.domain}
+              ticks={yAxisConfig.ticks}
               axisLine={false}
               tickLine={false}
-              tickFormatter={formatYAxis}
+              tickFormatter={yAxisConfig.tickFormatter}
               tick={{ fill: '#5f6b76', fontSize: 12, fontWeight: 600 }}
             />
             <Tooltip
               formatter={(value) => [formatCurrency(value), 'Doanh thu']}
-              labelFormatter={(label) => `Ngày ${label}`}
+              labelFormatter={(label) => `${isToday ? 'Giờ' : 'Ngày'} ${label}`}
               contentStyle={{
                 border: '1px solid #dce8f0',
                 borderRadius: 8,

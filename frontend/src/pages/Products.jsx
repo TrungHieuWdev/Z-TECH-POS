@@ -181,10 +181,7 @@ export default function Products() {
 
   const productStats = useMemo(() => ({
     total: products.length,
-    inventoryValue: products.reduce((sum, product) => {
-      const unitValue = Number(product.cost_price ?? product.price ?? 0);
-      return sum + Number(product.stock_quantity || 0) * unitValue;
-    }, 0),
+    active: products.filter((product) => getProductStatus(product) === 'active').length,
     low: products.filter((product) => getStockState(product) === 'low').length,
     out: products.filter((product) => getStockState(product) === 'out').length,
     noCode: products.filter((product) => !String(product.sku || '').trim() && !String(product.barcode || '').trim()).length
@@ -544,7 +541,7 @@ export default function Products() {
       <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         {[
           { label: 'Tổng sản phẩm', value: productStats.total, note: `${productStats.noCode} chưa có SKU/mã vạch`, icon: Package, tone: 'bg-brand-surface text-brand-strong' },
-          { label: 'Giá trị tồn kho', value: formatCurrency(productStats.inventoryValue), note: 'Tính theo số lượng và giá vốn', icon: Boxes, tone: 'bg-emerald-50 text-emerald-700' },
+          { label: 'Sản phẩm đang bán', value: productStats.active, note: 'Đang hiển thị trên POS', icon: Boxes, tone: 'bg-emerald-50 text-emerald-700' },
           { label: 'Sắp hết hàng', value: productStats.low, note: 'Đã chạm mức tồn tối thiểu', icon: AlertTriangle, tone: 'bg-amber-50 text-amber-700' },
           { label: 'Hết hàng', value: productStats.out, note: 'Cần nhập thêm hàng', icon: Barcode, tone: 'bg-red-50 text-red-700' }
         ].map((card) => (

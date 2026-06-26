@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Bell, Clock3, Menu, Search, Settings } from 'lucide-react';
+import { Bell, Menu, Search, Settings } from 'lucide-react';
 import Sidebar from './Sidebar';
 import SettingsModal from './SettingsModal';
 import NotificationCenter from './NotificationCenter';
@@ -37,6 +37,20 @@ export default function Layout() {
     navigate(keyword ? `/pos?search=${encodeURIComponent(keyword)}` : '/pos');
   };
 
+  const vietnamTime = new Intl.DateTimeFormat('vi-VN', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).format(currentTime);
+  const vietnamDate = new Intl.DateTimeFormat('vi-VN', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(currentTime);
+
   return (
     <div className="min-h-screen bg-[#f8f9fa] font-sans text-[#191c1d]">
       <Sidebar isMobileOpen={isMobileNavOpen} onMobileClose={() => setIsMobileNavOpen(false)} />
@@ -62,15 +76,10 @@ export default function Layout() {
               title="Giờ Việt Nam"
               aria-label="Giờ Việt Nam hiện tại"
             >
-              <Clock3 size={17} className="shrink-0" />
-              <time className="min-w-[68px] text-center text-sm font-bold tabular-nums">
-                {new Intl.DateTimeFormat('vi-VN', {
-                  timeZone: 'Asia/Ho_Chi_Minh',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  second: '2-digit',
-                  hour12: false,
-                }).format(currentTime)}
+              <time className="flex items-center gap-2 text-sm font-bold tabular-nums">
+                <span>{vietnamDate}</span>
+                <span className="h-4 w-px bg-[#b9d5e7]" aria-hidden="true" />
+                <span>{vietnamTime}</span>
               </time>
             </div>
             <button
