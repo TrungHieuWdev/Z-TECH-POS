@@ -20,7 +20,7 @@ import {
   X
 } from 'lucide-react';
 import api from '../api/axios';
-import Modal from '../components/Modal';
+import Modal from '../components/Modal';``
 import ProductImage from '../components/ProductImage';
 import {
   buildTransferMemo,
@@ -612,7 +612,7 @@ export default function POS() {
     setUsedPoints(0);
     setCustomerMode('regular');
     setSelectedCustomer(null);
-    setCustomerName('Khách lẻ');
+    setCustomerName('Khách thường');
     setIsCustomerPickerOpen(false);
   };
 
@@ -620,7 +620,7 @@ export default function POS() {
     setUsedPoints(0);
     setCustomerMode('member');
     setSelectedCustomer(customer);
-    setCustomerName(customer.name || 'Khách lẻ');
+    setCustomerName(customer.name || 'Khách thường');
     setIsCustomerPickerOpen(false);
   };
 

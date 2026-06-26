@@ -13,39 +13,40 @@ function getPercentChange(current, previous) {
   return Number((((currentValue - previousValue) / previousValue) * 100).toFixed(1));
 }
 
-function getCategorySharePeriod(value = 'month') {
-  return ['today', 'week', 'month', 'year', 'all'].includes(value) ? value : 'month';
+function getCategorySharePeriod(value = 'today') {
+  return ['today', '7days', '14days', '30days', '90days'].includes(value) ? value : 'today';
 }
 
-function getCategoryShareDateFilter(period = 'month') {
+function getCategoryShareDateFilter(period = 'today') {
   switch (period) {
     case 'today':
       return 'AND DATE(o.created_at) = CURDATE()';
-    case 'week':
+    case '7days':
       return 'AND o.created_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)';
-    case 'year':
-      return 'AND YEAR(o.created_at) = YEAR(CURDATE())';
-    case 'all':
-      return '';
-    case 'month':
+    case '14days':
+      return 'AND o.created_at >= DATE_SUB(CURDATE(), INTERVAL 13 DAY)';
+    case '90days':
+      return 'AND o.created_at >= DATE_SUB(CURDATE(), INTERVAL 89 DAY)';
+    case '30days':
     default:
-      return "AND o.created_at >= DATE_FORMAT(CURDATE(), '%Y-%m-01')";
+      return 'AND o.created_at >= DATE_SUB(CURDATE(), INTERVAL 29 DAY)';
   }
 }
 
-function getPeriodFilters(value = 'year', alias = '') {
+function getPeriodFilters(value = 'today', alias = '') {
   const period = getCategorySharePeriod(value);
   const column = `${alias}created_at`;
   if (period === 'today') return { current: `DATE(${column}) = CURDATE()`, previous: `DATE(${column}) = DATE_SUB(CURDATE(), INTERVAL 1 DAY)` };
-  if (period === 'week') return { current: `${column} >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)`, previous: `${column} >= DATE_SUB(CURDATE(), INTERVAL 13 DAY) AND ${column} < DATE_SUB(CURDATE(), INTERVAL 6 DAY)` };
-  if (period === 'month') return { current: `${column} >= DATE_FORMAT(CURDATE(), '%Y-%m-01')`, previous: `${column} >= DATE_FORMAT(DATE_SUB(CURDATE(), INTERVAL 1 MONTH), '%Y-%m-01') AND ${column} < DATE_FORMAT(CURDATE(), '%Y-%m-01')` };
-  if (period === 'year') return { current: `YEAR(${column}) = YEAR(CURDATE())`, previous: `YEAR(${column}) = YEAR(CURDATE()) - 1` };
-  return { current: '1 = 1', previous: '0 = 1' };
+  if (period === '7days') return { current: `${column} >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)`, previous: `${column} >= DATE_SUB(CURDATE(), INTERVAL 13 DAY) AND ${column} < DATE_SUB(CURDATE(), INTERVAL 6 DAY)` };
+  if (period === '14days') return { current: `${column} >= DATE_SUB(CURDATE(), INTERVAL 13 DAY)`, previous: `${column} >= DATE_SUB(CURDATE(), INTERVAL 27 DAY) AND ${column} < DATE_SUB(CURDATE(), INTERVAL 13 DAY)` };
+  if (period === '90days') return { current: `${column} >= DATE_SUB(CURDATE(), INTERVAL 89 DAY)`, previous: `${column} >= DATE_SUB(CURDATE(), INTERVAL 179 DAY) AND ${column} < DATE_SUB(CURDATE(), INTERVAL 89 DAY)` };
+  return { current: `${column} >= DATE_SUB(CURDATE(), INTERVAL 29 DAY)`, previous: `${column} >= DATE_SUB(CURDATE(), INTERVAL 59 DAY) AND ${column} < DATE_SUB(CURDATE(), INTERVAL 29 DAY)` };
 }
 
 export async function getSummary(req, res) {
   try {
-    const filters = getPeriodFilters(req.query.period || 'year');
+    const filters = getPeriodFilters(req.query.period || 'today');
+    const orderItemFilters = getPeriodFilters(req.query.period || 'today', 'o.');
     const [
       todayRevenue,
       yesterdayRevenue,
@@ -53,8 +54,10 @@ export async function getSummary(req, res) {
       todayOrders,
       yesterdayOrders,
       lowStock,
-      newCustomers,
-      yesterdayCustomers
+      productsSold,
+      previousProductsSold,
+      estimatedProfit,
+      previousEstimatedProfit
     ] = await Promise.all([
       query(
         `SELECT COALESCE(SUM(total), 0) AS value FROM orders WHERE status = 'completed' AND ${filters.current}`
@@ -74,16 +77,42 @@ export async function getSummary(req, res) {
       query(`SELECT COUNT(*) AS value FROM orders WHERE status = 'completed' AND ${filters.current}`),
       query(`SELECT COUNT(*) AS value FROM orders WHERE status = 'completed' AND ${filters.previous}`),
       query('SELECT COUNT(*) AS value FROM products WHERE is_active = 1 AND stock_quantity <= min_stock'),
-      query(`SELECT COUNT(*) AS value FROM customers WHERE ${filters.current}`),
-      query(`SELECT COUNT(*) AS value FROM customers WHERE ${filters.previous}`)
+      query(
+        `SELECT COALESCE(SUM(oi.quantity), 0) AS value
+         FROM order_items oi
+         JOIN orders o ON oi.order_id = o.id
+         WHERE o.status = 'completed' AND ${orderItemFilters.current}`
+      ),
+      query(
+        `SELECT COALESCE(SUM(oi.quantity), 0) AS value
+         FROM order_items oi
+         JOIN orders o ON oi.order_id = o.id
+         WHERE o.status = 'completed' AND ${orderItemFilters.previous}`
+      ),
+      query(
+        `SELECT COALESCE(SUM(oi.subtotal - (COALESCE(p.cost_price, 0) * oi.quantity)), 0) AS value
+         FROM order_items oi
+         JOIN orders o ON oi.order_id = o.id
+         JOIN products p ON oi.product_id = p.id
+         WHERE o.status = 'completed' AND ${orderItemFilters.current}`
+      ),
+      query(
+        `SELECT COALESCE(SUM(oi.subtotal - (COALESCE(p.cost_price, 0) * oi.quantity)), 0) AS value
+         FROM order_items oi
+         JOIN orders o ON oi.order_id = o.id
+         JOIN products p ON oi.product_id = p.id
+         WHERE o.status = 'completed' AND ${orderItemFilters.previous}`
+      )
     ]);
 
     const todayRevenueValue = toNumber(todayRevenue[0].value);
     const yesterdayRevenueValue = toNumber(yesterdayRevenue[0].value);
     const todayOrdersValue = toNumber(todayOrders[0].value);
     const yesterdayOrdersValue = toNumber(yesterdayOrders[0].value);
-    const newCustomersValue = toNumber(newCustomers[0].value);
-    const yesterdayCustomersValue = toNumber(yesterdayCustomers[0].value);
+    const productsSoldValue = toNumber(productsSold[0].value);
+    const previousProductsSoldValue = toNumber(previousProductsSold[0].value);
+    const estimatedProfitValue = toNumber(estimatedProfit[0].value);
+    const previousEstimatedProfitValue = toNumber(previousEstimatedProfit[0].value);
 
     res.json({
       todayRevenue: todayRevenueValue,
@@ -92,13 +121,14 @@ export async function getSummary(req, res) {
       todayOrders: todayOrdersValue,
       yesterdayOrders: yesterdayOrdersValue,
       lowStockCount: toNumber(lowStock[0].value),
-      todayNewCustomers: newCustomersValue,
-      yesterdayNewCustomers: yesterdayCustomersValue,
-      newCustomers: newCustomersValue,
-      yesterdayCustomers: yesterdayCustomersValue,
+      productsSold: productsSoldValue,
+      previousProductsSold: previousProductsSoldValue,
+      estimatedProfit: estimatedProfitValue,
+      previousEstimatedProfit: previousEstimatedProfitValue,
       revenueGrowth: getPercentChange(todayRevenueValue, yesterdayRevenueValue),
       orderGrowth: getPercentChange(todayOrdersValue, yesterdayOrdersValue),
-      customerGrowth: getPercentChange(newCustomersValue, yesterdayCustomersValue)
+      productsSoldGrowth: getPercentChange(productsSoldValue, previousProductsSoldValue),
+      estimatedProfitGrowth: getPercentChange(estimatedProfitValue, previousEstimatedProfitValue)
     });
   } catch (error) {
     res.status(500).json({ message: 'Không thể lấy tổng quan', error: error.message });
@@ -124,7 +154,7 @@ export async function getRevenueChart(req, res) {
 
 export async function getTopProducts(req, res) {
   try {
-    const filters = getPeriodFilters(req.query.period || 'year', 'o.');
+    const filters = getPeriodFilters(req.query.period || 'today', 'o.');
     const rows = await query(
       `SELECT
          p.id AS product_id,
@@ -204,7 +234,7 @@ export async function getCategoryShare(req, res) {
 
 export async function getRecentOrders(req, res) {
   try {
-    const filters = getPeriodFilters(req.query.period || 'year', 'o.');
+    const filters = getPeriodFilters(req.query.period || 'today', 'o.');
     const rows = await query(
       `SELECT
          o.id,

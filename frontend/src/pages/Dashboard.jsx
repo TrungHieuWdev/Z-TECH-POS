@@ -4,34 +4,21 @@ import {
   ChevronDown,
   MoreVertical,
   PackageCheck,
+  PackageOpen,
   ReceiptText,
-  Users,
+  TrendingUp,
   WalletCards
 } from 'lucide-react';
 import api from '../api/axios';
+import RevenueAreaChart from '../components/dashboard/RevenueAreaChart';
 import { formatCurrency, formatDate, formatTime } from '../utils/format';
-
-const chartColors = [
-  '#6FAED6',
-  '#8AB8A8',
-  '#D6A56F',
-  '#9D8CC7',
-  '#6E8FB7',
-  '#D18A8A',
-  '#78A6A3',
-  '#B9A36A',
-  '#8FA0A8',
-  '#A98AA4',
-  '#7EA77B',
-  '#C28B72'
-];
 
 const dashboardPeriodOptions = [
   { value: 'today', label: 'Hôm nay' },
-  { value: 'week', label: '7 ngày' },
-  { value: 'month', label: 'Tháng này' },
-  { value: 'year', label: 'Năm nay' },
-  { value: 'all', label: 'Tất cả' }
+  { value: '7days', label: '7 ngày' },
+  { value: '14days', label: '14 ngày' },
+  { value: '30days', label: '30 ngày' },
+  { value: '90days', label: '90 ngày' }
 ];
 
 const cardTones = {
@@ -57,24 +44,41 @@ function formatPercent(value) {
   return `${prefix}${numberValue.toLocaleString('vi-VN')}%`;
 }
 
-function safeNumber(value) { const number = Number(value); return Number.isFinite(number) ? number : 0; }
+function getTodayGrowthCaption(value) {
+  if (value === null || value === undefined) return 'Hôm qua chưa có dữ liệu';
 
-function getRevenueCaption(todayRevenue, yesterdayRevenue) {
-  const today = safeNumber(todayRevenue); const yesterday = safeNumber(yesterdayRevenue);
-  if (yesterday <= 0) return today > 0 ? 'Phát sinh mới hôm nay' : 'Hôm qua chưa có dữ liệu';
-  const delta = today - yesterday;
-  if (delta === 0) return 'Bằng hôm qua';
-  return `${delta > 0 ? 'Tăng' : 'Giảm'} ${formatCurrency(Math.abs(delta))} so với hôm qua`;
+  const numberValue = safeNumber(value);
+  if (numberValue === 0) return 'Bằng hôm qua';
+
+  return `${numberValue > 0 ? 'Tăng' : 'Giảm'} ${formatPercent(Math.abs(numberValue))} so với hôm qua`;
 }
 
-function getCountCaption(todayValue, yesterdayValue, noun) {
-  const today = Math.round(safeNumber(todayValue)); const yesterday = Math.round(safeNumber(yesterdayValue));
-  if (yesterday === 0) return today > 0 ? 'Hôm qua chưa có dữ liệu' : 'Bằng hôm qua';
-  const delta = today - yesterday;
-  if (delta === 0) return 'Bằng hôm qua';
-  return `${delta > 0 ? '+' : '-'}${Math.abs(delta).toLocaleString('vi-VN')} ${noun} so với hôm qua`;
+function safeNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
 }
 
+function getRevenueCaption(currentRevenue, previousRevenue) {
+  const current = safeNumber(currentRevenue);
+  const previous = safeNumber(previousRevenue);
+
+  if (previous <= 0) return current > 0 ? 'Phát sinh mới trong kỳ' : 'Kỳ trước chưa có dữ liệu';
+
+  const delta = current - previous;
+  if (delta === 0) return 'Bằng kỳ trước';
+  return `${delta > 0 ? 'Tăng' : 'Giảm'} ${formatCurrency(Math.abs(delta))} so với kỳ trước`;
+}
+
+function getCountCaption(currentValue, previousValue, noun) {
+  const current = Math.round(safeNumber(currentValue));
+  const previous = Math.round(safeNumber(previousValue));
+
+  if (previous === 0) return current > 0 ? 'Kỳ trước chưa có dữ liệu' : 'Bằng kỳ trước';
+
+  const delta = current - previous;
+  if (delta === 0) return 'Bằng kỳ trước';
+  return `${delta > 0 ? '+' : '-'}${Math.abs(delta).toLocaleString('vi-VN')} ${noun} so với kỳ trước`;
+}
 
 function getInitials(name = '') {
   const words = name.trim().split(/\s+/).filter(Boolean);
@@ -94,13 +98,15 @@ export default function Dashboard() {
     todayOrders: 0,
     yesterdayOrders: 0,
     lowStockCount: 0,
-    todayNewCustomers: 0,
-    yesterdayNewCustomers: 0,
+    productsSold: 0,
+    previousProductsSold: 0,
+    estimatedProfit: 0,
+    previousEstimatedProfit: 0,
     revenueGrowth: 0,
     orderGrowth: 0,
-    customerGrowth: 0
+    productsSoldGrowth: 0,
+    estimatedProfitGrowth: 0
   });
-  const [categoryShare, setCategoryShare] = useState([]);
   const [topProducts, setTopProducts] = useState([]);
   const [recentOrders, setRecentOrders] = useState([]);
   const [dashboardPeriod, setDashboardPeriod] = useState('today');
@@ -110,17 +116,16 @@ export default function Dashboard() {
   useEffect(() => {
     async function fetchDashboard() {
       setIsLoading(true);
+
       try {
         const params = { period: dashboardPeriod };
-        const [summaryRes, categoryRes, topRes, recentRes] = await Promise.all([
+        const [summaryRes, topRes, recentRes] = await Promise.all([
           api.get('/dashboard/summary', { params }),
-          api.get('/dashboard/category-share', { params }),
           api.get('/dashboard/top-products', { params }),
           api.get('/dashboard/recent-orders', { params })
         ]);
 
         setSummary(summaryRes.data);
-        setCategoryShare(categoryRes.data);
         setTopProducts(topRes.data);
         setRecentOrders(recentRes.data);
         setError('');
@@ -134,60 +139,28 @@ export default function Dashboard() {
     fetchDashboard();
   }, [dashboardPeriod]);
 
-  const donutBackground = useMemo(() => {
-    if (categoryShare.length === 0) {
-      return '#f3f4f5';
-    }
-
-    let cursor = 0;
-    const segments = categoryShare.map((item, index) => {
-      const start = cursor;
-      const end = Math.min(cursor + Number(item.percentage || 0), 100);
-      cursor = end;
-      return `${chartColors[index % chartColors.length]} ${start}% ${end}%`;
-    });
-
-    if (cursor < 100) {
-      segments.push(`#f3f4f5 ${cursor}% 100%`);
-    }
-
-    return `conic-gradient(${segments.join(', ')})`;
-  }, [categoryShare]);
-
-  const categoryRevenueTotal = useMemo(() => {
-    return categoryShare.reduce((sum, item) => sum + Number(item.revenue || 0), 0);
-  }, [categoryShare]);
-
-  const revenueSparkline = {
-    hasData: false,
-    total: 0,
-    bars: []
-  };
-
   const dashboardPeriodLabel = useMemo(() => {
     return dashboardPeriodOptions.find((option) => option.value === dashboardPeriod)?.label || dashboardPeriodOptions[0].label;
   }, [dashboardPeriod]);
 
-  const comparisonCaption = (caption) => {
-    if (dashboardPeriod === 'today') return caption;
-    return caption
-      .replaceAll('hôm qua', 'kỳ trước')
-      .replaceAll('Hôm qua', 'Kỳ trước')
-      .replaceAll('hôm nay', 'trong kỳ');
-  };
+  const revenueComparisonAmount = safeNumber(summary.todayRevenue) - safeNumber(summary.yesterdayRevenue);
 
   const cards = [
     {
-      label: `Doanh thu · ${dashboardPeriodLabel}`,
+      label: `Doanh thu - ${dashboardPeriodLabel}`,
       value: formatCurrency(summary.todayRevenue),
-      caption: `${formatPercent(summary.revenueGrowth)} so với hôm qua`,
+      caption: dashboardPeriod === 'today'
+        ? getTodayGrowthCaption(summary.revenueGrowth)
+        : getRevenueCaption(summary.todayRevenue, summary.yesterdayRevenue),
       icon: WalletCards,
       tone: 'blue'
     },
     {
-      label: `Đơn hàng · ${dashboardPeriodLabel}`,
+      label: `Đơn hàng - ${dashboardPeriodLabel}`,
       value: safeNumber(summary.todayOrders).toLocaleString('vi-VN'),
-      caption: `${formatPercent(summary.orderGrowth)} so với hôm qua`,
+      caption: dashboardPeriod === 'today'
+        ? getTodayGrowthCaption(summary.orderGrowth)
+        : getCountCaption(summary.todayOrders, summary.yesterdayOrders, 'đơn'),
       icon: ReceiptText,
       tone: 'gray'
     },
@@ -196,54 +169,28 @@ export default function Dashboard() {
       value: `${safeNumber(summary.lowStockCount).toLocaleString('vi-VN')} sản phẩm`,
       caption: summary.lowStockCount > 0 ? 'Dưới mức tồn tối thiểu' : 'Kho đang ổn định',
       icon: PackageCheck,
-      tone: 'amber'
+      tone: 'amber',
+      to: '/products?lowStock=1'
     },
     {
-      label: `Khách hàng mới · ${dashboardPeriodLabel}`,
-      value: safeNumber(summary.todayNewCustomers ?? summary.newCustomers).toLocaleString('vi-VN'),
-      caption: `${formatPercent(summary.customerGrowth)} so với hôm qua`,
-      icon: Users,
+      label: `Sản phẩm đã bán - ${dashboardPeriodLabel}`,
+      value: safeNumber(summary.productsSold).toLocaleString('vi-VN'),
+      caption: dashboardPeriod === 'today'
+        ? getTodayGrowthCaption(summary.productsSoldGrowth)
+        : getCountCaption(summary.productsSold, summary.previousProductsSold, 'sản phẩm'),
+      icon: PackageOpen,
       tone: 'slate'
+    },
+    {
+      label: `Lợi nhuận tạm tính - ${dashboardPeriodLabel}`,
+      value: formatCurrency(summary.estimatedProfit),
+      caption: dashboardPeriod === 'today'
+        ? getTodayGrowthCaption(summary.estimatedProfitGrowth)
+        : getRevenueCaption(summary.estimatedProfit, summary.previousEstimatedProfit),
+      icon: TrendingUp,
+      tone: 'gray'
     }
   ];
-
-  const dashboardCards = cards.map((card, index) => {
-    if (index === 0) {
-      return {
-        ...card,
-        caption: dashboardPeriod === 'all'
-          ? 'Tổng doanh thu toàn thời gian'
-          : comparisonCaption(getRevenueCaption(summary.todayRevenue, summary.yesterdayRevenue))
-      };
-    }
-
-    if (index === 1) {
-      return {
-        ...card,
-        caption: dashboardPeriod === 'all'
-          ? 'Tổng đơn hàng toàn thời gian'
-          : comparisonCaption(getCountCaption(summary.todayOrders, summary.yesterdayOrders, 'đơn'))
-      };
-    }
-
-    if (index === 2) {
-      return {
-        ...card,
-        to: '/products?lowStock=1'
-      };
-    }
-
-    if (index === 3) {
-      return {
-        ...card,
-        caption: dashboardPeriod === 'all'
-          ? 'Tổng khách hàng toàn thời gian'
-          : comparisonCaption(getCountCaption(summary.todayNewCustomers ?? summary.newCustomers, summary.yesterdayNewCustomers ?? summary.yesterdayCustomers, 'khách'))
-      };
-    }
-
-    return card;
-  });
 
   return (
     <div className="space-y-6">
@@ -275,8 +222,8 @@ export default function Dashboard() {
         </div>
       )}
 
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        {dashboardCards.map((card) => {
+      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        {cards.map((card) => {
           const Icon = card.icon;
           const CardWrapper = card.to ? Link : 'article';
 
@@ -284,20 +231,20 @@ export default function Dashboard() {
             <CardWrapper
               key={card.label}
               to={card.to}
-              className={`rounded-lg border bg-white p-4 shadow-[0_1px_3px_rgba(25,28,29,0.08)] ${card.tone === 'amber' && summary.lowStockCount > 0 ? 'border-red-500' : 'border-[#e1e3e4]'} ${
+              className={`rounded-lg border bg-white p-3 shadow-[0_1px_3px_rgba(25,28,29,0.08)] ${card.tone === 'amber' && summary.lowStockCount > 0 ? 'border-red-500' : 'border-[#e1e3e4]'} ${
                 card.to ? 'block transition hover:border-[#c8dff0] hover:shadow-[0_8px_24px_rgba(116,184,224,0.18)]' : ''
               }`}
             >
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className={`text-sm font-semibold ${card.tone === 'amber' && summary.lowStockCount > 0 ? 'text-red-700' : 'text-[#73777d]'}`}>{card.label}</p>
-                  <p className="mt-3 text-xl font-bold leading-6 text-[#191c1d]">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className={`truncate text-xs font-semibold ${card.tone === 'amber' && summary.lowStockCount > 0 ? 'text-red-700' : 'text-[#73777d]'}`}>{card.label}</p>
+                  <p className="mt-2 text-lg font-bold leading-6 text-[#191c1d]">
                     {isLoading ? '...' : card.value}
                   </p>
-                  <p className="mt-1.5 text-sm font-medium text-[#43474d]">{card.caption}</p>
+                  <p className="mt-1 line-clamp-2 text-xs font-medium leading-4 text-[#43474d]">{card.caption}</p>
                 </div>
-                <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${cardTones[card.tone]}`}>
-                  <Icon size={18} />
+                <div className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${cardTones[card.tone]}`}>
+                  <Icon size={17} />
                 </div>
               </div>
             </CardWrapper>
@@ -306,101 +253,12 @@ export default function Dashboard() {
       </section>
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.75fr)]">
-        <article className="rounded-lg border border-[#e1e3e4] bg-white p-4 shadow-[0_1px_3px_rgba(25,28,29,0.08)]">
-          <div className="mb-3 flex items-start justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-semibold leading-6 text-[#191c1d]">Cơ cấu doanh thu</h2>
-              <p className="mt-0.5 text-xs font-medium text-[#73777d]">Phân bổ theo nhóm sản phẩm</p>
-            </div>
-            <span className="rounded-lg bg-brand-surface px-3 py-2 text-sm font-semibold text-brand-ink">
-              {dashboardPeriodLabel}
-            </span>
-            <button
-              type="button"
-              className="hidden h-8 items-center gap-2 rounded-lg bg-brand-surface px-3 text-xs font-semibold text-brand-ink transition hover:bg-brand-soft"
-            >
-              Tháng này
-              <ChevronDown size={16} />
-            </button>
-          </div>
-
-          <div className="grid min-h-[230px] items-center gap-8 md:grid-cols-[minmax(240px,0.95fr)_minmax(260px,0.72fr)]">
-            <div className="flex justify-center">
-              <div
-                className="relative grid h-48 w-48 place-items-center rounded-full"
-                data-preserve-radius="circle"
-                style={{ background: donutBackground }}
-                aria-label="Cơ cấu doanh thu theo danh mục"
-              >
-                <div className="grid h-28 w-28 place-items-center rounded-full bg-white shadow-[inset_0_0_0_1px_rgba(225,227,228,0.8)]" data-preserve-radius="circle">
-                  <div className="text-center [&>div:last-child]:hidden">
-                    <div className="px-2 text-[13px] font-bold leading-tight text-[#191c1d]">
-                      {categoryRevenueTotal > 0 ? formatCurrency(categoryRevenueTotal) : '0 đ'}
-                    </div>
-                    <div className="mt-1 text-xs font-medium text-[#73777d]">{dashboardPeriodLabel}</div>
-                    <div className="mt-1 text-xs font-medium text-[#73777d]">Tổng cộng</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="hidden mx-auto w-full max-w-[170px]">
-              <div className="mb-2 flex items-end justify-between gap-3">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase text-[#73777d]">Xu hướng</p>
-                  <p className="mt-0.5 text-xs font-bold text-[#191c1d]">
-                    {revenueSparkline.hasData ? formatCurrency(revenueSparkline.total) : '0 đ'}
-                  </p>
-                </div>
-              </div>
-              <svg
-                viewBox="0 0 132 46"
-                className="h-[46px] w-full overflow-visible"
-                role="img"
-                aria-label="Biểu đồ nhỏ doanh thu theo danh mục"
-              >
-                <line x1="5" y1="41" x2="127" y2="41" stroke="#e1e3e4" strokeWidth="1" />
-                {revenueSparkline.hasData ? (
-                  <>
-                    {revenueSparkline.bars.map((bar, index) => {
-                      const barWidth = 12;
-                      const gap = revenueSparkline.bars.length > 1 ? (122 - barWidth * revenueSparkline.bars.length) / (revenueSparkline.bars.length - 1) : 0;
-                      const x = 5 + index * (barWidth + Math.max(gap, 6));
-                      const y = 41 - bar.height;
-
-                      return <rect key={`${bar.value}-${index}`} x={x} y={y} width={barWidth} height={bar.height} rx="4" fill={bar.color} />;
-                    })}
-                  </>
-                ) : (
-                  [0, 1, 2, 3].map((item) => (
-                    <rect key={item} x={10 + item * 28} y="30" width="12" height="11" rx="4" fill="#dfe3e6" />
-                  ))
-                )}
-              </svg>
-            </div>
-
-            <div className="ml-auto w-full max-w-[320px] space-y-1.5">
-              {categoryShare.length === 0 && (
-                <p className="text-sm font-medium text-[#73777d]">Chưa có doanh thu trong tháng này.</p>
-              )}
-              {categoryShare.map((item, index) => (
-                <div key={item.name} className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-0.5 py-1">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <span
-                      className="h-3 w-3 shrink-0 rounded-full"
-                      style={{ backgroundColor: chartColors[index % chartColors.length] }}
-                    />
-                    <span className="truncate text-sm font-semibold text-[#43474d]">{item.name}</span>
-                  </div>
-                  <div className="shrink-0 text-right leading-tight">
-                    <div className="text-sm font-bold text-[#191c1d]">{item.percentage}%</div>
-                    <div className="mt-0.5 text-xs font-medium text-[#73777d]">{formatCurrency(item.revenue)}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </article>
+        <RevenueAreaChart
+          totalRevenue={summary.todayRevenue}
+          comparisonAmount={revenueComparisonAmount}
+          period={dashboardPeriod}
+          periodLabel={dashboardPeriodLabel}
+        />
 
         <article className="rounded-lg border border-[#e1e3e4] bg-white p-4 shadow-[0_1px_3px_rgba(25,28,29,0.08)]">
           <div className="mb-3 flex items-center justify-between gap-4">
@@ -412,7 +270,7 @@ export default function Dashboard() {
 
           <div className="space-y-3">
             {topProducts.length === 0 && (
-              <p className="text-sm font-medium text-[#73777d]">Chưa có sản phẩm bán chạy trong 30 ngày gần đây.</p>
+              <p className="text-sm font-medium text-[#73777d]">Chưa có sản phẩm bán chạy trong kỳ này.</p>
             )}
             {topProducts.slice(0, 5).map((product) => (
               <div key={product.product_id} className="flex items-start justify-between gap-4">

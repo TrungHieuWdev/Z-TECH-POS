@@ -158,11 +158,12 @@ export default function Products() {
   const [searchParams, setSearchParams] = useSearchParams();
   const hasFullAccess = isFullAccessRole(getUser()?.role);
   const lowStockOnly = searchParams.get('lowStock') === '1';
+  const selectedCategoryId = searchParams.get('category_id') || '';
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [deviceModels, setDeviceModels] = useState([]);
   const [search, setSearch] = useState('');
-  const [categoryId, setCategoryId] = useState('');
+  const [categoryId, setCategoryId] = useState(selectedCategoryId);
   const [deviceFamily, setDeviceFamily] = useState('');
   const [stockFilter, setStockFilter] = useState('');
   const [warrantyFilter, setWarrantyFilter] = useState('');
@@ -411,6 +412,10 @@ export default function Products() {
   useEffect(() => {
     if (lowStockOnly) setActiveTab('low');
   }, [lowStockOnly]);
+
+  useEffect(() => {
+    setCategoryId(selectedCategoryId);
+  }, [selectedCategoryId]);
 
   const openCreate = () => {
     setEditingProduct(null);

@@ -20,7 +20,7 @@ import settingsRoutes from './routes/settings.js';
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = Number(process.env.PORT || 5000);
 
 const allowedOrigins = new Set([
   process.env.FRONTEND_ORIGIN,
@@ -133,6 +133,16 @@ app.use((req, res) => {
   res.status(404).json({ message: 'Không tìm thấy API' });
 });
 
-app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on http://0.0.0.0:${PORT}`);
+});
+
+server.on('error', (error) => {
+  if (error.code === 'EADDRINUSE') {
+    console.error(`\nKhong the khoi dong backend: port ${PORT} dang duoc tien trinh khac su dung.`);
+    console.error(`Hay chay: npm run dev de tu dong giai phong port ${PORT}, hoac doi PORT trong file .env.\n`);
+    process.exit(1);
+  }
+
+  throw error;
 });

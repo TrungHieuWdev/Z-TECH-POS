@@ -6,11 +6,15 @@ INSERT INTO users (id, name, employee_code, email, password, role) VALUES
 (3, 'Nhân viên', 'NV001', 'employee@pos.com', '$2a$10$gP1nmk.Bvd80W7hfPCJuD.5RZ6qwwCZPG4TEuEde013Z3Nz6CH5FC', 'employee');
 
 INSERT INTO categories (id, name, description) VALUES
-(1, 'Ốp lưng', 'Ốp lưng theo đúng model máy'),
-(2, 'Sạc & cáp', 'Cáp sạc, củ sạc, sạc không dây theo chuẩn cổng'),
-(3, 'Tai nghe & âm thanh', 'Tai nghe dây, Bluetooth và phụ kiện âm thanh'),
-(4, 'Kính cường lực', 'Kính màn hình và kính camera theo từng model'),
-(5, 'Phụ kiện tiện ích', 'Giá đỡ, dán lưng, túi chống nước và phụ kiện hỗ trợ');
+(1, 'Cường lực màn hình', 'Kính cường lực theo từng model máy, phục vụ bán kèm khi khách mua ốp hoặc thay phụ kiện.'),
+(2, 'Cường lực camera', 'Kính bảo vệ cụm camera sau, dễ tư vấn theo từng dòng máy.'),
+(3, 'Ốp lưng', 'Ốp lưng theo model, chất liệu và kiểu dáng để trưng bày tại quầy.'),
+(4, 'Sạc & cáp', 'Củ sạc, cáp sạc, sạc nhanh và phụ kiện nguồn dùng hằng ngày.'),
+(5, 'Tai nghe', 'Tai nghe dây, tai nghe Bluetooth và phụ kiện âm thanh cá nhân.'),
+(6, 'Loa bluetooth', 'Loa di động, loa mini và phụ kiện âm thanh bán kèm.'),
+(7, 'Phụ kiện chụp ảnh', 'Tripod, gậy selfie, đèn livestream và phụ kiện hỗ trợ quay chụp.'),
+(8, 'Phụ kiện vệ sinh', 'Bộ vệ sinh màn hình, khăn lau, dung dịch và dụng cụ chăm sóc thiết bị.'),
+(9, 'Miếng dán PPF', 'Miếng dán lưng, viền và màn hình PPF theo model máy.');
 
 DROP TEMPORARY TABLE IF EXISTS product_templates;
 CREATE TEMPORARY TABLE product_templates (
@@ -78,11 +82,11 @@ INSERT INTO device_models (id, family, name, series, release_year, notes) VALUES
 (50, 'xiaomi', 'Xiaomi 15', 'Xiaomi', 2025, 'Xiaomi flagship dùng cho giai đoạn bán 2025-2026');
 
 INSERT INTO product_templates VALUES
-(1, 1, 'Ốp lưng chống sốc', 'Ốp lưng bảo vệ bốn góc, ôm sát model máy, phù hợp bán tại quầy.', 129000, 62000, 28, 6, 'Case'),
-(2, 4, 'Kính cường lực full màn', 'Kính 9H full màn, chống xước, cảm ứng mượt, cắt đúng model.', 79000, 26000, 45, 10, 'Glass'),
-(3, 4, 'Kính camera sau', 'Bộ kính bảo vệ cụm camera, dễ lắp, không ảnh hưởng chất lượng ảnh.', 69000, 24000, 34, 8, 'Lens'),
-(4, 2, 'Bộ sạc nhanh tương thích', 'Cáp và củ sạc nhanh tương thích chuẩn cổng của model máy.', 249000, 145000, 18, 5, 'Charger'),
-(5, 5, 'Giá đỡ kiêm dán lưng tiện ích', 'Phụ kiện tiện ích dùng kèm hằng ngày, trưng bày theo đúng model.', 99000, 42000, 25, 6, 'Utility');
+(1, 3, 'Ốp lưng chống sốc', 'Ốp lưng bảo vệ bốn góc, ôm sát model máy, phù hợp bán tại quầy.', 129000, 62000, 28, 6, 'Case'),
+(2, 1, 'Cường lực full màn', 'Kính 9H full màn, chống xước, cảm ứng mượt, cắt đúng model.', 79000, 26000, 45, 10, 'Glass'),
+(3, 2, 'Cường lực camera sau', 'Bộ kính bảo vệ cụm camera, dễ lắp, không ảnh hưởng chất lượng ảnh.', 69000, 24000, 34, 8, 'Lens'),
+(4, 4, 'Bộ sạc nhanh tương thích', 'Cáp và củ sạc nhanh tương thích chuẩn cổng của model máy.', 249000, 145000, 18, 5, 'Charger'),
+(5, 9, 'Miếng dán PPF mặt lưng', 'Miếng dán PPF trong suốt, hạn chế trầy xước và giữ dáng máy khi dùng hằng ngày.', 99000, 42000, 25, 6, 'Utility');
 
 INSERT INTO products
 (category_id, device_model_id, name, description, price, cost_price, stock_quantity, min_stock, image_url)

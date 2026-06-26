@@ -37,7 +37,6 @@ const extraItems = [
   { to: '/promotions', label: 'Khuyến mãi', icon: Tags },
   { to: '/warranties', label: 'Bảo hành', icon: BadgeCheck },
   { to: '/activity-logs', label: 'Nhật ký hoạt động', icon: History },
-  { label: 'AI gợi ý', icon: BrainCircuit }
 ];
 
 const employeeAllowedPaths = new Set(['/', '/pos', '/orders', '/products', '/inventory', '/customers', '/shifts', '/promotions', '/warranties']);

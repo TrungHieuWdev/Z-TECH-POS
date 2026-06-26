@@ -1,32 +1,120 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Edit, Plus, Search, Trash2 } from 'lucide-react';
+import {
+  Edit,
+  Eye,
+  EyeOff,
+  FolderOpen,
+  PackageCheck,
+  PackagePlus,
+  Plus,
+  Search,
+  Trash2
+} from 'lucide-react';
 import api from '../api/axios';
 import Modal from '../components/Modal';
 import { formatDate } from '../utils/format';
 
 const initialForm = { name: '', description: '' };
 
+const statusFilters = [
+  { value: 'all', label: 'Tất cả' },
+  { value: 'active', label: 'Đang sử dụng' },
+  { value: 'empty', label: 'Chưa có sản phẩm' },
+  { value: 'hidden', label: 'Tạm ẩn' }
+];
+
+function getCategoryStatus(category) {
+  if (category.status === 'hidden' || Number(category.is_active) === 0) return 'hidden';
+  return Number(category.productCount || 0) > 0 ? 'active' : 'empty';
+}
+
+function getStatusMeta(status) {
+  if (status === 'hidden') {
+    return { label: 'Tạm ẩn', className: 'bg-gray-100 text-gray-600' };
+  }
+
+  if (status === 'empty') {
+    return { label: 'Chưa có sản phẩm', className: 'bg-amber-50 text-amber-700' };
+  }
+
+  return { label: 'Đang sử dụng', className: 'bg-emerald-50 text-emerald-700' };
+}
+
+function getShortDescription(category) {
+  const description = String(category.description || '').trim();
+  if (description) return description;
+  return 'Dùng để nhóm sản phẩm khi bán hàng, nhập kho và xem báo cáo.';
+}
+
 export default function Categories() {
+  const navigate = useNavigate();
   const [categories, setCategories] = useState([]);
+  const [products, setProducts] = useState([]);
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [form, setForm] = useState(initialForm);
   const [editingCategory, setEditingCategory] = useState(null);
   const [isOpen, setIsOpen] = useState(false);
 
-  async function loadCategories() {
-    const response = await api.get('/categories');
-    setCategories(response.data);
+  async function loadData() {
+    const [categoryResponse, productResponse] = await Promise.all([
+      api.get('/categories'),
+      api.get('/products')
+    ]);
+    setCategories(categoryResponse.data);
+    setProducts(productResponse.data);
   }
 
   useEffect(() => {
-    loadCategories();
+    loadData().catch((error) => {
+      toast.error(error.response?.data?.message || 'Không thể tải danh mục');
+    });
   }, []);
 
+  const enrichedCategories = useMemo(() => {
+    const productCountByCategory = products.reduce((map, product) => {
+      const key = String(product.category_id || '');
+      if (!key) return map;
+      map.set(key, (map.get(key) || 0) + 1);
+      return map;
+    }, new Map());
+
+    return categories.map((category) => {
+      const productCount = productCountByCategory.get(String(category.id)) || 0;
+      const status = getCategoryStatus({ ...category, productCount });
+
+      return {
+        ...category,
+        productCount,
+        status
+      };
+    });
+  }, [categories, products]);
+
+  const summary = useMemo(() => ({
+    total: enrichedCategories.length,
+    active: enrichedCategories.filter((category) => category.status === 'active').length,
+    empty: enrichedCategories.filter((category) => category.status === 'empty').length,
+    hidden: enrichedCategories.filter((category) => category.status === 'hidden').length
+  }), [enrichedCategories]);
+
   const filteredCategories = useMemo(() => {
-    const keyword = search.toLowerCase();
-    return categories.filter((category) => category.name.toLowerCase().includes(keyword));
-  }, [categories, search]);
+    const keyword = search.trim().toLowerCase();
+
+    return enrichedCategories.filter((category) => {
+      const searchable = [
+        category.name,
+        category.description,
+        getStatusMeta(category.status).label
+      ].join(' ').toLowerCase();
+
+      if (keyword && !searchable.includes(keyword)) return false;
+      if (statusFilter !== 'all' && category.status !== statusFilter) return false;
+      return true;
+    });
+  }, [enrichedCategories, search, statusFilter]);
 
   const openCreate = () => {
     setEditingCategory(null);
@@ -59,13 +147,18 @@ export default function Categories() {
       }
 
       closeModal();
-      await loadCategories();
+      await loadData();
     } catch (error) {
       toast.error(error.response?.data?.message || 'Không thể lưu danh mục');
     }
   };
 
   const handleDelete = async (category) => {
+    if (Number(category.productCount || 0) > 0) {
+      toast.error('Không thể xóa danh mục đang có sản phẩm. Vui lòng chuyển sản phẩm sang danh mục khác trước.');
+      return;
+    }
+
     if (!window.confirm(`Xóa danh mục "${category.name}"?`)) {
       return;
     }
@@ -73,82 +166,176 @@ export default function Categories() {
     try {
       await api.delete(`/categories/${category.id}`);
       toast.success('Đã xóa danh mục');
-      await loadCategories();
+      await loadData();
     } catch (error) {
       toast.error(error.response?.data?.message || 'Không thể xóa danh mục');
     }
   };
 
+  const viewProducts = (category) => {
+    navigate(`/products?category_id=${category.id}`);
+  };
+
+  const summaryCards = [
+    { label: 'Tổng danh mục', value: summary.total, icon: FolderOpen, tone: 'bg-brand-surface text-brand-strong' },
+    { label: 'Đang sử dụng', value: summary.active, icon: PackageCheck, tone: 'bg-emerald-50 text-emerald-700' },
+    { label: 'Chưa có sản phẩm', value: summary.empty, icon: PackagePlus, tone: 'bg-amber-50 text-amber-700' },
+    { label: 'Tạm ẩn', value: summary.hidden, icon: EyeOff, tone: 'bg-gray-100 text-gray-600' }
+  ];
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-950">Nhóm sản phẩm theo loại phụ kiện</h1>
-          <p className="text-gray-600">Quản lý các nhóm sản phẩm để dễ dàng phân loại và tìm kiếm</p>
-        </div>
-        <button
-          type="button"
-          onClick={openCreate}
-          className="flex items-center gap-2 rounded-lg bg-[#74B8E0] px-4 py-2.5 font-semibold text-white transition hover:bg-[#74B8E0] active:bg-[#74B8E0]"
-        >
-          <Plus size={18} />
-          <span>Thêm danh mục</span>
-        </button>
-      </div>
-
-      <div className="rounded-lg bg-white p-4 shadow-sm">
-        <div className="flex max-w-xl items-center gap-2 rounded-lg border border-gray-300 px-3 py-2">
-          <Search size={18} className="text-gray-400" />
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            className="w-full outline-none"
-            placeholder="Tìm danh mục"
-          />
+          <h1 className="text-2xl font-extrabold text-gray-950">Danh mục sản phẩm</h1>
+          <p className="mt-1 text-sm font-medium text-gray-500">
+            Quản lý nhóm sản phẩm dùng để phân loại hàng hóa, nhập kho và báo cáo bán hàng.
+          </p>
         </div>
       </div>
 
-      <section className="rounded-lg bg-white shadow-sm">
+      <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        {summaryCards.map((card) => (
+          <article key={card.label} className="flex min-w-0 items-center gap-3 border border-gray-200 bg-white px-4 py-3 shadow-sm">
+            <div className={`grid h-10 w-10 shrink-0 place-items-center ${card.tone}`}>
+              <card.icon size={19} />
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-xs font-bold uppercase tracking-wide text-gray-500">{card.label}</p>
+              <p className="mt-0.5 text-xl font-extrabold text-gray-950">{card.value}</p>
+            </div>
+          </article>
+        ))}
+      </section>
+
+      <section className="border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+          <div className="relative min-w-0 flex-1">
+            <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              className="h-10 w-full border border-gray-300 pl-10 pr-3 text-sm outline-none focus:border-brand"
+              placeholder="Tìm danh mục..."
+            />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {statusFilters.map((filter) => (
+              <button
+                key={filter.value}
+                type="button"
+                onClick={() => setStatusFilter(filter.value)}
+                className={`h-10 border px-3 text-sm font-bold transition ${
+                  statusFilter === filter.value
+                    ? 'border-brand bg-brand-surface text-brand-deep'
+                    : 'border-gray-200 bg-white text-gray-600 hover:border-brand hover:text-brand-strong'
+                }`}
+              >
+                {filter.label}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={openCreate}
+            className="flex h-10 shrink-0 items-center justify-center gap-2 bg-brand px-4 text-sm font-bold text-white transition hover:bg-brand-strong"
+          >
+            <Plus size={18} />
+            <span>Thêm danh mục</span>
+          </button>
+        </div>
+      </section>
+
+      <section className="border border-gray-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-left text-sm">
-            <thead className="bg-gray-50 text-gray-500">
+          <table className="w-full min-w-[1040px] table-fixed text-left text-sm">
+            <colgroup>
+              <col className="w-[22%]" />
+              <col className="w-[12%]" />
+              <col className="w-[28%]" />
+              <col className="w-[14%]" />
+              <col className="w-[11%]" />
+              <col className="w-[13%]" />
+            </colgroup>
+            <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
               <tr>
-                <th className="px-4 py-3 font-semibold">Tên</th>
-                <th className="px-4 py-3 font-semibold">Mô tả</th>
-                <th className="px-4 py-3 font-semibold">Ngày tạo</th>
-                <th className="px-4 py-3 font-semibold text-right">Thao tác</th>
+                <th className="px-4 py-3 font-bold">Tên danh mục</th>
+                <th className="px-4 py-3 font-bold">Số sản phẩm</th>
+                <th className="px-4 py-3 font-bold">Mô tả ngắn</th>
+                <th className="px-4 py-3 font-bold">Trạng thái</th>
+                <th className="px-4 py-3 font-bold">Ngày tạo</th>
+                <th className="px-4 py-3 text-right font-bold">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {filteredCategories.map((category) => (
-                <tr key={category.id}>
-                  <td className="px-4 py-3 font-medium text-gray-950">{category.name}</td>
-                  <td className="px-4 py-3 text-gray-600">{category.description}</td>
-                  <td className="px-4 py-3 text-gray-600">{formatDate(category.created_at)}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={() => openEdit(category)}
-                        className="rounded-lg p-2 text-gray-500 transition hover:bg-brand-surface hover:text-brand-strong"
-                        title="Sửa"
-                        aria-label="Sửa"
-                      >
-                        <Edit size={17} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(category)}
-                        className="rounded-lg p-2 text-gray-500 transition hover:bg-red-50 hover:text-red-600"
-                        title="Xóa"
-                        aria-label="Xóa"
-                      >
-                        <Trash2 size={17} />
-                      </button>
-                    </div>
+              {filteredCategories.map((category) => {
+                const statusMeta = getStatusMeta(category.status);
+                const canDelete = Number(category.productCount || 0) === 0;
+
+                return (
+                  <tr key={category.id} className="hover:bg-brand-surface/50">
+                    <td className="px-4 py-3">
+                      <p className="truncate font-bold text-gray-950">{category.name}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="font-extrabold text-gray-950">{category.productCount}</span>
+                      <span className="ml-1 text-xs font-medium text-gray-500">sản phẩm</span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="line-clamp-2 text-gray-600">{getShortDescription(category)}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex px-2.5 py-1 text-xs font-bold ${statusMeta.className}`}>
+                        {statusMeta.label}
+                      </span>
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-gray-600">{formatDate(category.created_at)}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex justify-end gap-1">
+                        <button
+                          type="button"
+                          onClick={() => viewProducts(category)}
+                          className="inline-flex h-8 items-center gap-1.5 px-2 text-xs font-bold text-brand-strong transition hover:bg-brand-surface"
+                          title="Xem sản phẩm"
+                        >
+                          <Eye size={15} />
+                          <span>Xem</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openEdit(category)}
+                          className="grid h-8 w-8 place-items-center text-gray-500 transition hover:bg-brand-surface hover:text-brand-strong"
+                          title="Sửa"
+                          aria-label="Sửa"
+                        >
+                          <Edit size={16} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(category)}
+                          disabled={!canDelete}
+                          className={`grid h-8 w-8 place-items-center transition ${
+                            canDelete
+                              ? 'text-gray-500 hover:bg-red-50 hover:text-red-600'
+                              : 'cursor-not-allowed text-gray-300'
+                          }`}
+                          title={canDelete ? 'Xóa' : 'Không thể xóa danh mục đang có sản phẩm. Vui lòng chuyển sản phẩm sang danh mục khác trước.'}
+                          aria-label="Xóa"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              {filteredCategories.length === 0 && (
+                <tr>
+                  <td colSpan="6" className="px-4 py-12 text-center text-gray-500">
+                    Không tìm thấy danh mục phù hợp.
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>
@@ -161,7 +348,7 @@ export default function Categories() {
             <input
               value={form.name}
               onChange={(event) => setForm({ ...form, name: event.target.value })}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-brand"
+              className="w-full border border-gray-300 px-3 py-2 outline-none focus:border-brand"
               required
             />
           </label>
@@ -170,14 +357,14 @@ export default function Categories() {
             <textarea
               value={form.description}
               onChange={(event) => setForm({ ...form, description: event.target.value })}
-              className="min-h-28 w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-brand"
+              className="min-h-28 w-full border border-gray-300 px-3 py-2 outline-none focus:border-brand"
             />
           </label>
           <div className="flex justify-end gap-3">
-            <button type="button" onClick={closeModal} className="rounded-lg border border-gray-300 px-4 py-2 font-medium">
+            <button type="button" onClick={closeModal} className="border border-gray-300 px-4 py-2 font-medium">
               Hủy
             </button>
-            <button type="submit" className="rounded-lg bg-brand px-4 py-2 font-semibold text-brand-ink hover:bg-brand-muted">
+            <button type="submit" className="bg-brand px-4 py-2 font-semibold text-white hover:bg-brand-strong">
               Lưu
             </button>
           </div>
