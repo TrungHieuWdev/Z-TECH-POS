@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import path from 'path';
 import authRoutes from './routes/auth.js';
 import productRoutes from './routes/products.js';
 import deviceModelRoutes from './routes/deviceModels.js';
@@ -62,6 +63,7 @@ app.use(cors({
   credentials: true
 }));
 app.use(express.json());
+app.use('/uploads', express.static(path.resolve('uploads')));
 
 app.get('/', (req, res) => {
   res.type('html').send(`

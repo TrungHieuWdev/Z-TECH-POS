@@ -11,6 +11,7 @@ import {
   LogOut,
   Package,
   ReceiptText,
+  Settings,
   ShoppingCart,
   Tags,
   Truck,
@@ -37,6 +38,7 @@ const extraItems = [
   { to: '/promotions', label: 'Khuyến mãi', icon: Tags },
   { to: '/warranties', label: 'Bảo hành', icon: BadgeCheck },
   { to: '/activity-logs', label: 'Nhật ký hoạt động', icon: History },
+  { to: '/settings', label: 'Cài đặt', icon: Settings },
 ];
 
 const employeeAllowedPaths = new Set(['/', '/pos', '/orders', '/products', '/inventory', '/customers', '/shifts', '/promotions', '/warranties']);

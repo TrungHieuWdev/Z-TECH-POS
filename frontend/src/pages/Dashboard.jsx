@@ -98,9 +98,9 @@ function describeDonutSegment(centerX, centerY, outerRadius, innerRadius, startA
 
 function getConnectorPoints(centerX, centerY, radius, angle, side = 'right') {
   const start = polarToCartesian(centerX, centerY, radius - 4, angle);
-  const elbow = polarToCartesian(centerX, centerY, radius + 20, angle);
+  const elbow = polarToCartesian(centerX, centerY, radius + 16, angle);
   const end = {
-    x: elbow.x + (side === 'right' ? 28 : -28),
+    x: elbow.x + (side === 'right' ? 24 : -24),
     y: elbow.y
   };
 
@@ -108,8 +108,8 @@ function getConnectorPoints(centerX, centerY, radius, angle, side = 'right') {
 }
 
 function getConnectorLabelPoint(centerX, centerY, radius, angle, side = 'right') {
-  const elbow = polarToCartesian(centerX, centerY, radius + 20, angle);
-  const endX = elbow.x + (side === 'right' ? 28 : -28);
+  const elbow = polarToCartesian(centerX, centerY, radius + 16, angle);
+  const endX = elbow.x + (side === 'right' ? 24 : -24);
 
   return {
     x: endX + (side === 'right' ? 8 : -8),
@@ -210,7 +210,7 @@ export default function Dashboard() {
   const cards = [
     {
       id: 'revenue',
-      label: `Doanh thu - ${dashboardPeriodLabel}`,
+      label: 'Doanh thu',
       value: formatCurrency(summary.todayRevenue),
       caption: displayedPeriod === 'today'
         ? getTodayGrowthCaption(summary.revenueGrowth)
@@ -220,7 +220,7 @@ export default function Dashboard() {
     },
     {
       id: 'orders',
-      label: `Đơn hàng - ${dashboardPeriodLabel}`,
+      label: 'Đơn hàng',
       value: safeNumber(summary.todayOrders).toLocaleString('vi-VN'),
       caption: displayedPeriod === 'today'
         ? getTodayGrowthCaption(summary.orderGrowth)
@@ -239,7 +239,7 @@ export default function Dashboard() {
     },
     {
       id: 'products-sold',
-      label: `Sản phẩm đã bán - ${dashboardPeriodLabel}`,
+      label: 'Sản phẩm đã bán',
       value: safeNumber(summary.productsSold).toLocaleString('vi-VN'),
       caption: displayedPeriod === 'today'
         ? getTodayGrowthCaption(summary.productsSoldGrowth)
@@ -249,7 +249,7 @@ export default function Dashboard() {
     },
     {
       id: 'profit',
-      label: `Lợi nhuận tạm tính - ${dashboardPeriodLabel}`,
+      label: 'Lợi nhuận tạm tính',
       value: formatCurrency(summary.estimatedProfit),
       caption: displayedPeriod === 'today'
         ? getTodayGrowthCaption(summary.estimatedProfitGrowth)
@@ -298,38 +298,42 @@ export default function Dashboard() {
     const cashAngle = paymentStats.cashPercent * 3.6;
     const cashConnectorAngle = cashAngle > 0 ? cashAngle / 2 : 18;
     const transferConnectorAngle = cashAngle + ((360 - cashAngle) / 2);
+    const centerX = 160;
+    const centerY = 102;
+    const outerRadius = 60;
+    const innerRadius = 32;
 
     return {
+      centerX,
+      centerY,
+      outerRadius,
+      innerRadius,
       cashEnd: cashAngle,
       transferStart: cashAngle,
       cashConnectorAngle,
       transferConnectorAngle,
-      cashLabel: getConnectorLabelPoint(150, 86, 58, cashConnectorAngle, 'right'),
-      transferLabel: getConnectorLabelPoint(150, 86, 58, transferConnectorAngle, 'left')
+      cashLabel: getConnectorLabelPoint(centerX, centerY, outerRadius, cashConnectorAngle, 'right'),
+      transferLabel: getConnectorLabelPoint(centerX, centerY, outerRadius, transferConnectorAngle, 'left')
     };
   }, [paymentStats.cashPercent]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-extrabold text-gray-950">Dashboard</h1>
-          <p className="mt-1 text-sm font-medium text-gray-500">
-            Theo dõi doanh thu, đơn hàng, tồn kho và hiệu suất bán hàng.
-          </p>
         </div>
-        <label className="relative w-full sm:w-[180px]">
-          <span className="mb-1 block text-xs font-bold uppercase tracking-wide text-[#557084]">Thời gian báo cáo</span>
+        <label className="relative w-full sm:w-[138px]">
           <select
             value={dashboardPeriod}
             onChange={(event) => setDashboardPeriod(event.target.value)}
-            className="h-11 w-full appearance-none border border-[#b9d5e7] bg-white pl-3 pr-10 text-sm font-bold text-brand-ink outline-none transition hover:border-brand-strong focus:border-brand-strong focus:ring-2 focus:ring-brand-soft"
+            className="h-9 w-full appearance-none border border-[#b9d5e7] bg-white pl-3 pr-8 text-sm font-bold text-brand-ink outline-none transition hover:border-brand-strong focus:border-brand-strong focus:ring-2 focus:ring-brand-soft"
           >
             {dashboardPeriodOptions.map((option) => (
               <option key={option.value} value={option.value}>{option.label}</option>
             ))}
           </select>
-          <ChevronDown className="pointer-events-none absolute bottom-3 right-3 text-brand-ink" size={18} />
+          <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-brand-ink" size={16} />
         </label>
       </div>
 
@@ -341,9 +345,9 @@ export default function Dashboard() {
 
       <div
         aria-busy={isLoading}
-        className={`space-y-4 transition-opacity duration-200 motion-reduce:transition-none ${isLoading ? 'opacity-60' : 'opacity-100'}`}
+        className={`space-y-3 transition-opacity duration-200 motion-reduce:transition-none ${isLoading ? 'opacity-60' : 'opacity-100'}`}
       >
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         {cards.map((card) => {
           const Icon = card.icon;
           const CardWrapper = card.to ? Link : 'article';
@@ -352,18 +356,18 @@ export default function Dashboard() {
             <CardWrapper
               key={card.id}
               to={card.to}
-              className={`rounded-lg border bg-white p-4 shadow-[0_1px_3px_rgba(25,28,29,0.08)] ${card.tone === 'amber' && summary.lowStockCount > 0 ? 'border-red-500' : 'border-[#e1e3e4]'} ${
+              className={`rounded-lg border bg-white p-3 shadow-[0_1px_3px_rgba(25,28,29,0.08)] ${card.tone === 'amber' && summary.lowStockCount > 0 ? 'border-red-500' : 'border-[#e1e3e4]'} ${
                 card.to ? 'block transition hover:border-[#c8dff0] hover:shadow-[0_8px_24px_rgba(116,184,224,0.18)]' : ''
               }`}
             >
-              <div className="flex min-h-[92px] items-start justify-between gap-3">
+              <div className="flex min-h-[76px] items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className={`truncate text-sm font-semibold ${card.tone === 'amber' && summary.lowStockCount > 0 ? 'text-red-700' : 'text-[#73777d]'}`}>{card.label}</p>
-                  <p className="mt-3 min-h-7 text-xl font-bold leading-7 text-[#191c1d]">{card.value}</p>
-                  <p className="mt-1.5 line-clamp-2 text-sm font-medium leading-5 text-[#43474d]">{card.caption}</p>
+                  <p className={`truncate text-xs font-semibold ${card.tone === 'amber' && summary.lowStockCount > 0 ? 'text-red-700' : 'text-[#73777d]'}`}>{card.label}</p>
+                  <p className="mt-2 min-h-6 text-lg font-bold leading-6 text-[#191c1d]">{card.value}</p>
+                  <p className="mt-1 line-clamp-1 text-xs font-medium leading-4 text-[#43474d]">{card.caption}</p>
                 </div>
-                <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-lg ${cardTones[card.tone]}`}>
-                  <Icon size={20} />
+                <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${cardTones[card.tone]}`}>
+                  <Icon size={18} />
                 </div>
               </div>
             </CardWrapper>
@@ -371,7 +375,7 @@ export default function Dashboard() {
         })}
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.75fr)]">
+      <section className="grid gap-3 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.75fr)]">
         <RevenueAreaChart
           totalRevenue={summary.todayRevenue}
           comparisonAmount={revenueComparisonAmount}
@@ -380,29 +384,29 @@ export default function Dashboard() {
           periodLabel={dashboardPeriodLabel}
         />
 
-        <article className="rounded-lg border border-[#e1e3e4] bg-white p-4 shadow-[0_1px_3px_rgba(25,28,29,0.08)]">
-          <div className="mb-3 flex items-center justify-between gap-4">
-            <h2 className="text-lg font-semibold leading-6 text-[#191c1d]">Top sản phẩm bán chạy</h2>
+        <article className="rounded-lg border border-[#e1e3e4] bg-white p-3 shadow-[0_1px_3px_rgba(25,28,29,0.08)]">
+          <div className="mb-2 flex items-center justify-between gap-4">
+            <h2 className="text-base font-semibold leading-6 text-[#191c1d]">Top sản phẩm bán chạy</h2>
             <Link to="/products" className="text-sm font-semibold text-brand-strong transition hover:text-brand-deep">
               Tất cả
             </Link>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-2">
             {topProducts.length === 0 && (
               <p className="text-sm font-medium text-[#73777d]">Chưa có sản phẩm bán chạy trong kỳ này.</p>
             )}
-            {topProducts.slice(0, 5).map((product) => (
+            {topProducts.slice(0, 4).map((product) => (
               <div key={product.product_id} className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold leading-5 text-[#191c1d]">{product.name}</p>
-                  <p className="mt-1 text-sm font-medium text-[#73777d]">
+                  <p className="mt-0.5 text-xs font-medium text-[#73777d]">
                     {product.category_name} - SL {Number(product.quantity || 0).toLocaleString('vi-VN')}
                   </p>
                 </div>
                 <div className="shrink-0 text-right">
-                  <p className="text-base font-bold text-[#191c1d]">{formatCurrency(product.revenue)}</p>
-                  <p className="mt-1 text-sm font-medium text-[#73777d]">giá {formatCurrency(product.price)}</p>
+                  <p className="text-sm font-bold text-[#191c1d]">{formatCurrency(product.revenue)}</p>
+                  <p className="mt-0.5 text-xs font-medium text-[#73777d]">giá {formatCurrency(product.price)}</p>
                 </div>
               </div>
             ))}
@@ -410,41 +414,43 @@ export default function Dashboard() {
         </article>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-3">
-        <article className="rounded-lg border border-[#e1e3e4] bg-white p-4 shadow-[0_1px_3px_rgba(25,28,29,0.08)]">
-          <div className="mb-3 flex items-center justify-between gap-3">
+      <section className="grid gap-3 xl:grid-cols-3">
+        <article className="min-h-[260px] rounded-lg border border-[#e1e3e4] bg-white p-3 shadow-[0_1px_3px_rgba(25,28,29,0.08)]">
+          <div className="mb-2 flex items-center justify-between gap-3">
             <h2 className="text-sm font-bold leading-5 text-[#191c1d]">Phương thức thanh toán</h2>
             <CreditCard size={18} className="text-brand-strong" />
           </div>
 
-          <div className="min-h-[142px]">
-            <svg viewBox="0 0 300 170" className="h-[170px] w-full overflow-visible" role="img" aria-label="Biểu đồ phương thức thanh toán">
+          <div className="min-h-[216px] overflow-hidden">
+            <svg viewBox="0 0 320 220" className="h-[220px] w-full" role="img" aria-label="Biểu đồ phương thức thanh toán">
               {paymentStats.total > 0 ? (
                 <>
                   <path
-                    d={describeDonutSegment(150, 86, 58, 27, 0, paymentChart.cashEnd)}
-                    fill="#2f8cf0"
+                    d={describeDonutSegment(paymentChart.centerX, paymentChart.centerY, paymentChart.outerRadius, paymentChart.innerRadius, 0, paymentChart.cashEnd)}
+                    fill="#74B8E0"
                     stroke="#ffffff"
                     strokeWidth="3"
                   />
                   <path
-                    d={describeDonutSegment(150, 86, 58, 27, paymentChart.transferStart, 360)}
+                    d={describeDonutSegment(paymentChart.centerX, paymentChart.centerY, paymentChart.outerRadius, paymentChart.innerRadius, paymentChart.transferStart, 360)}
                     fill="#f59e0b"
                     stroke="#ffffff"
                     strokeWidth="3"
                   />
                   <polyline
-                    points={getConnectorPoints(150, 86, 58, paymentChart.cashConnectorAngle, 'right')}
+                    points={getConnectorPoints(paymentChart.centerX, paymentChart.centerY, paymentChart.outerRadius, paymentChart.cashConnectorAngle, 'right')}
                     fill="none"
-                    stroke="#2f8cf0"
+                    stroke="#74B8E0"
                     strokeWidth="1.4"
                   />
                   <polyline
-                    points={getConnectorPoints(150, 86, 58, paymentChart.transferConnectorAngle, 'left')}
+                    points={getConnectorPoints(paymentChart.centerX, paymentChart.centerY, paymentChart.outerRadius, paymentChart.transferConnectorAngle, 'left')}
                     fill="none"
                     stroke="#f59e0b"
                     strokeWidth="1.4"
                   />
+                  <text x={paymentChart.centerX} y={paymentChart.centerY - 2} textAnchor="middle" dominantBaseline="middle" className="fill-[#191c1d] text-[17px] font-extrabold">100%</text>
+                  <text x={paymentChart.centerX} y={paymentChart.centerY + 17} textAnchor="middle" dominantBaseline="middle" className="fill-[#73777d] text-[10px] font-bold">tổng</text>
                   <text x={paymentChart.cashLabel.x} y={paymentChart.cashLabel.y - 4} className="fill-[#191c1d] text-[12px] font-semibold">Tiền mặt</text>
                   <text x={paymentChart.cashLabel.x} y={paymentChart.cashLabel.y + 11} className="fill-[#73777d] text-[11px] font-bold">{paymentStats.cashPercent}%</text>
                   <text x={paymentChart.transferLabel.x} y={paymentChart.transferLabel.y - 4} textAnchor="end" className="fill-[#191c1d] text-[12px] font-semibold">Chuyển khoản</text>
@@ -452,24 +458,24 @@ export default function Dashboard() {
                 </>
               ) : (
                 <>
-                  <circle cx="150" cy="86" r="58" fill="#edf2f5" />
-                  <circle cx="150" cy="86" r="27" fill="#ffffff" />
-                  <text x="150" y="91" textAnchor="middle" className="fill-[#73777d] text-[12px] font-semibold">Chưa có dữ liệu</text>
+                  <circle cx={paymentChart.centerX} cy={paymentChart.centerY} r={paymentChart.outerRadius} fill="#edf2f5" />
+                  <circle cx={paymentChart.centerX} cy={paymentChart.centerY} r={paymentChart.innerRadius} fill="#ffffff" />
+                  <text x={paymentChart.centerX} y={paymentChart.centerY + 4} textAnchor="middle" className="fill-[#73777d] text-[12px] font-semibold">Chưa có dữ liệu</text>
                 </>
               )}
             </svg>
           </div>
         </article>
 
-        <article className="rounded-lg border border-[#e1e3e4] bg-white p-4 shadow-[0_1px_3px_rgba(25,28,29,0.08)]">
-          <div className="mb-3 flex items-center justify-between gap-3">
+        <article className="min-h-[260px] rounded-lg border border-[#e1e3e4] bg-white p-3 shadow-[0_1px_3px_rgba(25,28,29,0.08)]">
+          <div className="mb-2 flex items-center justify-between gap-3">
             <h2 className="text-sm font-bold leading-5 text-[#191c1d]">Hiệu suất bán hàng nhân viên</h2>
             <UsersRound size={18} className="text-brand-strong" />
           </div>
 
           <div className="space-y-3">
             {staffStats.length === 0 && (
-              <p className="py-5 text-sm font-medium text-[#73777d]">Chưa có dữ liệu nhân viên.</p>
+              <p className="py-3 text-sm font-medium text-[#73777d]">Chưa có dữ liệu nhân viên.</p>
             )}
             {staffStats.map((staff) => (
               <div key={staff.name} className="flex items-center justify-between gap-3 text-sm">
@@ -482,19 +488,26 @@ export default function Dashboard() {
           </div>
         </article>
 
-        <article className="rounded-lg border border-[#e1e3e4] bg-white p-4 shadow-[0_1px_3px_rgba(25,28,29,0.08)]">
-          <div className="mb-3 flex items-center justify-between gap-4 border-b border-[#e1e3e4] pb-3">
+        <article className="min-h-[260px] rounded-lg border border-[#e1e3e4] bg-white p-3 shadow-[0_1px_3px_rgba(25,28,29,0.08)]">
+          <div className="mb-2 flex items-center justify-between gap-4 border-b border-[#e1e3e4] pb-2">
             <h2 className="text-sm font-bold leading-5 text-[#191c1d]">Đơn hàng gần đây</h2>
+            <Link
+              to="/orders"
+              className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-strong transition hover:text-brand-deep"
+            >
+              <span>Xem tất cả</span>
+              <ArrowRight size={15} />
+            </Link>
           </div>
 
           <div className="divide-y divide-[#eef1f3]">
             {recentOrders.length === 0 && (
-              <p className="py-8 text-center text-sm font-medium text-[#73777d]">
+              <p className="py-4 text-center text-sm font-medium text-[#73777d]">
                 Chưa có đơn hàng gần đây.
               </p>
             )}
-            {recentOrders.slice(0, 2).map((order) => (
-              <div key={order.id} className="grid grid-cols-[28px_minmax(0,1fr)_minmax(82px,0.65fr)_auto] items-center gap-2.5 py-2.5">
+            {recentOrders.slice(0, 4).map((order) => (
+              <div key={order.id} className="grid grid-cols-[28px_minmax(0,1fr)_minmax(82px,0.65fr)_auto] items-center gap-2.5 py-2">
                 <div className="grid h-6 w-6 place-items-center rounded bg-brand-surface text-brand-strong">
                   <CalendarCheck size={14} />
                 </div>
@@ -508,16 +521,6 @@ export default function Dashboard() {
                 <p className="whitespace-nowrap text-right text-xs font-bold text-[#191c1d]">{formatCurrency(order.total)}</p>
               </div>
             ))}
-          </div>
-
-          <div className="pt-2">
-            <Link
-              to="/orders"
-              className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-strong transition hover:text-brand-deep"
-            >
-              <span>Xem tất cả</span>
-              <ArrowRight size={15} />
-            </Link>
           </div>
         </article>
       </section>

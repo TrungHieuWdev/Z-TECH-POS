@@ -19,6 +19,7 @@ import Reports from './pages/Reports';
 import ActivityLogs from './pages/ActivityLogs';
 import Warranty from './pages/Warranty';
 import WarrantyLookupPublic from './pages/WarrantyLookupPublic';
+import SettingsPage from './components/settings/SettingsPage';
 import { canAccessPath, getToken, getUser } from './utils/auth';
 import { isFullAccessRole } from './utils/auth';
 
@@ -68,6 +69,7 @@ export default function App() {
             <Route path="/inventory" element={<Inventory />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/activity-logs" element={<ActivityLogs />} />
+            <Route path="/settings" element={<SettingsPage />} />
             </Route>
           </Route>
         </Route>

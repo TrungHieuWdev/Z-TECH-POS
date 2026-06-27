@@ -157,26 +157,23 @@ export default function RevenueAreaChart({
     : buildPeriodYAxisConfig(period);
 
   return (
-    <article className="rounded-lg border border-[#e1e3e4] bg-white p-4 shadow-[0_1px_3px_rgba(25,28,29,0.08)]">
-      <div className="mb-4 flex items-start justify-between gap-4">
+    <article className="rounded-lg border border-[#e1e3e4] bg-white p-3 shadow-[0_1px_3px_rgba(25,28,29,0.08)]">
+      <div className="mb-2 flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold leading-6 text-[#191c1d]">Cơ cấu doanh thu</h2>
-          <p className="mt-0.5 text-xs font-medium text-[#73777d]">
-            {isToday ? 'Doanh thu phát sinh theo giờ' : 'Doanh thu phát sinh theo ngày'}
-          </p>
+          <h2 className="text-base font-semibold leading-6 text-[#191c1d]">Cơ cấu doanh thu</h2>
         </div>
-        <span className="rounded-lg bg-brand-surface px-3 py-2 text-sm font-semibold text-brand-ink">
+        <span className="rounded-lg bg-brand-surface px-2.5 py-1.5 text-xs font-semibold text-brand-ink">
           {periodLabel}
         </span>
       </div>
 
-      <div className="h-[250px] w-full">
+      <div className="h-[190px] w-full">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
             <defs>
               <linearGradient id="dashboardRevenueFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#1f86f2" stopOpacity={0.26} />
-                <stop offset="95%" stopColor="#1f86f2" stopOpacity={0.04} />
+                <stop offset="5%" stopColor="#74B8E0" stopOpacity={0.26} />
+                <stop offset="95%" stopColor="#74B8E0" stopOpacity={0.04} />
               </linearGradient>
             </defs>
             <CartesianGrid stroke="#e6edf3" strokeDasharray="4 4" vertical={false} />
@@ -215,27 +212,27 @@ export default function RevenueAreaChart({
             <Area
               type="monotone"
               dataKey="revenue"
-              stroke="#1f86f2"
+              stroke="#74B8E0"
               strokeWidth={3}
               fill="url(#dashboardRevenueFill)"
-              dot={{ r: 4.5, fill: '#ffffff', stroke: '#1f86f2', strokeWidth: 2.5 }}
-              activeDot={{ r: 6, fill: '#ffffff', stroke: '#1f86f2', strokeWidth: 3 }}
+              dot={{ r: 4.5, fill: '#ffffff', stroke: '#74B8E0', strokeWidth: 2.5 }}
+              activeDot={{ r: 6, fill: '#ffffff', stroke: '#74B8E0', strokeWidth: 3 }}
             />
           </AreaChart>
         </ResponsiveContainer>
       </div>
 
-      <div className="mt-4 flex items-end justify-between border-t border-[#e1e3e4] pt-3">
+      <div className="mt-2 flex items-end justify-between border-t border-[#e1e3e4] pt-2">
         <div>
           <div className="flex items-center gap-2 text-xs font-semibold text-[#73777d]">
             <span className="h-2.5 w-2.5 rounded-full bg-[#1f86f2]" />
             Tổng doanh thu
           </div>
-          <p className="mt-1 text-lg font-bold text-[#191c1d]">{formatCurrency(safeTotal)}</p>
+          <p className="mt-0.5 text-base font-bold text-[#191c1d]">{formatCurrency(safeTotal)}</p>
         </div>
         <div className="text-right">
-          <p className="text-sm font-bold text-emerald-600">↑ {formatCurrency(Math.abs(safeComparison))}</p>
-          <p className="mt-1 text-xs font-semibold text-[#73777d]">so với kỳ trước</p>
+          <p className="text-xs font-bold text-emerald-600">↑ {formatCurrency(Math.abs(safeComparison))}</p>
+          <p className="mt-0.5 text-[11px] font-semibold text-[#73777d]">so với kỳ trước</p>
         </div>
       </div>
     </article>

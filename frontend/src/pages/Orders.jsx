@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
+  CalendarCheck,
   CheckCircle2,
   ChevronDown,
   ChevronsLeft,
@@ -11,8 +12,7 @@ import {
   RefreshCw,
   Search,
   User,
-  Wallet,
-  XCircle
+  Wallet
 } from 'lucide-react';
 import api from '../api/axios';
 import Modal from '../components/Modal';
@@ -59,9 +59,17 @@ function getCustomerName(order) {
   return order.customer_name || 'Khách lẻ';
 }
 
-function SummaryCard({ icon: Icon, label, value, toneClassName }) {
+function SummaryCard({ icon: Icon, label, value, toneClassName, onClick }) {
+  const Wrapper = onClick ? 'button' : 'article';
+
   return (
-    <article className="flex h-[92px] items-center gap-4 rounded-lg border border-gray-300 bg-white px-5 shadow-sm shadow-gray-100">
+    <Wrapper
+      type={onClick ? 'button' : undefined}
+      onClick={onClick}
+      className={`flex h-[92px] w-full items-center gap-4 rounded-lg border border-gray-300 bg-white px-5 text-left shadow-sm shadow-gray-100 ${
+        onClick ? 'transition hover:border-brand-strong hover:bg-brand-surface focus:outline-none focus:ring-2 focus:ring-brand-soft' : ''
+      }`}
+    >
       <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-md ${toneClassName}`}>
         <Icon size={19} />
       </div>
@@ -69,8 +77,24 @@ function SummaryCard({ icon: Icon, label, value, toneClassName }) {
         <p className="truncate text-sm font-medium text-gray-700">{label}</p>
         <p className="mt-1 text-2xl font-bold leading-none text-gray-950">{value}</p>
       </div>
-    </article>
+    </Wrapper>
   );
+}
+
+function formatDateInput(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function isSameLocalDate(value, dateKey) {
+  if (!value) return false;
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value).slice(0, 10) === dateKey;
+
+  return formatDateInput(date) === dateKey;
 }
 
 function FilterBar({
@@ -309,6 +333,8 @@ export default function Orders() {
   }, [search, filterType, dateFrom, dateTo]);
 
   const summary = useMemo(() => {
+    const todayKey = formatDateInput(new Date());
+
     return filteredOrders.reduce(
       (totals, order) => {
         totals.total += 1;
@@ -325,9 +351,13 @@ export default function Orders() {
           totals.cancelled += 1;
         }
 
+        if (isSameLocalDate(order.created_at, todayKey)) {
+          totals.today += 1;
+        }
+
         return totals;
       },
-      { total: 0, cash: 0, transfer: 0, cancelled: 0 }
+      { total: 0, cash: 0, transfer: 0, cancelled: 0, today: 0 }
     );
   }, [filteredOrders]);
 
@@ -357,11 +387,18 @@ export default function Orders() {
       toneClassName: 'bg-orange-100 text-orange-700'
     },
     {
-      key: 'cancelled',
-      label: 'Đã hủy',
-      value: summary.cancelled.toLocaleString('vi-VN'),
-      icon: XCircle,
-      toneClassName: 'bg-red-100 text-red-700'
+      key: 'today',
+      label: 'Hóa đơn hôm nay',
+      value: summary.today.toLocaleString('vi-VN'),
+      icon: CalendarCheck,
+      toneClassName: 'bg-sky-100 text-sky-700',
+      onClick: () => {
+        const today = formatDateInput(new Date());
+        setSearch('');
+        setFilterType('all');
+        setDateFrom(today);
+        setDateTo(today);
+      }
     }
   ];
 

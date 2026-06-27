@@ -1,18 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { Bell, Menu, Search, Settings } from 'lucide-react';
+import { Bell, Menu, Search } from 'lucide-react';
 import Sidebar from './Sidebar';
-import SettingsModal from './SettingsModal';
 import NotificationCenter from './NotificationCenter';
-import { getRoleLabel, getUser, isFullAccessRole } from '../utils/auth';
+import { getRoleLabel, getUser } from '../utils/auth';
 
 export default function Layout() {
   const user = getUser();
-  const hasFullAccess = isFullAccessRole(user?.role);
   const navigate = useNavigate();
   const location = useLocation();
   const [quickSearch, setQuickSearch] = useState('');
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [notificationCount, setNotificationCount] = useState(0);
@@ -92,16 +89,6 @@ export default function Layout() {
               <Bell size={20} />
               {notificationCount > 0 && <span className="absolute left-[23px] top-0 text-[11px] font-extrabold leading-none text-red-600">{notificationCount > 99 ? '99+' : notificationCount}</span>}
             </button>
-            <button
-              type="button"
-              onClick={() => setIsSettingsOpen(true)}
-              style={{ display: hasFullAccess ? undefined : 'none' }}
-              className="hidden h-9 w-9 items-center justify-center rounded-full text-[#43474d] transition hover:bg-brand-surface hover:text-brand-strong sm:flex"
-              title="Cài đặt"
-              aria-label="Cài đặt"
-            >
-              <Settings size={20} />
-            </button>
             <div className="flex items-center gap-2">
               <div className="hidden text-right sm:block">
                 <p className="text-xs font-semibold leading-none text-[#191c1d]">{user?.name || 'Admin'}</p>
@@ -118,7 +105,6 @@ export default function Layout() {
           <Outlet />
         </main>
       </div>
-      <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
       <NotificationCenter isOpen={isNotificationsOpen} onClose={() => setIsNotificationsOpen(false)} onCountChange={setNotificationCount} />
     </div>
   );

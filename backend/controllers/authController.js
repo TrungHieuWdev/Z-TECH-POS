@@ -87,5 +87,62 @@ export async function login(req, res) {
 }
 
 export async function getMe(req, res) {
-  res.json(req.user);
+  try {
+    const rows = await query(
+      `SELECT id, name, email, employee_code, role, last_login_at
+       FROM users
+       WHERE id = ?
+       LIMIT 1`,
+      [req.user.id]
+    );
+    const user = rows[0];
+
+    if (!user) return res.status(404).json({ message: 'Không tìm thấy tài khoản' });
+
+    res.json({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      employeeCode: user.employee_code,
+      role: user.role,
+      lastLoginAt: user.last_login_at || null
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Không thể tải thông tin tài khoản', error: error.message });
+  }
+}
+
+export async function changePassword(req, res) {
+  try {
+    const currentPassword = String(req.body.currentPassword || '');
+    const newPassword = String(req.body.newPassword || '');
+    const confirmPassword = String(req.body.confirmPassword || '');
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      return res.status(400).json({ message: 'Vui lòng nhập đầy đủ thông tin mật khẩu' });
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: 'Mật khẩu mới phải có ít nhất 6 ký tự' });
+    }
+    if (newPassword === currentPassword) {
+      return res.status(400).json({ message: 'Mật khẩu mới phải khác mật khẩu hiện tại' });
+    }
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({ message: 'Xác nhận mật khẩu mới không trùng khớp' });
+    }
+
+    const rows = await query('SELECT id, password FROM users WHERE id = ? LIMIT 1', [req.user.id]);
+    const user = rows[0];
+    if (!user) return res.status(404).json({ message: 'Không tìm thấy tài khoản' });
+
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) return res.status(400).json({ message: 'Mật khẩu hiện tại không đúng' });
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await query('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, req.user.id]);
+
+    res.json({ message: 'Đổi mật khẩu thành công' });
+  } catch (error) {
+    res.status(500).json({ message: 'Không thể đổi mật khẩu', error: error.message });
+  }
 }

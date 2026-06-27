@@ -122,7 +122,7 @@ function buildCsv(employees) {
 }
 
 function maskPassword() {
-  return '••••••••';
+  return 'Đã tạo';
 }
 
 export default function Employees() {
