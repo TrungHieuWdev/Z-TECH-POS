@@ -183,12 +183,16 @@ export async function resetEmployeePassword(req, res) {
       return res.status(404).json({ message: 'Không tìm thấy nhân viên' });
     }
 
-    const nextPassword = `${employee.employee_code}@123`;
+    const nextPassword = String(req.body.password || '').trim();
+    if (nextPassword.length < 6) {
+      return res.status(400).json({ message: 'Mật khẩu mới phải có ít nhất 6 ký tự' });
+    }
+
     const hashedPassword = await bcrypt.hash(nextPassword, 10);
 
     await query('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, employeeId]);
 
-    res.json({ message: 'Đã đặt lại mật khẩu', code: employee.employee_code, password: nextPassword });
+    res.json({ message: 'Đã đổi mật khẩu', code: employee.employee_code });
   } catch (error) {
     res.status(500).json({ message: 'Không thể đặt lại mật khẩu', error: error.message });
   }

@@ -136,6 +136,9 @@ export default function Employees() {
   const [viewingEmployee, setViewingEmployee] = useState(null);
   const [revealedPasswords, setRevealedPasswords] = useState({});
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [passwordEmployee, setPasswordEmployee] = useState(null);
+  const [passwordForm, setPasswordForm] = useState('');
+  const [isPasswordSaving, setIsPasswordSaving] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
   const [isConfirming, setIsConfirming] = useState(false);
 
@@ -242,13 +245,39 @@ export default function Employees() {
     }
   };
 
-  const resetPassword = async (employee) => {
+  const openPasswordModal = (employee) => {
+    setPasswordEmployee(employee);
+    setPasswordForm('');
+  };
+
+  const closePasswordModal = () => {
+    if (isPasswordSaving) return;
+    setPasswordEmployee(null);
+    setPasswordForm('');
+  };
+
+  const changePassword = async (event) => {
+    event.preventDefault();
+    if (!passwordEmployee || isPasswordSaving) return;
+
+    const nextPassword = passwordForm.trim();
+    if (nextPassword.length < 6) {
+      toast.error('Mật khẩu mới phải có ít nhất 6 ký tự');
+      return;
+    }
+
+    setIsPasswordSaving(true);
     try {
-      const response = await api.post(`/employees/${employee.id}/reset-password`);
-      setRevealedPasswords((current) => ({ ...current, [employee.id]: response.data.password }));
-      toast.success(`Mật khẩu mới của ${response.data.code}: ${response.data.password}`);
+      const response = await api.post(`/employees/${passwordEmployee.id}/reset-password`, { password: nextPassword });
+      setRevealedPasswords((current) => ({ ...current, [passwordEmployee.id]: nextPassword }));
+      await loadEmployees();
+      toast.success(`Đã đổi mật khẩu cho ${response.data.code}`);
+      setPasswordEmployee(null);
+      setPasswordForm('');
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Không thể đặt lại mật khẩu');
+      toast.error(error.response?.data?.message || 'Không thể đổi mật khẩu');
+    } finally {
+      setIsPasswordSaving(false);
     }
   };
 
@@ -507,7 +536,7 @@ export default function Employees() {
                           </button>
                           <button
                             type="button"
-                            onClick={() => resetPassword(employee)}
+                            onClick={() => openPasswordModal(employee)}
                             className="rounded-lg p-2 text-gray-500 transition hover:bg-amber-50 hover:text-amber-700"
                           >
                             <KeyRound size={18} />
@@ -651,6 +680,57 @@ export default function Employees() {
       </Modal>
 
       <Modal
+        isOpen={Boolean(passwordEmployee)}
+        onClose={closePasswordModal}
+        title="Đổi mật khẩu nhân viên"
+        maxWidth="max-w-md"
+      >
+        {passwordEmployee && (
+          <form onSubmit={changePassword} className="space-y-5">
+            <div className="bg-[#f4fcfe] p-4">
+              <p className="font-bold text-gray-950">
+                {passwordEmployee.code} - {passwordEmployee.name}
+              </p>
+              <p className="mt-1 text-sm text-gray-600">
+                Nhân viên sẽ đăng nhập bằng mã nhân viên và mật khẩu mới này.
+              </p>
+            </div>
+            <label className="block">
+              <span className="mb-1 block text-sm font-semibold text-gray-700">Mật khẩu mới</span>
+              <input
+                type="password"
+                value={passwordForm}
+                onChange={(event) => setPasswordForm(event.target.value)}
+                className="h-11 w-full border border-gray-300 px-3 outline-none focus:border-[#7ed5e6] focus:ring-2 focus:ring-[#c0edf7]"
+                placeholder="Nhập mật khẩu mới"
+                minLength={6}
+                autoFocus
+                required
+              />
+              <p className="mt-1 text-xs text-gray-500">Tối thiểu 6 ký tự.</p>
+            </label>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={closePasswordModal}
+                disabled={isPasswordSaving}
+                className="border border-gray-300 px-4 py-2 font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+              >
+                Hủy
+              </button>
+              <button
+                type="submit"
+                disabled={isPasswordSaving}
+                className="bg-[#0f3b46] px-4 py-2 font-semibold text-white hover:bg-[#174f5d] disabled:opacity-60"
+              >
+                {isPasswordSaving ? 'Đang lưu...' : 'Lưu mật khẩu'}
+              </button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      <Modal
         isOpen={Boolean(confirmAction)}
         onClose={() => !isConfirming && setConfirmAction(null)}
         title={confirmAction?.type === 'delete' ? 'Xác nhận xóa nhân viên' : 'Xác nhận cập nhật tài khoản'}
@@ -719,10 +799,10 @@ export default function Employees() {
                 ) : (
                   <button
                     type="button"
-                    onClick={() => resetPassword(viewingEmployee)}
+                    onClick={() => openPasswordModal(viewingEmployee)}
                     className="mt-1 font-semibold text-[#0f3b46] underline underline-offset-2"
                   >
-                    Đặt lại và hiển thị mật khẩu mới
+                    Đổi mật khẩu đăng nhập
                   </button>
                 )}
               </div>

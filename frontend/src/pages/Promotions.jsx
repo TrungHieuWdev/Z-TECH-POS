@@ -324,10 +324,7 @@ export default function Promotions() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold leading-8 text-brand-deep">Khuyến mãi</h1>
-          <p className="mt-1 text-sm font-medium text-[#5f6670]">
-            Quản lý chương trình giảm giá và điều kiện áp dụng
-          </p>
+          <h1 className="text-2xl font-bold leading-8 text-brand-deep">Trang khuyến mãi</h1>
         </div>
         <div className="flex flex-wrap gap-3" style={{ display: hasFullAccess ? undefined : 'none' }}>
           <button

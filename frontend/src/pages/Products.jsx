@@ -604,7 +604,7 @@ export default function Products() {
                   <tr key={product.id} className="hover:bg-brand-surface/50">
                     <td className="px-4 py-2.5">
                       <div className="flex items-center gap-3">
-                        <div className="h-11 w-11 shrink-0 overflow-hidden border border-[#d7eef3]"><ProductImage product={product} iconSize={20} compact /></div>
+                        <div className="h-16 w-12 shrink-0 overflow-hidden border border-[#d7eef3]"><ProductImage product={product} iconSize={28} compact /></div>
                         <div className="max-w-[260px] min-w-0"><p className="truncate font-bold text-gray-950">{product.name}</p><p className="mt-0.5 truncate text-xs text-gray-500">{product.device_model || 'Phụ kiện dùng chung'}</p></div>
                       </div>
                     </td>

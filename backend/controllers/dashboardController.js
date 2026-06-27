@@ -57,7 +57,8 @@ export async function getSummary(req, res) {
       productsSold,
       previousProductsSold,
       estimatedProfit,
-      previousEstimatedProfit
+      previousEstimatedProfit,
+      paymentTotals
     ] = await Promise.all([
       query(
         `SELECT COALESCE(SUM(total), 0) AS value FROM orders WHERE status = 'completed' AND ${filters.current}`
@@ -102,6 +103,13 @@ export async function getSummary(req, res) {
          JOIN orders o ON oi.order_id = o.id
          JOIN products p ON oi.product_id = p.id
          WHERE o.status = 'completed' AND ${orderItemFilters.previous}`
+      ),
+      query(
+        `SELECT
+           COALESCE(SUM(CASE WHEN payment_method = 'cash' THEN total ELSE 0 END), 0) AS cash,
+           COALESCE(SUM(CASE WHEN payment_method = 'transfer' THEN total ELSE 0 END), 0) AS transfer
+         FROM orders
+         WHERE status = 'completed' AND ${filters.current}`
       )
     ]);
 
@@ -128,7 +136,9 @@ export async function getSummary(req, res) {
       revenueGrowth: getPercentChange(todayRevenueValue, yesterdayRevenueValue),
       orderGrowth: getPercentChange(todayOrdersValue, yesterdayOrdersValue),
       productsSoldGrowth: getPercentChange(productsSoldValue, previousProductsSoldValue),
-      estimatedProfitGrowth: getPercentChange(estimatedProfitValue, previousEstimatedProfitValue)
+      estimatedProfitGrowth: getPercentChange(estimatedProfitValue, previousEstimatedProfitValue),
+      paymentCash: toNumber(paymentTotals[0].cash),
+      paymentTransfer: toNumber(paymentTotals[0].transfer)
     });
   } catch (error) {
     res.status(500).json({ message: 'Không thể lấy tổng quan', error: error.message });
@@ -137,16 +147,25 @@ export async function getSummary(req, res) {
 
 export async function getRevenueChart(req, res) {
   try {
+    const period = getCategorySharePeriod(req.query.period || 'today');
+    const filters = getPeriodFilters(period);
+    const bucketExpression = period === 'today'
+      ? 'HOUR(created_at)'
+      : "DATE_FORMAT(created_at, '%Y-%m-%d')";
+
     const rows = await query(
-      `SELECT DATE(created_at) AS date, COALESCE(SUM(total), 0) AS revenue
+      `SELECT ${bucketExpression} AS bucket, COALESCE(SUM(total), 0) AS revenue
        FROM orders
        WHERE status = 'completed'
-         AND created_at >= DATE_SUB(CURDATE(), INTERVAL 29 DAY)
-       GROUP BY DATE(created_at)
-       ORDER BY DATE(created_at)`
+         AND ${filters.current}
+       GROUP BY ${bucketExpression}
+       ORDER BY ${bucketExpression}`
     );
 
-    res.json(rows);
+    res.json(rows.map((row) => ({
+      bucket: row.bucket,
+      revenue: toNumber(row.revenue)
+    })));
   } catch (error) {
     res.status(500).json({ message: 'Không thể lấy biểu đồ doanh thu', error: error.message });
   }

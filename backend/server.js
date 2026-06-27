@@ -22,21 +22,32 @@ dotenv.config();
 const app = express();
 const PORT = Number(process.env.PORT || 5000);
 
+const configuredOrigins = String(process.env.FRONTEND_ORIGINS || process.env.FRONTEND_ORIGIN || '')
+  .split(',')
+  .map((origin) => origin.trim().replace(/\/$/, ''))
+  .filter(Boolean);
 const allowedOrigins = new Set([
-  process.env.FRONTEND_ORIGIN,
+  ...configuredOrigins,
   'http://localhost:5173',
   'http://127.0.0.1:5173'
-].filter(Boolean));
+]);
+const isProduction = process.env.NODE_ENV === 'production';
+
+function isDevelopmentHost(hostname) {
+  return ['localhost', '127.0.0.1', '::1', '0.0.0.0'].includes(hostname) ||
+    /^10\./.test(hostname) ||
+    /^192\.168\./.test(hostname) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(hostname);
+}
 
 function isAllowedOrigin(origin) {
   if (!origin || allowedOrigins.has(origin)) return true;
+
   try {
     const url = new URL(origin);
-    return url.protocol === 'http:' && url.port === '5173' && (
-      /^10\./.test(url.hostname) ||
-      /^192\.168\./.test(url.hostname) ||
-      /^172\.(1[6-9]|2\d|3[01])\./.test(url.hostname)
-    );
+    return !isProduction &&
+      ['http:', 'https:'].includes(url.protocol) &&
+      isDevelopmentHost(url.hostname);
   } catch {
     return false;
   }
@@ -45,6 +56,7 @@ function isAllowedOrigin(origin) {
 app.use(cors({
   origin(origin, callback) {
     if (isAllowedOrigin(origin)) return callback(null, true);
+    console.warn(`[CORS] Rejected origin: ${origin || '(no origin)'}`);
     return callback(new Error('Origin không được CORS cho phép'));
   },
   credentials: true

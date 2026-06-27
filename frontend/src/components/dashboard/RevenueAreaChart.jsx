@@ -9,7 +9,6 @@ import {
 } from 'recharts';
 import { formatCurrency } from '../../utils/format';
 
-const shapeValues = [0, 65000, 65000, 165000, 280000, 390000, 350000, 350000];
 const todayHours = Array.from({ length: 14 }, (_, index) => index + 8);
 
 const periodDays = {
@@ -64,48 +63,46 @@ function formatDateLabel(date) {
   return `${day}/${month}`;
 }
 
-function buildDateLabels(period) {
+function formatDateKey(date) {
+  const year = date.getFullYear();
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const day = date.getDate().toString().padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function buildDateEntries(period) {
   const days = chartDisplayDays[period] || periodDays[period] || periodDays.today;
   const today = new Date();
-
-  if (days === 1) {
-    return shapeValues.map(() => formatDateLabel(today));
-  }
 
   return Array.from({ length: days }, (_, index) => {
     const date = new Date(today);
     date.setDate(today.getDate() - (days - 1 - index));
-    return formatDateLabel(date);
+    return {
+      key: formatDateKey(date),
+      label: formatDateLabel(date)
+    };
   });
 }
 
-function interpolateShapeValue(index, pointCount) {
-  if (pointCount <= 1) return shapeValues[0];
-
-  const sourcePosition = (index / (pointCount - 1)) * (shapeValues.length - 1);
-  const lowerIndex = Math.floor(sourcePosition);
-  const upperIndex = Math.min(shapeValues.length - 1, Math.ceil(sourcePosition));
-  const progress = sourcePosition - lowerIndex;
-
-  return shapeValues[lowerIndex] + (shapeValues[upperIndex] - shapeValues[lowerIndex]) * progress;
-}
-
-function buildChartData(totalRevenue, period) {
-  const basePeak = Math.max(...shapeValues);
-  const scale = totalRevenue > 0 ? Math.max(totalRevenue, 376000) / basePeak : 1;
-
+function buildChartData(chartRows, period) {
   if (period === 'today') {
-    return todayHours.map((hour, index) => ({
+    const revenueByHour = new Map(
+      chartRows.map((row) => [Number(row.bucket), safeNumber(row.revenue)])
+    );
+
+    return todayHours.map((hour) => ({
       date: `${hour.toString().padStart(2, '0')}:00`,
-      revenue: Math.round(interpolateShapeValue(index, todayHours.length) * scale)
+      revenue: revenueByHour.get(hour) || 0
     }));
   }
 
-  const labels = buildDateLabels(period);
+  const revenueByDate = new Map(
+    chartRows.map((row) => [String(row.bucket).slice(0, 10), safeNumber(row.revenue)])
+  );
 
-  return labels.map((label, index) => ({
-    date: label,
-    revenue: Math.round(interpolateShapeValue(index, labels.length) * scale)
+  return buildDateEntries(period).map((entry) => ({
+    date: entry.label,
+    revenue: revenueByDate.get(entry.key) || 0
   }));
 }
 
@@ -137,13 +134,14 @@ function buildPeriodYAxisConfig(period) {
 export default function RevenueAreaChart({
   totalRevenue = 0,
   comparisonAmount = 0,
+  chartRows = [],
   period = 'today',
   periodLabel = 'Hôm nay'
 }) {
   const safeTotal = safeNumber(totalRevenue);
   const safeComparison = safeNumber(comparisonAmount);
   const isToday = period === 'today';
-  const data = buildChartData(safeTotal, period);
+  const data = buildChartData(Array.isArray(chartRows) ? chartRows : [], period);
   const shouldShowEveryDate = period === '14days' || period === '30days';
   const shouldAngleDateLabels = period === '30days';
   const xAxisTicks = period === '90days'

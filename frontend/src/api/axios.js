@@ -2,6 +2,9 @@ import axios from 'axios';
 import { getToken } from '../utils/auth';
 
 function getApiBaseUrl() {
+  // In development, Vite proxies /api to the backend so browser CORS is avoided entirely.
+  if (import.meta.env.DEV) return '/api';
+
   const { protocol, hostname } = window.location;
   const configuredUrl = String(import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '').trim();
 
@@ -56,7 +59,10 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const requestUrl = String(error.config?.url || '');
+    const isLoginRequest = requestUrl.includes('/auth/login');
+
+    if (error.response?.status === 401 && !isLoginRequest) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       sessionStorage.removeItem('token');

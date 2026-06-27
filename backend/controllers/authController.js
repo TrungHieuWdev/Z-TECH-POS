@@ -32,7 +32,7 @@ export async function login(req, res) {
     const user = users[0];
 
     if (!user) {
-      return res.status(401).json({ message: 'Mã nhân viên hoặc mật khẩu không đúng' });
+      return res.status(401).json({ message: 'Mật khẩu hoặc mã đăng nhập bạn nhập bị sai' });
     }
 
     if (String(user.status || 'active').toLowerCase() !== 'active') {
@@ -42,7 +42,7 @@ export async function login(req, res) {
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
-      return res.status(401).json({ message: 'Mã nhân viên hoặc mật khẩu không đúng' });
+      return res.status(401).json({ message: 'Mật khẩu hoặc mã đăng nhập bạn nhập bị sai' });
     }
 
     const fullAccess = ['owner', 'manager', 'admin'].includes(String(user.role || '').toLowerCase());

@@ -43,6 +43,14 @@ const employeeOptions = [
   'Nguyễn Văn Minh'
 ];
 
+const shiftNameOptions = ['Ca sáng', 'Ca trưa', 'Ca chiều', 'Ca tối'];
+
+const timeOptions24h = Array.from({ length: 48 }, (_, index) => {
+  const hours = String(Math.floor(index / 2)).padStart(2, '0');
+  const minutes = index % 2 === 0 ? '00' : '30';
+  return `${hours}:${minutes}`;
+});
+
 const initialShifts = [
   {
     id: 1,
@@ -58,7 +66,7 @@ const initialShifts = [
   {
     id: 2,
     code: 'CA002',
-    name: 'Ca chiều',
+    name: 'Ca trưa',
     employee: 'Lê Quốc Khoa',
     startTime: '13:00',
     endTime: '17:00',
@@ -91,7 +99,7 @@ const initialShifts = [
 ];
 
 const emptyForm = {
-  name: '',
+  name: shiftNameOptions[0],
   employee: employeeOptions[0],
   startTime: '08:00',
   endTime: '12:00',
@@ -238,13 +246,29 @@ export default function Shifts() {
     api
       .get('/employees')
       .then((response) => {
-        const names = response.data.map((employee) => employee.name).filter(Boolean);
-        setEmployeeChoices(Array.from(new Set([...employeeOptions, ...names])));
+        const employees = Array.isArray(response.data) ? response.data : [];
+        const activeNames = employees
+          .filter((employee) => employee.status === 'active')
+          .map((employee) => employee.name)
+          .filter(Boolean);
+        const names = activeNames.length
+          ? activeNames
+          : employees.map((employee) => employee.name).filter(Boolean);
+
+        setEmployeeChoices(names.length ? Array.from(new Set(names)) : employeeOptions);
       })
       .catch(() => {
         setEmployeeChoices(employeeOptions);
       });
   }, [hasFullAccess]);
+
+  useEffect(() => {
+    if (!isFormOpen || !employeeChoices.length || employeeChoices.includes(form.employee)) {
+      return;
+    }
+
+    setForm((current) => ({ ...current, employee: employeeChoices[0] }));
+  }, [employeeChoices, form.employee, isFormOpen]);
 
   const stats = useMemo(() => getShiftStats(shifts), [shifts]);
 
@@ -315,6 +339,7 @@ export default function Shifts() {
       code: editingShift?.code ?? getNextShiftCode(shifts),
       name: form.name.trim(),
       note: form.note.trim(),
+      status: editingShift ? form.status : 'active',
       openingCash: Math.max(Number(form.openingCash || 0), 0)
     };
 
@@ -328,7 +353,7 @@ export default function Shifts() {
       toast.success('Đã cập nhật ca làm');
     } else {
       setShifts((current) => [nextShift, ...current]);
-      toast.success('Đã thêm ca làm');
+      toast.success(`${nextShift.employee} bắt đầu làm`);
     }
 
     closeForm();
@@ -590,13 +615,18 @@ export default function Shifts() {
         <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2">
           <label>
             <span className="mb-1 block text-sm font-medium text-gray-700">Tên ca</span>
-            <input
+            <select
               value={form.name}
               onChange={(event) => setForm({ ...form, name: event.target.value })}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-[#7ed5e6] focus:ring-2 focus:ring-[#c0edf7]"
-              placeholder="VD: Ca sáng"
               required
-            />
+            >
+              {shiftNameOptions.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
           </label>
           <label>
             <span className="mb-1 block text-sm font-medium text-gray-700">Nhân viên phụ trách</span>
@@ -614,23 +644,33 @@ export default function Shifts() {
           </label>
           <label>
             <span className="mb-1 block text-sm font-medium text-gray-700">Giờ bắt đầu</span>
-            <input
-              type="time"
+            <select
               value={form.startTime}
               onChange={(event) => setForm({ ...form, startTime: event.target.value })}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-[#7ed5e6] focus:ring-2 focus:ring-[#c0edf7]"
               required
-            />
+            >
+              {timeOptions24h.map((time) => (
+                <option key={time} value={time}>
+                  {time}
+                </option>
+              ))}
+            </select>
           </label>
           <label>
             <span className="mb-1 block text-sm font-medium text-gray-700">Giờ kết thúc</span>
-            <input
-              type="time"
+            <select
               value={form.endTime}
               onChange={(event) => setForm({ ...form, endTime: event.target.value })}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-[#7ed5e6] focus:ring-2 focus:ring-[#c0edf7]"
               required
-            />
+            >
+              {timeOptions24h.map((time) => (
+                <option key={time} value={time}>
+                  {time}
+                </option>
+              ))}
+            </select>
           </label>
           <label>
             <span className="mb-1 block text-sm font-medium text-gray-700">Ngày làm</span>
@@ -641,22 +681,6 @@ export default function Shifts() {
               className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-[#7ed5e6] focus:ring-2 focus:ring-[#c0edf7]"
               required
             />
-          </label>
-          <label>
-            <span className="mb-1 block text-sm font-medium text-gray-700">Trạng thái</span>
-            <select
-              value={form.status}
-              onChange={(event) => setForm({ ...form, status: event.target.value })}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-[#7ed5e6] focus:ring-2 focus:ring-[#c0edf7]"
-            >
-              {statusOptions
-                .filter((option) => option.value !== 'all')
-                .map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-            </select>
           </label>
           <label>
             <span className="mb-1 block text-sm font-medium text-gray-700">Tiền đầu ca</span>

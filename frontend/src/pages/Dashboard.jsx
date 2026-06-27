@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowRight,
@@ -62,6 +62,25 @@ function polarToCartesian(centerX, centerY, radius, angleInDegrees) {
 }
 
 function describeDonutSegment(centerX, centerY, outerRadius, innerRadius, startAngle, endAngle) {
+  const sweepAngle = endAngle - startAngle;
+  if (sweepAngle <= 0) return '';
+  if (sweepAngle >= 359.99) {
+    const topOuter = polarToCartesian(centerX, centerY, outerRadius, 0);
+    const bottomOuter = polarToCartesian(centerX, centerY, outerRadius, 180);
+    const topInner = polarToCartesian(centerX, centerY, innerRadius, 0);
+    const bottomInner = polarToCartesian(centerX, centerY, innerRadius, 180);
+
+    return [
+      `M ${topOuter.x} ${topOuter.y}`,
+      `A ${outerRadius} ${outerRadius} 0 1 1 ${bottomOuter.x} ${bottomOuter.y}`,
+      `A ${outerRadius} ${outerRadius} 0 1 1 ${topOuter.x} ${topOuter.y}`,
+      `L ${topInner.x} ${topInner.y}`,
+      `A ${innerRadius} ${innerRadius} 0 1 0 ${bottomInner.x} ${bottomInner.y}`,
+      `A ${innerRadius} ${innerRadius} 0 1 0 ${topInner.x} ${topInner.y}`,
+      'Z'
+    ].join(' ');
+  }
+
   const outerStart = polarToCartesian(centerX, centerY, outerRadius, endAngle);
   const outerEnd = polarToCartesian(centerX, centerY, outerRadius, startAngle);
   const innerStart = polarToCartesian(centerX, centerY, innerRadius, startAngle);
@@ -132,6 +151,8 @@ export default function Dashboard() {
     previousProductsSold: 0,
     estimatedProfit: 0,
     previousEstimatedProfit: 0,
+    paymentCash: 0,
+    paymentTransfer: 0,
     revenueGrowth: 0,
     orderGrowth: 0,
     productsSoldGrowth: 0,
@@ -139,30 +160,41 @@ export default function Dashboard() {
   });
   const [topProducts, setTopProducts] = useState([]);
   const [recentOrders, setRecentOrders] = useState([]);
+  const [revenueChart, setRevenueChart] = useState([]);
   const [dashboardPeriod, setDashboardPeriod] = useState('today');
+  const [displayedPeriod, setDisplayedPeriod] = useState('today');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const requestIdRef = useRef(0);
 
   useEffect(() => {
+    const requestId = ++requestIdRef.current;
+
     async function fetchDashboard() {
       setIsLoading(true);
 
       try {
         const params = { period: dashboardPeriod };
-        const [summaryRes, topRes, recentRes] = await Promise.all([
+        const [summaryRes, topRes, recentRes, chartRes] = await Promise.all([
           api.get('/dashboard/summary', { params }),
           api.get('/dashboard/top-products', { params }),
-          api.get('/dashboard/recent-orders', { params })
+          api.get('/dashboard/recent-orders', { params }),
+          api.get('/dashboard/revenue-chart', { params }).catch(() => ({ data: [] }))
         ]);
+
+        if (requestId !== requestIdRef.current) return;
 
         setSummary(summaryRes.data);
         setTopProducts(topRes.data);
         setRecentOrders(recentRes.data);
+        setRevenueChart(Array.isArray(chartRes.data) ? chartRes.data : []);
+        setDisplayedPeriod(dashboardPeriod);
         setError('');
       } catch (requestError) {
+        if (requestId !== requestIdRef.current) return;
         setError(requestError.response?.data?.message || 'Không thể tải dữ liệu dashboard');
       } finally {
-        setIsLoading(false);
+        if (requestId === requestIdRef.current) setIsLoading(false);
       }
     }
 
@@ -170,31 +202,34 @@ export default function Dashboard() {
   }, [dashboardPeriod]);
 
   const dashboardPeriodLabel = useMemo(() => {
-    return dashboardPeriodOptions.find((option) => option.value === dashboardPeriod)?.label || dashboardPeriodOptions[0].label;
-  }, [dashboardPeriod]);
+    return dashboardPeriodOptions.find((option) => option.value === displayedPeriod)?.label || dashboardPeriodOptions[0].label;
+  }, [displayedPeriod]);
 
   const revenueComparisonAmount = safeNumber(summary.todayRevenue) - safeNumber(summary.yesterdayRevenue);
 
   const cards = [
     {
+      id: 'revenue',
       label: `Doanh thu - ${dashboardPeriodLabel}`,
       value: formatCurrency(summary.todayRevenue),
-      caption: dashboardPeriod === 'today'
+      caption: displayedPeriod === 'today'
         ? getTodayGrowthCaption(summary.revenueGrowth)
         : getRevenueCaption(summary.todayRevenue, summary.yesterdayRevenue),
       icon: WalletCards,
       tone: 'blue'
     },
     {
+      id: 'orders',
       label: `Đơn hàng - ${dashboardPeriodLabel}`,
       value: safeNumber(summary.todayOrders).toLocaleString('vi-VN'),
-      caption: dashboardPeriod === 'today'
+      caption: displayedPeriod === 'today'
         ? getTodayGrowthCaption(summary.orderGrowth)
         : getCountCaption(summary.todayOrders, summary.yesterdayOrders, 'đơn'),
       icon: ReceiptText,
       tone: 'gray'
     },
     {
+      id: 'low-stock',
       label: 'Sắp hết hàng',
       value: `${safeNumber(summary.lowStockCount).toLocaleString('vi-VN')} sản phẩm`,
       caption: summary.lowStockCount > 0 ? 'Dưới mức tồn tối thiểu' : 'Kho đang ổn định',
@@ -203,18 +238,20 @@ export default function Dashboard() {
       to: '/products?lowStock=1'
     },
     {
+      id: 'products-sold',
       label: `Sản phẩm đã bán - ${dashboardPeriodLabel}`,
       value: safeNumber(summary.productsSold).toLocaleString('vi-VN'),
-      caption: dashboardPeriod === 'today'
+      caption: displayedPeriod === 'today'
         ? getTodayGrowthCaption(summary.productsSoldGrowth)
         : getCountCaption(summary.productsSold, summary.previousProductsSold, 'sản phẩm'),
       icon: PackageOpen,
       tone: 'slate'
     },
     {
+      id: 'profit',
       label: `Lợi nhuận tạm tính - ${dashboardPeriodLabel}`,
       value: formatCurrency(summary.estimatedProfit),
-      caption: dashboardPeriod === 'today'
+      caption: displayedPeriod === 'today'
         ? getTodayGrowthCaption(summary.estimatedProfitGrowth)
         : getRevenueCaption(summary.estimatedProfit, summary.previousEstimatedProfit),
       icon: TrendingUp,
@@ -223,18 +260,10 @@ export default function Dashboard() {
   ];
 
   const paymentStats = useMemo(() => {
-    const totals = recentOrders.reduce((result, order) => {
-      const key = order.payment_method || 'cash';
-      const amount = safeNumber(order.total);
-
-      if (key === 'cash') {
-        result.cash += amount;
-      } else {
-        result.transfer += amount;
-      }
-
-      return result;
-    }, { cash: 0, transfer: 0 });
+    const totals = {
+      cash: safeNumber(summary.paymentCash),
+      transfer: safeNumber(summary.paymentTransfer)
+    };
     const total = totals.cash + totals.transfer;
     const cashPercent = total > 0 ? Math.round((totals.cash / total) * 100) : 0;
     const transferPercent = total > 0 ? 100 - cashPercent : 0;
@@ -245,7 +274,7 @@ export default function Dashboard() {
       cashPercent,
       transferPercent
     };
-  }, [recentOrders]);
+  }, [summary.paymentCash, summary.paymentTransfer]);
 
   const staffStats = useMemo(() => {
     const totals = recentOrders.reduce((map, order) => {
@@ -266,13 +295,13 @@ export default function Dashboard() {
   }, [recentOrders]);
 
   const paymentChart = useMemo(() => {
-    const cashAngle = Math.min(356, Math.max(4, paymentStats.cashPercent * 3.6));
-    const cashConnectorAngle = Math.max(18, cashAngle / 2);
+    const cashAngle = paymentStats.cashPercent * 3.6;
+    const cashConnectorAngle = cashAngle > 0 ? cashAngle / 2 : 18;
     const transferConnectorAngle = cashAngle + ((360 - cashAngle) / 2);
 
     return {
-      cashEnd: cashAngle - 2,
-      transferStart: cashAngle + 2,
+      cashEnd: cashAngle,
+      transferStart: cashAngle,
       cashConnectorAngle,
       transferConnectorAngle,
       cashLabel: getConnectorLabelPoint(150, 86, 58, cashConnectorAngle, 'right'),
@@ -310,6 +339,10 @@ export default function Dashboard() {
         </div>
       )}
 
+      <div
+        aria-busy={isLoading}
+        className={`space-y-4 transition-opacity duration-200 motion-reduce:transition-none ${isLoading ? 'opacity-60' : 'opacity-100'}`}
+      >
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         {cards.map((card) => {
           const Icon = card.icon;
@@ -317,7 +350,7 @@ export default function Dashboard() {
 
           return (
             <CardWrapper
-              key={card.label}
+              key={card.id}
               to={card.to}
               className={`rounded-lg border bg-white p-4 shadow-[0_1px_3px_rgba(25,28,29,0.08)] ${card.tone === 'amber' && summary.lowStockCount > 0 ? 'border-red-500' : 'border-[#e1e3e4]'} ${
                 card.to ? 'block transition hover:border-[#c8dff0] hover:shadow-[0_8px_24px_rgba(116,184,224,0.18)]' : ''
@@ -326,9 +359,7 @@ export default function Dashboard() {
               <div className="flex min-h-[92px] items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className={`truncate text-sm font-semibold ${card.tone === 'amber' && summary.lowStockCount > 0 ? 'text-red-700' : 'text-[#73777d]'}`}>{card.label}</p>
-                  <p className="mt-3 text-xl font-bold leading-7 text-[#191c1d]">
-                    {isLoading ? '...' : card.value}
-                  </p>
+                  <p className="mt-3 min-h-7 text-xl font-bold leading-7 text-[#191c1d]">{card.value}</p>
                   <p className="mt-1.5 line-clamp-2 text-sm font-medium leading-5 text-[#43474d]">{card.caption}</p>
                 </div>
                 <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-lg ${cardTones[card.tone]}`}>
@@ -344,7 +375,8 @@ export default function Dashboard() {
         <RevenueAreaChart
           totalRevenue={summary.todayRevenue}
           comparisonAmount={revenueComparisonAmount}
-          period={dashboardPeriod}
+          chartRows={revenueChart}
+          period={displayedPeriod}
           periodLabel={dashboardPeriodLabel}
         />
 
@@ -489,6 +521,7 @@ export default function Dashboard() {
           </div>
         </article>
       </section>
+      </div>
     </div>
   );
 }

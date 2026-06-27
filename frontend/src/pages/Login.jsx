@@ -55,7 +55,7 @@ function Field({ label, icon: Icon, children }) {
   );
 }
 
-function LoginCard({ form, loading, remember, showPassword, onFormChange, onRememberChange, onPasswordToggle, onSubmit }) {
+function LoginCard({ form, loading, remember, showPassword, errorMessage, onFormChange, onRememberChange, onPasswordToggle, onSubmit }) {
   const inputClass = 'h-[54px] w-full rounded-xl border border-[#d8e0eb] bg-white pl-12 pr-4 text-[15px] font-medium text-[#17233a] outline-none transition placeholder:text-[#9aa6b8] focus:border-[#5ba9e7] focus:ring-2 focus:ring-[#d9efff]';
 
   return (
@@ -102,6 +102,12 @@ function LoginCard({ form, loading, remember, showPassword, onFormChange, onReme
           </button>
         </Field>
 
+        {errorMessage && (
+          <div className="border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
+            {errorMessage}
+          </div>
+        )}
+
         <div className="flex items-center justify-between gap-4">
           <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-[#26364d]">
             <span className="relative grid h-[18px] w-[18px] place-items-center">
@@ -140,12 +146,17 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [remember, setRemember] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
-  const updateForm = (field, value) => setForm((current) => ({ ...current, [field]: value }));
+  const updateForm = (field, value) => {
+    setErrorMessage('');
+    setForm((current) => ({ ...current, [field]: value }));
+  };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     setLoading(true);
+    setErrorMessage('');
 
     try {
       const response = await api.post('/auth/login', {
@@ -158,11 +169,14 @@ export default function Login() {
       toast.success('Đăng nhập thành công');
       navigate(isFullAccessRole(user?.role) ? '/' : '/pos');
     } catch (error) {
-      const message = error.code === 'ECONNABORTED'
+      const message = error.response?.status === 401
+        ? 'Mật khẩu hoặc mã đăng nhập bạn nhập bị sai'
+        : error.code === 'ECONNABORTED'
         ? 'Máy chủ phản hồi quá chậm. Vui lòng kiểm tra backend đang chạy.'
         : !error.response
           ? 'Không kết nối được máy chủ. Vui lòng kiểm tra backend và kết nối mạng.'
           : error.response?.data?.error || error.response?.data?.message || 'Không thể đăng nhập';
+      setErrorMessage(message);
       toast.error(message);
     } finally {
       setLoading(false);
@@ -183,6 +197,7 @@ export default function Login() {
             loading={loading}
             remember={remember}
             showPassword={showPassword}
+            errorMessage={errorMessage}
             onFormChange={updateForm}
             onRememberChange={setRemember}
             onPasswordToggle={() => setShowPassword((current) => !current)}
