@@ -52,6 +52,7 @@ export default function useSettings() {
         shopInfo: { ...settings.shopInfo, logoUrl: data.logoUrl || '' }
       });
       setSettings(nextSettings);
+      window.dispatchEvent(new CustomEvent('settings-updated', { detail: nextSettings }));
       toast.success('Đã tải logo cửa hàng');
       return data.logoUrl || '';
     } catch (error) {

@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
+  ChevronLeft,
+  ChevronRight,
   Edit,
   Eye,
   EyeOff,
@@ -17,6 +19,7 @@ import Modal from '../components/Modal';
 import { formatDate } from '../utils/format';
 
 const initialForm = { name: '', description: '' };
+const PAGE_SIZE = 6;
 
 const statusFilters = [
   { value: 'all', label: 'Tất cả' },
@@ -51,20 +54,16 @@ function getShortDescription(category) {
 export default function Categories() {
   const navigate = useNavigate();
   const [categories, setCategories] = useState([]);
-  const [products, setProducts] = useState([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [currentPage, setCurrentPage] = useState(1);
   const [form, setForm] = useState(initialForm);
   const [editingCategory, setEditingCategory] = useState(null);
   const [isOpen, setIsOpen] = useState(false);
 
   async function loadData() {
-    const [categoryResponse, productResponse] = await Promise.all([
-      api.get('/categories'),
-      api.get('/products')
-    ]);
+    const categoryResponse = await api.get('/categories?include_hidden=1');
     setCategories(categoryResponse.data);
-    setProducts(productResponse.data);
   }
 
   useEffect(() => {
@@ -74,15 +73,8 @@ export default function Categories() {
   }, []);
 
   const enrichedCategories = useMemo(() => {
-    const productCountByCategory = products.reduce((map, product) => {
-      const key = String(product.category_id || '');
-      if (!key) return map;
-      map.set(key, (map.get(key) || 0) + 1);
-      return map;
-    }, new Map());
-
     return categories.map((category) => {
-      const productCount = productCountByCategory.get(String(category.id)) || 0;
+      const productCount = Number(category.product_count || 0);
       const status = getCategoryStatus({ ...category, productCount });
 
       return {
@@ -91,7 +83,7 @@ export default function Categories() {
         status
       };
     });
-  }, [categories, products]);
+  }, [categories]);
 
   const summary = useMemo(() => ({
     total: enrichedCategories.length,
@@ -115,6 +107,24 @@ export default function Categories() {
       return true;
     });
   }, [enrichedCategories, search, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredCategories.length / PAGE_SIZE));
+  const paginatedCategories = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return filteredCategories.slice(start, start + PAGE_SIZE);
+  }, [currentPage, filteredCategories]);
+  const visiblePages = useMemo(() => (
+    Array.from({ length: totalPages }, (_, index) => index + 1)
+      .filter((page) => page === 1 || page === totalPages || Math.abs(page - currentPage) <= 1)
+  ), [currentPage, totalPages]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, statusFilter]);
+
+  useEffect(() => {
+    setCurrentPage((page) => Math.min(page, totalPages));
+  }, [totalPages]);
 
   const openCreate = () => {
     setEditingCategory(null);
@@ -169,6 +179,21 @@ export default function Categories() {
       await loadData();
     } catch (error) {
       toast.error(error.response?.data?.message || 'Không thể xóa danh mục');
+    }
+  };
+
+  const handleVisibility = async (category) => {
+    const willShow = category.status === 'hidden';
+    const action = willShow ? 'mở' : 'tạm ẩn';
+
+    if (!window.confirm(`${willShow ? 'Mở' : 'Tạm ẩn'} danh mục "${category.name}"?`)) return;
+
+    try {
+      await api.patch(`/categories/${category.id}/visibility`, { is_active: willShow ? 1 : 0 });
+      toast.success(`Đã ${action} danh mục`);
+      await loadData();
+    } catch (error) {
+      toast.error(error.response?.data?.message || `Không thể ${action} danh mục`);
     }
   };
 
@@ -268,7 +293,7 @@ export default function Categories() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {filteredCategories.map((category) => {
+              {paginatedCategories.map((category) => {
                 const statusMeta = getStatusMeta(category.status);
                 const canDelete = Number(category.productCount || 0) === 0;
 
@@ -312,6 +337,19 @@ export default function Categories() {
                         </button>
                         <button
                           type="button"
+                          onClick={() => handleVisibility(category)}
+                          className={`grid h-8 w-8 place-items-center transition ${
+                            category.status === 'hidden'
+                              ? 'text-emerald-600 hover:bg-emerald-50'
+                              : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
+                          }`}
+                          title={category.status === 'hidden' ? 'Mở danh mục' : 'Tạm ẩn'}
+                          aria-label={category.status === 'hidden' ? 'Mở danh mục' : 'Tạm ẩn'}
+                        >
+                          {category.status === 'hidden' ? <Eye size={16} /> : <EyeOff size={16} />}
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => handleDelete(category)}
                           disabled={!canDelete}
                           className={`grid h-8 w-8 place-items-center transition ${
@@ -339,6 +377,52 @@ export default function Categories() {
             </tbody>
           </table>
         </div>
+        {filteredCategories.length > 0 && (
+          <div className="flex flex-col gap-3 border-t border-gray-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm font-medium text-gray-500">
+              Hiển thị {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filteredCategories.length)} trong {filteredCategories.length} danh mục
+            </p>
+            <nav className="flex items-center justify-center gap-1" aria-label="Phân trang danh mục">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                disabled={currentPage === 1}
+                className="grid h-9 w-9 place-items-center border border-gray-200 text-gray-600 transition hover:border-brand hover:text-brand-strong disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="Trang trước"
+              >
+                <ChevronLeft size={17} />
+              </button>
+              {visiblePages.map((page, index) => (
+                <span key={page} className="contents">
+                  {index > 0 && page - visiblePages[index - 1] > 1 && (
+                    <span className="px-1 text-gray-400">…</span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage(page)}
+                    className={`h-9 min-w-9 border px-2 text-sm font-bold transition ${
+                      currentPage === page
+                        ? 'border-brand bg-brand text-white'
+                        : 'border-gray-200 text-gray-600 hover:border-brand hover:text-brand-strong'
+                    }`}
+                    aria-current={currentPage === page ? 'page' : undefined}
+                  >
+                    {page}
+                  </button>
+                </span>
+              ))}
+              <button
+                type="button"
+                onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                disabled={currentPage === totalPages}
+                className="grid h-9 w-9 place-items-center border border-gray-200 text-gray-600 transition hover:border-brand hover:text-brand-strong disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="Trang sau"
+              >
+                <ChevronRight size={17} />
+              </button>
+            </nav>
+          </div>
+        )}
       </section>
 
       <Modal isOpen={isOpen} onClose={closeModal} title={editingCategory ? 'Sửa danh mục' : 'Thêm danh mục'}>

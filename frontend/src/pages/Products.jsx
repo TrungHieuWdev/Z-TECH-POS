@@ -148,6 +148,29 @@ function getCategoryName(categories, categoryId) {
   return categories.find((category) => String(category.id) === String(categoryId))?.name || '';
 }
 
+function productMatchesCategory(product, category) {
+  if (!category) return true;
+  if (String(product.category_id) === String(category.id)) return true;
+
+  const productName = String(product.name || '').toLowerCase();
+  const primaryCategory = String(product.category_name || '');
+
+  if (category.name === 'Cường lực camera') {
+    return primaryCategory === 'Kính cường lực' && productName.includes('camera');
+  }
+  if (category.name === 'Cường lực màn hình') {
+    return primaryCategory === 'Kính cường lực' && !productName.includes('camera');
+  }
+  if (category.name === 'Tai nghe') {
+    return ['Tai nghe có dây', 'Tai nghe không dây'].includes(primaryCategory);
+  }
+  if (category.name === 'Miếng dán PPF') {
+    return primaryCategory === 'Phụ kiện tiện ích'
+      && (productName.includes('ppf') || productName.includes('dán lưng'));
+  }
+  return false;
+}
+
 function getWarrantyBadgeClass(product) {
   if (product.warranty_type === 'initial_exchange') return 'bg-amber-100 text-amber-800';
   if (!Boolean(Number(product.warranty_enabled))) return 'bg-gray-100 text-gray-700';
@@ -189,6 +212,7 @@ export default function Products() {
 
   const filteredProducts = useMemo(() => {
     const keyword = search.trim().toLowerCase();
+    const selectedCategory = categories.find((category) => String(category.id) === String(categoryId));
 
     return products.filter((product) => {
       const stockState = getStockState(product);
@@ -205,7 +229,7 @@ export default function Products() {
 
       if (keyword && !searchable.includes(keyword)) return false;
       if (deviceFamily && product.device_family !== deviceFamily) return false;
-      if (categoryId && String(product.category_id) !== String(categoryId)) return false;
+      if (categoryId && !productMatchesCategory(product, selectedCategory)) return false;
       if (stockFilter && stockState !== stockFilter) return false;
       if (warrantyFilter === 'yes' && (!warrantyEnabled || warrantyType === 'initial_exchange')) return false;
       if (warrantyFilter === 'none' && warrantyEnabled) return false;
@@ -217,7 +241,7 @@ export default function Products() {
       if (activeTab === 'warranty' && !warrantyEnabled) return false;
       return true;
     });
-  }, [products, search, deviceFamily, categoryId, stockFilter, warrantyFilter, statusFilter, activeTab]);
+  }, [products, categories, search, deviceFamily, categoryId, stockFilter, warrantyFilter, statusFilter, activeTab]);
 
   const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE));
   const paginatedProducts = filteredProducts.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);

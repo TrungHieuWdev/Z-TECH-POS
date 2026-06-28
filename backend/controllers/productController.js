@@ -19,12 +19,12 @@ const searchAliasSql = `
       WHEN 'xiaomi' THEN 'xiaomi redmi poco mi'
       ELSE ''
     END,
-    CASE p.category_id
-      WHEN 1 THEN 'op lung case cover'
-      WHEN 2 THEN 'sac cap charger cable cu sac bo sac'
-      WHEN 3 THEN 'tai nghe am thanh bluetooth earphone headphone'
-      WHEN 4 THEN 'kinh cuong luc kinh camera glass lens'
-      WHEN 5 THEN 'gia do dan lung tien ich utility'
+    CASE
+      WHEN LOWER(c.name) LIKE '%ốp lưng%' THEN 'op lung case cover'
+      WHEN LOWER(c.name) LIKE '%sạc%' OR LOWER(c.name) LIKE '%cáp%' THEN 'sac cap charger cable cu sac bo sac'
+      WHEN LOWER(c.name) LIKE '%tai nghe%' THEN 'tai nghe am thanh bluetooth earphone headphone'
+      WHEN LOWER(c.name) LIKE '%cường lực%' THEN 'kinh cuong luc kinh camera glass lens'
+      WHEN LOWER(c.name) LIKE '%ppf%' OR LOWER(c.name) LIKE '%tiện ích%' THEN 'gia do dan lung ppf tien ich utility'
       ELSE ''
     END
   )
@@ -170,7 +170,10 @@ async function resolveImportCategory(item) {
   if (item.category_id) return Number(item.category_id);
 
   const categoryName = String(item.category_name || item.category || item.danh_muc || 'Khác').trim() || 'Khác';
-  const existing = await query('SELECT id FROM categories WHERE LOWER(name) = LOWER(?) LIMIT 1', [categoryName]);
+  const existing = await query(
+    'SELECT id FROM categories WHERE LOWER(name) = LOWER(?) AND is_active = 1 LIMIT 1',
+    [categoryName]
+  );
 
   if (existing[0]) return existing[0].id;
 
@@ -289,7 +292,7 @@ async function validateProduct(product) {
     return 'Model máy là bắt buộc';
   }
 
-  const [category] = await query('SELECT id FROM categories WHERE id = ?', [product.category_id]);
+  const [category] = await query('SELECT id FROM categories WHERE id = ? AND is_active = 1', [product.category_id]);
   if (!category) {
     return 'Danh mục không hợp lệ';
   }
@@ -322,7 +325,23 @@ export async function getAll(req, res) {
     let sql = `${productSelect} WHERE p.is_active = 1`;
 
     if (category_id) {
-      sql += ' AND p.category_id = ?';
+      const [selectedCategory] = await query('SELECT name FROM categories WHERE id = ? AND is_active = 1', [category_id]);
+
+      if (!selectedCategory) {
+        return res.json([]);
+      }
+
+      if (selectedCategory.name === 'Cường lực camera') {
+        sql += " AND (p.category_id = ? OR (c.name = 'Kính cường lực' AND LOWER(p.name) LIKE '%camera%'))";
+      } else if (selectedCategory.name === 'Cường lực màn hình') {
+        sql += " AND (p.category_id = ? OR (c.name = 'Kính cường lực' AND LOWER(p.name) NOT LIKE '%camera%'))";
+      } else if (selectedCategory.name === 'Tai nghe') {
+        sql += " AND (p.category_id = ? OR c.name IN ('Tai nghe có dây', 'Tai nghe không dây'))";
+      } else if (selectedCategory.name === 'Miếng dán PPF') {
+        sql += " AND (p.category_id = ? OR (c.name = 'Phụ kiện tiện ích' AND (LOWER(p.name) LIKE '%ppf%' OR LOWER(p.name) LIKE '%dán lưng%')))";
+      } else {
+        sql += ' AND p.category_id = ?';
+      }
       params.push(category_id);
     }
 

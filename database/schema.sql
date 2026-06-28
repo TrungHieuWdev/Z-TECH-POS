@@ -23,6 +23,7 @@ CREATE TABLE categories (
   id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(100) NOT NULL,
   description TEXT,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -111,6 +112,8 @@ CREATE TABLE orders (
   points_used INT NOT NULL DEFAULT 0,
   points_discount_amount DECIMAL(15,0) NOT NULL DEFAULT 0,
   points_earned INT NOT NULL DEFAULT 0,
+  vat_rate DECIMAL(5,2) NOT NULL DEFAULT 0,
+  vat_amount DECIMAL(15,0) NOT NULL DEFAULT 0,
   total DECIMAL(15,0) NOT NULL,
   payment_method ENUM('cash', 'card', 'transfer') DEFAULT 'cash',
   status ENUM('completed', 'cancelled') DEFAULT 'completed',

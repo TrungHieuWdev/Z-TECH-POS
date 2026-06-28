@@ -5,6 +5,7 @@ import {
   getLowStock,
   getRecentOrders,
   getRevenueChart,
+  getStaffPerformance,
   getSummary,
   getTopProducts
 } from '../controllers/dashboardController.js';
@@ -17,5 +18,6 @@ router.get('/top-products', auth, requireFullAccess, getTopProducts);
 router.get('/low-stock', auth, requireFullAccess, getLowStock);
 router.get('/category-share', auth, requireFullAccess, getCategoryShare);
 router.get('/recent-orders', auth, requireFullAccess, getRecentOrders);
+router.get('/staff-performance', auth, requireFullAccess, getStaffPerformance);
 
 export default router;

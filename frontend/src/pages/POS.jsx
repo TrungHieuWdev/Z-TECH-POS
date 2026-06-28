@@ -22,6 +22,8 @@ import {
 import api from '../api/axios';
 import Modal from '../components/Modal';``
 import ProductImage from '../components/ProductImage';
+import { DEFAULT_SETTINGS, mergeSettings } from '../constants/settingsDefaults';
+import { getSettings, getUploadedAssetUrl } from '../services/settingsService';
 import {
   buildTransferMemo,
   buildVietQrDataUrl,
@@ -45,6 +47,11 @@ const paymentLabels = {
   cash: 'Tiền mặt',
   transfer: 'Chuyển khoản'
 };
+
+function getPaymentLabel(method) {
+  if (method === 'qr') return 'QR Code';
+  return paymentLabels[method] || method;
+}
 
 const TRANSFER_CONFIRM_TIMEOUT_SECONDS = 10 * 60;
 
@@ -120,10 +127,18 @@ function ReceiptContent({ receipt }) {
     return null;
   }
 
+  const shopInfo = receipt.shopInfo || {};
+  const logoSrc = getUploadedAssetUrl(shopInfo.logoUrl);
+  const receiptTitle = receipt.print?.header || shopInfo.name || 'Z-TECH POS';
+  const receiptFooter = receipt.print?.footer || '';
+
   return (
     <div className="space-y-4 text-sm text-[#191c1e]">
       <div className="text-center">
-        <div className="text-lg font-extrabold text-brand-strong">Z-TECH POS</div>
+        {logoSrc && <img src={logoSrc} alt={receiptTitle} className="mx-auto mb-2 h-14 w-14 object-contain" />}
+        <div className="text-lg font-extrabold text-brand-strong">{receiptTitle}</div>
+        {shopInfo.address && <div className="mt-1 text-[11px] font-medium text-[#737686]">{shopInfo.address}</div>}
+        {shopInfo.phone && <div className="text-[11px] font-medium text-[#737686]">{shopInfo.phone}</div>}
         <div className="mt-1 text-xs font-semibold text-[#737686]">Hóa đơn bán hàng</div>
       </div>
 
@@ -138,7 +153,7 @@ function ReceiptContent({ receipt }) {
         </div>
         <div className="flex justify-between gap-3">
           <span className="text-[#737686]">Thanh toán</span>
-          <span className="font-semibold">{paymentLabels[receipt.paymentMethod]}</span>
+          <span className="font-semibold">{getPaymentLabel(receipt.paymentMethod)}</span>
         </div>
         {receipt.transferMemo && (
           <div className="flex justify-between gap-3">
@@ -185,11 +200,16 @@ function ReceiptContent({ receipt }) {
             <span>+{Number(receipt.pointsEarned).toLocaleString('vi-VN')} điểm</span>
           </div>
         )}
+        {Number(receipt.vatAmount || 0) > 0 && (
+          <div className="flex justify-between">
+            <span>VAT {Number(receipt.vatRate || 0).toLocaleString('vi-VN')}%</span>
+            <span>{formatCurrency(receipt.vatAmount)}</span>
+          </div>
+        )}
         <div className="flex justify-between text-base font-extrabold">
           <span>Tổng cộng</span>
           <span>{formatCurrency(receipt.total)}</span>
         </div>
-        <p className="text-center text-[11px] font-medium text-[#737686]">Hóa đơn bán hàng nội bộ, không phải hóa đơn VAT</p>
         {receipt.paymentMethod === 'cash' && (
           <>
             <div className="flex justify-between">
@@ -242,6 +262,7 @@ export default function POS() {
   const [isMobileCartOpen, setIsMobileCartOpen] = useState(false);
   const [mobileCartView, setMobileCartView] = useState('cart');
   const [receipt, setReceipt] = useState(null);
+  const [posSettings, setPosSettings] = useState(DEFAULT_SETTINGS);
   const [transferMemo, setTransferMemo] = useState('');
   const [bankTransfer, setBankTransfer] = useState(getBankTransferSettings);
   const [vietQrDataUrl, setVietQrDataUrl] = useState('');
@@ -258,6 +279,25 @@ export default function POS() {
     const handleBankSettingsUpdate = (event) => setBankTransfer(event.detail);
     window.addEventListener('bank-transfer-settings-updated', handleBankSettingsUpdate);
     return () => window.removeEventListener('bank-transfer-settings-updated', handleBankSettingsUpdate);
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+    getSettings()
+      .then((data) => {
+        if (isMounted) setPosSettings(mergeSettings(data));
+      })
+      .catch(() => {});
+
+    const handleSettingsUpdate = (event) => {
+      setPosSettings(mergeSettings(event.detail));
+    };
+
+    window.addEventListener('settings-updated', handleSettingsUpdate);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('settings-updated', handleSettingsUpdate);
+    };
   }, []);
 
   useEffect(() => {
@@ -415,13 +455,34 @@ export default function POS() {
   const normalizedUsedPoints = Math.min(Math.max(Math.floor(Number(usedPoints) || 0), 0), maxRedeemPoints);
   const pointsDiscountAmount = normalizedUsedPoints * 1000;
   const amountAfterPoints = Math.max(amountAfterPromotion - pointsDiscountAmount, 0);
-  const total = amountAfterPoints;
+  const vatEnabled = Boolean(posSettings.payment?.vat?.enabled);
+  const vatRate = vatEnabled ? Math.max(0, Math.min(100, Number(posSettings.payment?.vat?.rate) || 0)) : 0;
+  const vatAmount = vatRate > 0 ? Math.round((amountAfterPoints * vatRate) / 100) : 0;
+  const totalBeforeVat = amountAfterPoints;
+  const total = totalBeforeVat + vatAmount;
+  const allowOutOfStockSale = Boolean(posSettings.inventory?.allowOutOfStockSale);
   const earnedPoints = selectedCustomer ? Math.floor(total / 10000) : 0;
   const hasCustomerPaid = String(customerPaid).trim() !== '';
   const customerPaidValue = toMoneyAmount(customerPaid);
   const changeDue = paymentMethod === 'cash' ? Math.max(customerPaidValue - total, 0) : 0;
   const amountMissing =
     paymentMethod === 'cash' && hasCustomerPaid ? Math.max(total - customerPaidValue, 0) : 0;
+  const enabledPaymentOptions = useMemo(() => {
+    const methods = posSettings.payment?.methods || {};
+    const options = [];
+
+    if (methods.cash !== false) {
+      options.push(paymentOptions.find((option) => option.value === 'cash'));
+    }
+    if (methods.transfer !== false) {
+      options.push(paymentOptions.find((option) => option.value === 'transfer'));
+    }
+    if (methods.qr) {
+      options.push({ value: 'qr', label: 'QR Code', icon: Smartphone });
+    }
+
+    return options.filter(Boolean);
+  }, [posSettings.payment?.methods]);
 
   useEffect(() => {
     const refresh = () => setPromotions(getPromotions(initialPromotions));
@@ -442,6 +503,17 @@ export default function POS() {
       setUsedPoints(maxRedeemPoints);
     }
   }, [maxRedeemPoints, usedPoints]);
+
+  useEffect(() => {
+    if (!enabledPaymentOptions.length) return;
+    if (enabledPaymentOptions.some((option) => option.value === paymentMethod)) return;
+
+    const configuredDefault = posSettings.payment?.defaultMethod;
+    const nextMethod = enabledPaymentOptions.some((option) => option.value === configuredDefault)
+      ? configuredDefault
+      : enabledPaymentOptions[0].value;
+    setPaymentMethod(nextMethod);
+  }, [enabledPaymentOptions, paymentMethod, posSettings.payment?.defaultMethod]);
 
   const toggleDeviceFamily = (value) => {
     // Tim nhanh theo dong may tach rieng voi loc danh muc san pham chung.
@@ -469,7 +541,7 @@ export default function POS() {
       const found = current.find((item) => item.id === product.id);
 
       if (found) {
-        if (found.quantity >= Number(product.stock_quantity)) {
+        if (!allowOutOfStockSale && found.quantity >= Number(product.stock_quantity)) {
           toast.error('Không đủ tồn kho');
           return current;
         }
@@ -479,7 +551,7 @@ export default function POS() {
         );
       }
 
-      if (Number(product.stock_quantity) <= 0) {
+      if (!allowOutOfStockSale && Number(product.stock_quantity) <= 0) {
         toast.error('Sản phẩm đã hết hàng');
         return current;
       }
@@ -498,14 +570,14 @@ export default function POS() {
       const response = await api.get(`/products/barcode/${encodeURIComponent(code)}`);
       const product = response.data;
 
-      if (Number(product.stock_quantity) <= 0) {
+      if (!allowOutOfStockSale && Number(product.stock_quantity) <= 0) {
         toast.error('Sản phẩm đã hết hàng');
         setScanCode('');
         return;
       }
 
       const existingItem = cart.find((item) => item.id === product.id);
-      if (existingItem && existingItem.quantity >= Number(product.stock_quantity)) {
+      if (!allowOutOfStockSale && existingItem && existingItem.quantity >= Number(product.stock_quantity)) {
         toast.error('Không đủ tồn kho');
         setScanCode('');
         return;
@@ -538,10 +610,9 @@ export default function POS() {
           item.id === productId
             ? {
                 ...item,
-                quantity: Math.min(
-                  Math.max(normalizedQuantity, 0),
-                  Number(item.stock_quantity)
-                )
+                quantity: allowOutOfStockSale
+                  ? Math.max(normalizedQuantity, 0)
+                  : Math.min(Math.max(normalizedQuantity, 0), Number(item.stock_quantity))
               }
             : item
         )
@@ -669,8 +740,8 @@ export default function POS() {
       return;
     }
 
-    const latestBankTransfer = getBankTransferSettings();
-    if (paymentMethod === 'transfer' && !isBankTransferConfigured(latestBankTransfer)) {
+    const latestBankTransfer = bankTransfer;
+    if ((paymentMethod === 'transfer' || paymentMethod === 'qr') && !isBankTransferConfigured(latestBankTransfer)) {
       toast.error('Chưa cấu hình thông tin ngân hàng chuyển khoản');
       return;
     }
@@ -683,7 +754,7 @@ export default function POS() {
   };
 
   const continueToTransferPayment = async () => {
-    const latestBankTransfer = getBankTransferSettings();
+    const latestBankTransfer = bankTransfer;
 
     if (!isBankTransferConfigured(latestBankTransfer)) {
       toast.error('Chưa cấu hình thông tin ngân hàng chuyển khoản');
@@ -719,7 +790,7 @@ export default function POS() {
         items: buildOrderItems(cart),
         promotion_discount: promotionDiscount,
         points_used: normalizedUsedPoints,
-        payment_method: paymentMethod
+        payment_method: paymentMethod === 'qr' ? 'transfer' : paymentMethod
       });
 
       setReceipt({
@@ -735,7 +806,12 @@ export default function POS() {
         total,
         customerPaid: paymentMethod === 'cash' && hasCustomerPaid ? customerPaidValue : total,
         changeDue,
-        transferMemo: paymentMethod === 'transfer' ? transferMemo : ''
+        vatRate,
+        vatAmount,
+        totalBeforeVat,
+        shopInfo: posSettings.shopInfo,
+        print: posSettings.print,
+        transferMemo: paymentMethod === 'transfer' || paymentMethod === 'qr' ? transferMemo : ''
       });
       setIsConfirmOpen(false);
       setCheckoutStep('confirm');
@@ -744,6 +820,9 @@ export default function POS() {
       await loadCustomers(customerLookup);
       await loadProducts();
       toast.success('Thanh toán thành công');
+      if (posSettings.print?.autoPrintAfterPayment) {
+        setTimeout(() => window.print(), 250);
+      }
       setIsMobileCartOpen(false);
     } catch (error) {
       toast.error(error.response?.data?.message || 'Không thể thanh toán');
@@ -772,7 +851,7 @@ export default function POS() {
     setCheckoutStep('confirm');
   };
 
-  const isTransferQrStep = paymentMethod === 'transfer' && checkoutStep === 'transfer';
+  const isTransferQrStep = (paymentMethod === 'transfer' || paymentMethod === 'qr') && checkoutStep === 'transfer';
 
   return (
     <>
@@ -1024,7 +1103,7 @@ export default function POS() {
                           inputMode="numeric"
                           pattern="[0-9]*"
                           min="0"
-                          max={Number(item.stock_quantity || 0)}
+                          max={allowOutOfStockSale ? undefined : Number(item.stock_quantity || 0)}
                           value={quantityDrafts[item.id] ?? item.quantity}
                           onChange={(event) => handleQuantityInput(item.id, event.target.value)}
                           onBlur={(event) => commitQuantityInput(item.id, event.target.value)}
@@ -1144,6 +1223,12 @@ export default function POS() {
                 </div>
               </>
             )}
+            {vatAmount > 0 && (
+              <div className="flex items-center justify-between text-sm text-[#434655]">
+                <span>VAT {vatRate.toLocaleString('vi-VN')}%</span>
+                <span className="font-bold">{formatCurrency(vatAmount)}</span>
+              </div>
+            )}
             <div className="flex items-center justify-between border-t border-[#c3c6d7] pt-2">
               <span className="text-base font-bold uppercase text-[#191c1e]">Tổng cộng</span>
               <span className="text-base font-extrabold text-brand-strong">{formatCurrency(total)}</span>
@@ -1151,7 +1236,7 @@ export default function POS() {
           </div>
 
           <div className="mb-2 grid grid-cols-2 gap-2">
-            {paymentOptions.map((option) => {
+            {enabledPaymentOptions.map((option) => {
               const Icon = option.icon;
               const isSelected = paymentMethod === option.value;
 
@@ -1512,7 +1597,7 @@ export default function POS() {
           )}
           <div className="flex justify-between">
             <span>Phương thức</span>
-            <span className="font-bold">{paymentLabels[paymentMethod]}</span>
+            <span className="font-bold">{getPaymentLabel(paymentMethod)}</span>
           </div>
           {paymentMethod === 'cash' && (
             <>
@@ -1525,6 +1610,12 @@ export default function POS() {
                 <span>{formatCurrency(changeDue)}</span>
               </div>
             </>
+          )}
+          {vatAmount > 0 && (
+            <div className="flex justify-between">
+              <span>VAT {vatRate.toLocaleString('vi-VN')}%</span>
+              <span>{formatCurrency(vatAmount)}</span>
+            </div>
           )}
           <div className="flex justify-between text-lg font-extrabold text-[#191c1e]">
             <span>Tổng cộng</span>
@@ -1543,7 +1634,7 @@ export default function POS() {
           </button>
           <button
             type="button"
-            onClick={paymentMethod === 'transfer' && checkoutStep === 'confirm' ? continueToTransferPayment : confirmCheckout}
+            onClick={(paymentMethod === 'transfer' || paymentMethod === 'qr') && checkoutStep === 'confirm' ? continueToTransferPayment : confirmCheckout}
             disabled={loading}
             className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 font-bold text-white disabled:opacity-60 ${
               isTransferQrStep ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-[#74B8E0]'
@@ -1552,10 +1643,10 @@ export default function POS() {
             <CheckCircle2 size={18} />
             <span>
               {loading
-                ? paymentMethod === 'transfer' && checkoutStep === 'confirm'
+                ? (paymentMethod === 'transfer' || paymentMethod === 'qr') && checkoutStep === 'confirm'
                   ? 'Đang tạo QR...'
                   : 'Đang thanh toán...'
-                : paymentMethod === 'transfer' && checkoutStep === 'confirm'
+                : (paymentMethod === 'transfer' || paymentMethod === 'qr') && checkoutStep === 'confirm'
                   ? 'Tiếp tục chuyển khoản'
                   : isTransferQrStep
                     ? 'Xác nhận đã nhận tiền'

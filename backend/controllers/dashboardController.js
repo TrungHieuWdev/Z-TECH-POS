@@ -280,3 +280,34 @@ export async function getRecentOrders(req, res) {
     res.status(500).json({ message: 'Không thể lấy đơn hàng gần đây', error: error.message });
   }
 }
+
+export async function getStaffPerformance(req, res) {
+  try {
+    const filters = getPeriodFilters(req.query.period || 'today', 'o.');
+    const rows = await query(
+      `SELECT
+         o.user_id,
+         COALESCE(NULLIF(TRIM(u.name), ''), 'Nhan vien') AS name,
+         COALESCE(u.role, 'employee') AS role,
+         COUNT(*) AS count,
+         COALESCE(SUM(o.total), 0) AS total
+       FROM orders o
+       LEFT JOIN users u ON o.user_id = u.id
+       WHERE o.status = 'completed'
+         AND ${filters.current}
+         AND LOWER(COALESCE(u.role, 'employee')) NOT IN ('owner', 'manager', 'admin')
+       GROUP BY o.user_id, name, role
+       ORDER BY total DESC`
+    );
+
+    res.json(rows.map((row) => ({
+      id: row.user_id,
+      name: row.name,
+      role: row.role,
+      count: toNumber(row.count),
+      total: toNumber(row.total)
+    })));
+  } catch (error) {
+    res.status(500).json({ message: 'Khong the lay hieu suat nhan vien', error: error.message });
+  }
+}

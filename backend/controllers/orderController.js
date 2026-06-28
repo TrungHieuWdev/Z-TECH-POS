@@ -3,6 +3,67 @@ import { randomUUID } from 'node:crypto';
 import { hasFullAccess } from '../middleware/auth.js';
 
 let warrantySnapshotReady = false;
+let orderSettingsColumnsReady = false;
+
+function settingEnabled(value) {
+  return ['1', 'true', 'yes', 'on'].includes(String(value || '').toLowerCase());
+}
+
+async function ensureOrderSettingsColumns() {
+  if (orderSettingsColumnsReady) return;
+
+  const columns = [
+    ['vat_rate', 'DECIMAL(5,2) NOT NULL DEFAULT 0'],
+    ['vat_amount', 'DECIMAL(15,0) NOT NULL DEFAULT 0']
+  ];
+
+  for (const [name, definition] of columns) {
+    const found = await query("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'orders' AND COLUMN_NAME = ?", [name]);
+    if (!found.length) await query(`ALTER TABLE orders ADD COLUMN ${name} ${definition}`);
+  }
+
+  orderSettingsColumnsReady = true;
+}
+
+async function getVatSettings(db = query) {
+  const rows = await db(
+    "SELECT setting_key, setting_value FROM system_settings WHERE setting_key IN ('vat_enabled', 'vat_rate')"
+  );
+  const values = Object.fromEntries(rows.map((row) => [row.setting_key, row.setting_value]));
+  const enabled = settingEnabled(values.vat_enabled);
+  const rate = Math.max(0, Math.min(100, Number(values.vat_rate) || 0));
+
+  return {
+    enabled: enabled && rate > 0,
+    rate
+  };
+}
+
+async function getInventorySettings(db = query) {
+  const rows = await db(
+    "SELECT setting_key, setting_value FROM system_settings WHERE setting_key IN ('inventory_allow_out_of_stock_sale')"
+  );
+  const values = Object.fromEntries(rows.map((row) => [row.setting_key, row.setting_value]));
+
+  return {
+    allowOutOfStockSale: settingEnabled(values.inventory_allow_out_of_stock_sale)
+  };
+}
+
+async function getPaymentSettings(db = query) {
+  const rows = await db(
+    "SELECT setting_key, setting_value FROM system_settings WHERE setting_key IN ('payment_cash_enabled', 'payment_transfer_enabled', 'payment_qr_enabled')"
+  );
+  const values = Object.fromEntries(rows.map((row) => [row.setting_key, row.setting_value]));
+  const transferEnabled = values.payment_transfer_enabled === undefined ? true : settingEnabled(values.payment_transfer_enabled);
+  const qrEnabled = settingEnabled(values.payment_qr_enabled);
+
+  return {
+    cash: values.payment_cash_enabled === undefined ? true : settingEnabled(values.payment_cash_enabled),
+    transfer: transferEnabled || qrEnabled
+  };
+}
+
 async function ensureWarrantySnapshotColumns() {
   if (warrantySnapshotReady) return;
   const columns = [
@@ -36,6 +97,7 @@ async function buildOrderNumber(db = query) {
 export async function create(req, res) {
   try {
     await ensureWarrantySnapshotColumns();
+    await ensureOrderSettingsColumns();
     const {
       customer_id = null,
       items = [],
@@ -52,6 +114,14 @@ export async function create(req, res) {
     const createdOrder = await withTransaction(async (db) => {
       const orderItems = [];
       let subtotal = 0;
+      const inventorySettings = await getInventorySettings(db);
+      const paymentSettings = await getPaymentSettings(db);
+
+      if (!paymentSettings[payment_method]) {
+        const error = new Error('Phuong thuc thanh toan dang bi tat trong cai dat');
+        error.status = 400;
+        throw error;
+      }
 
       for (const item of items) {
         const productId = item.product_id;
@@ -72,7 +142,7 @@ export async function create(req, res) {
           error.status = 404;
           throw error;
         }
-        if (Number(product.stock_quantity) < quantity) {
+        if (!inventorySettings.allowOutOfStockSale && Number(product.stock_quantity) < quantity) {
           const error = new Error(`Sản phẩm ${product.name} không đủ tồn kho`);
           error.status = 400;
           throw error;
@@ -112,16 +182,18 @@ export async function create(req, res) {
 
       const pointsDiscountAmount = requestedPoints * 1000;
       const afterPoints = Math.max(amountAfterPromotion - pointsDiscountAmount, 0);
-      const total = afterPoints;
+      const vatSettings = await getVatSettings(db);
+      const vatAmount = vatSettings.enabled ? Math.round((afterPoints * vatSettings.rate) / 100) : 0;
+      const total = afterPoints + vatAmount;
       const earnedPoints = customer_id ? Math.floor(total / 10000) : 0;
       const totalDiscount = promotionDiscount + pointsDiscountAmount;
       const orderNumber = await buildOrderNumber(db);
 
       const orderResult = await db(
         `INSERT INTO orders
-          (customer_id, user_id, order_number, subtotal, discount, points_used, points_discount_amount, points_earned, total, payment_method, status, note)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?)`,
-        [customer_id || null, req.user.id, orderNumber, subtotal, totalDiscount, requestedPoints, pointsDiscountAmount, earnedPoints, total, payment_method, note]
+          (customer_id, user_id, order_number, subtotal, discount, points_used, points_discount_amount, points_earned, vat_rate, vat_amount, total, payment_method, status, note)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?)`,
+        [customer_id || null, req.user.id, orderNumber, subtotal, totalDiscount, requestedPoints, pointsDiscountAmount, earnedPoints, vatSettings.enabled ? vatSettings.rate : 0, vatAmount, total, payment_method, note]
       );
 
       for (const item of orderItems) {

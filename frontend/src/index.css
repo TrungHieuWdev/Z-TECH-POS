@@ -94,6 +94,34 @@ textarea {
   font: inherit;
 }
 
+@keyframes payment-donut-reveal {
+  from { stroke-dashoffset: 1; }
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes payment-chart-details-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.payment-donut-reveal {
+  animation: payment-donut-reveal 850ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  transform: rotate(-90deg);
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.payment-chart-details {
+  animation: payment-chart-details-in 350ms ease-out 600ms both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .payment-donut-reveal,
+  .payment-chart-details {
+    animation: none;
+  }
+}
+
 .print-receipt {
   display: none;
 }
