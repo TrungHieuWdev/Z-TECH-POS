@@ -46,8 +46,68 @@ const api = axios.create({
   timeout: 8000
 });
 
+const CACHE_TTL = 15 * 60 * 1000;
+const responseCache = new Map();
+const pendingRequests = new Map();
+
+function stableParams(params) {
+  if (!params || typeof params !== 'object') return String(params || '');
+  return JSON.stringify(Object.keys(params).sort().map((key) => [key, params[key]]));
+}
+
+function getRequestKey(config) {
+  return `${config.baseURL || ''}${config.url || ''}?${stableParams(config.params)}`;
+}
+
+export function clearApiCache() {
+  responseCache.clear();
+}
+
 api.interceptors.request.use((config) => {
   const token = getToken();
+  const method = String(config.method || 'get').toLowerCase();
+
+  if (method !== 'get') clearApiCache();
+
+  if (method === 'get' && config.cache !== false) {
+    const requestKey = getRequestKey(config);
+    const cached = responseCache.get(requestKey);
+
+    if (cached && Date.now() - cached.savedAt < CACHE_TTL) {
+      config.__servedFromCache = true;
+      config.adapter = async () => ({
+        data: cached.data,
+        status: cached.status,
+        statusText: cached.statusText,
+        headers: cached.headers,
+        config,
+        request: null
+      });
+    } else {
+      if (cached) responseCache.delete(requestKey);
+      config.__cacheKey = requestKey;
+
+      const pending = pendingRequests.get(requestKey);
+      if (pending) {
+        config.__joinedPendingRequest = true;
+        config.adapter = async () => {
+          const response = await pending;
+          return { ...response, config };
+        };
+      } else {
+        const defaultAdapter = axios.getAdapter(config.adapter || api.defaults.adapter);
+        config.adapter = (adapterConfig) => {
+          const request = defaultAdapter(adapterConfig);
+          pendingRequests.set(requestKey, request);
+          const clearPending = () => {
+            if (pendingRequests.get(requestKey) === request) pendingRequests.delete(requestKey);
+          };
+          request.then(clearPending, clearPending);
+          return request;
+        };
+      }
+    }
+  }
 
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -57,7 +117,18 @@ api.interceptors.request.use((config) => {
 });
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    if (response.config?.__cacheKey && !response.config.__servedFromCache) {
+      responseCache.set(response.config.__cacheKey, {
+        savedAt: Date.now(),
+        data: response.data,
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers
+      });
+    }
+    return response;
+  },
   (error) => {
     const requestUrl = String(error.config?.url || '');
     const isLoginRequest = requestUrl.includes('/auth/login');

@@ -64,7 +64,7 @@ export default function ActivityLogs() {
   const [dateTo, setDateTo] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 
-  async function loadLogs() {
+  async function loadLogs(forceRefresh = false) {
     setIsLoading(true);
 
     try {
@@ -74,7 +74,7 @@ export default function ActivityLogs() {
       if (dateFrom) params.date_from = dateFrom;
       if (dateTo) params.date_to = dateTo;
 
-      const response = await api.get('/activity-logs', { params });
+      const response = await api.get('/activity-logs', { params, cache: !forceRefresh });
       setLogs(response.data);
     } catch (error) {
       toast.error(error.response?.data?.message || 'Không thể tải nhật ký hoạt động');
@@ -116,7 +116,7 @@ export default function ActivityLogs() {
         </div>
         <button
           type="button"
-          onClick={loadLogs}
+          onClick={() => loadLogs(true)}
           disabled={isLoading}
           className="inline-flex h-11 items-center gap-2 rounded-lg bg-[#74B8E0] px-4 text-sm font-bold text-white shadow-sm transition hover:bg-[#5eaed9] disabled:opacity-60"
         >

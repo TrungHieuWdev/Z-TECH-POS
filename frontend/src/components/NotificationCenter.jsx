@@ -12,7 +12,8 @@ export default function NotificationCenter({ isOpen, onClose, onCountChange }) {
   async function load() {
     setLoading(true);
     const [productResult, activityResult] = await Promise.allSettled([
-      api.get('/products'), api.get('/activity-logs', { params: { limit: 15 } })
+      api.get('/products', { cache: false }),
+      api.get('/activity-logs', { params: { limit: 15 }, cache: false })
     ]);
     if (productResult.status === 'fulfilled') setProducts(productResult.value.data || []);
     if (activityResult.status === 'fulfilled') setActivities(activityResult.value.data || []);
