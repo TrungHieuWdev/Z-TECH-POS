@@ -36,12 +36,6 @@ const statusOptions = [
   { value: 'cancelled', label: 'Đã hủy' }
 ];
 
-const employeeOptions = [
-  'Trần Thị Hạnh',
-  'Lê Quốc Khoa',
-  'Phạm Gia Bảo',
-  'Nguyễn Văn Minh'
-];
 
 const shiftNameOptions = ['Ca sáng', 'Ca trưa', 'Ca chiều', 'Ca tối'];
 

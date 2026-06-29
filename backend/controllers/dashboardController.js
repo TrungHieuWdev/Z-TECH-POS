@@ -14,13 +14,23 @@ function getPercentChange(current, previous) {
 }
 
 function getCategorySharePeriod(value = 'today') {
-  return ['today', '7days', '14days', '30days', '90days'].includes(value) ? value : 'today';
+  return ['today', 'yesterday', '7days', '14days', '30days', '90days'].includes(value) ? value : 'today';
+}
+
+function getSelectedDate(value) {
+  const date = String(value || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return '';
+
+  const parsed = new Date(`${date}T00:00:00Z`);
+  return Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date ? '' : date;
 }
 
 function getCategoryShareDateFilter(period = 'today') {
   switch (period) {
     case 'today':
       return 'AND DATE(o.created_at) = CURDATE()';
+    case 'yesterday':
+      return 'AND DATE(o.created_at) = DATE_SUB(CURDATE(), INTERVAL 1 DAY)';
     case '7days':
       return 'AND o.created_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)';
     case '14days':
@@ -33,10 +43,18 @@ function getCategoryShareDateFilter(period = 'today') {
   }
 }
 
-function getPeriodFilters(value = 'today', alias = '') {
+function getPeriodFilters(value = 'today', alias = '', selectedDate = '') {
   const period = getCategorySharePeriod(value);
   const column = `${alias}created_at`;
+  const date = getSelectedDate(selectedDate);
+  if (date) {
+    return {
+      current: `DATE(${column}) = '${date}'`,
+      previous: `DATE(${column}) = DATE_SUB('${date}', INTERVAL 1 DAY)`
+    };
+  }
   if (period === 'today') return { current: `DATE(${column}) = CURDATE()`, previous: `DATE(${column}) = DATE_SUB(CURDATE(), INTERVAL 1 DAY)` };
+  if (period === 'yesterday') return { current: `DATE(${column}) = DATE_SUB(CURDATE(), INTERVAL 1 DAY)`, previous: `DATE(${column}) = DATE_SUB(CURDATE(), INTERVAL 2 DAY)` };
   if (period === '7days') return { current: `${column} >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)`, previous: `${column} >= DATE_SUB(CURDATE(), INTERVAL 13 DAY) AND ${column} < DATE_SUB(CURDATE(), INTERVAL 6 DAY)` };
   if (period === '14days') return { current: `${column} >= DATE_SUB(CURDATE(), INTERVAL 13 DAY)`, previous: `${column} >= DATE_SUB(CURDATE(), INTERVAL 27 DAY) AND ${column} < DATE_SUB(CURDATE(), INTERVAL 13 DAY)` };
   if (period === '90days') return { current: `${column} >= DATE_SUB(CURDATE(), INTERVAL 89 DAY)`, previous: `${column} >= DATE_SUB(CURDATE(), INTERVAL 179 DAY) AND ${column} < DATE_SUB(CURDATE(), INTERVAL 89 DAY)` };
@@ -45,8 +63,8 @@ function getPeriodFilters(value = 'today', alias = '') {
 
 export async function getSummary(req, res) {
   try {
-    const filters = getPeriodFilters(req.query.period || 'today');
-    const orderItemFilters = getPeriodFilters(req.query.period || 'today', 'o.');
+    const filters = getPeriodFilters(req.query.period || 'today', '', req.query.date);
+    const orderItemFilters = getPeriodFilters(req.query.period || 'today', 'o.', req.query.date);
     const [
       todayRevenue,
       yesterdayRevenue,
@@ -148,8 +166,9 @@ export async function getSummary(req, res) {
 export async function getRevenueChart(req, res) {
   try {
     const period = getCategorySharePeriod(req.query.period || 'today');
-    const filters = getPeriodFilters(period);
-    const bucketExpression = period === 'today'
+    const selectedDate = getSelectedDate(req.query.date);
+    const filters = getPeriodFilters(period, '', selectedDate);
+    const bucketExpression = period === 'today' || period === 'yesterday' || selectedDate
       ? 'HOUR(created_at)'
       : "DATE_FORMAT(created_at, '%Y-%m-%d')";
 
@@ -173,7 +192,7 @@ export async function getRevenueChart(req, res) {
 
 export async function getTopProducts(req, res) {
   try {
-    const filters = getPeriodFilters(req.query.period || 'today', 'o.');
+    const filters = getPeriodFilters(req.query.period || 'today', 'o.', req.query.date);
     const rows = await query(
       `SELECT
          p.id AS product_id,
@@ -223,7 +242,10 @@ export async function getLowStock(req, res) {
 export async function getCategoryShare(req, res) {
   try {
     const period = getCategorySharePeriod(req.query.period);
-    const dateFilter = getCategoryShareDateFilter(period);
+    const selectedDate = getSelectedDate(req.query.date);
+    const dateFilter = selectedDate
+      ? `AND DATE(o.created_at) = '${selectedDate}'`
+      : getCategoryShareDateFilter(period);
     const rows = await query(
       `SELECT
          COALESCE(c.name, 'Chưa phân loại') AS name,
@@ -253,7 +275,7 @@ export async function getCategoryShare(req, res) {
 
 export async function getRecentOrders(req, res) {
   try {
-    const filters = getPeriodFilters(req.query.period || 'today', 'o.');
+    const filters = getPeriodFilters(req.query.period || 'today', 'o.', req.query.date);
     const rows = await query(
       `SELECT
          o.id,
@@ -283,7 +305,7 @@ export async function getRecentOrders(req, res) {
 
 export async function getStaffPerformance(req, res) {
   try {
-    const filters = getPeriodFilters(req.query.period || 'today', 'o.');
+    const filters = getPeriodFilters(req.query.period || 'today', 'o.', req.query.date);
     const rows = await query(
       `SELECT
          o.user_id,

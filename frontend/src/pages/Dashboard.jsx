@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  ArrowRight,
   CalendarCheck,
+  CalendarDays,
   ChevronDown,
   CreditCard,
   PackageCheck,
@@ -18,11 +18,19 @@ import { formatCurrency, formatDate, formatTime } from '../utils/format';
 
 const dashboardPeriodOptions = [
   { value: 'today', label: 'Hôm nay' },
+  { value: 'yesterday', label: 'Hôm qua' },
   { value: '7days', label: '7 ngày' },
   { value: '14days', label: '14 ngày' },
   { value: '30days', label: '30 ngày' },
   { value: '90days', label: '90 ngày' }
 ];
+
+function getLocalDateValue(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
 const cardTones = {
   blue: 'bg-brand-soft text-brand-ink',
@@ -38,13 +46,13 @@ function formatPercent(value) {
   return `${prefix}${cappedValue.toLocaleString('vi-VN')}%`;
 }
 
-function getTodayGrowthCaption(value) {
-  if (value === null || value === undefined) return 'Hôm qua chưa có dữ liệu';
+function getTodayGrowthCaption(value, comparisonLabel = 'hôm qua') {
+  if (value === null || value === undefined) return `${comparisonLabel.charAt(0).toUpperCase()}${comparisonLabel.slice(1)} chưa có dữ liệu`;
 
   const numberValue = safeNumber(value);
-  if (numberValue === 0) return 'Bằng hôm qua';
+  if (numberValue === 0) return `Bằng ${comparisonLabel}`;
 
-  return `${numberValue > 0 ? 'Tăng' : 'Giảm'} ${formatPercent(Math.abs(numberValue))} so với hôm qua`;
+  return `${numberValue > 0 ? 'Tăng' : 'Giảm'} ${formatPercent(Math.abs(numberValue))} so với ${comparisonLabel}`;
 }
 
 function safeNumber(value) {
@@ -163,7 +171,9 @@ export default function Dashboard() {
   const [staffPerformance, setStaffPerformance] = useState([]);
   const [revenueChart, setRevenueChart] = useState([]);
   const [dashboardPeriod, setDashboardPeriod] = useState('today');
+  const [selectedDate, setSelectedDate] = useState('');
   const [displayedPeriod, setDisplayedPeriod] = useState('today');
+  const [displayedDate, setDisplayedDate] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const requestIdRef = useRef(0);
@@ -175,7 +185,7 @@ export default function Dashboard() {
       setIsLoading(true);
 
       try {
-        const params = { period: dashboardPeriod };
+        const params = { period: dashboardPeriod, ...(selectedDate ? { date: selectedDate } : {}) };
         const [summaryRes, topRes, recentRes, chartRes, staffRes] = await Promise.all([
           api.get('/dashboard/summary', { params }),
           api.get('/dashboard/top-products', { params }),
@@ -192,6 +202,7 @@ export default function Dashboard() {
         setRevenueChart(Array.isArray(chartRes.data) ? chartRes.data : []);
         setStaffPerformance(Array.isArray(staffRes.data) ? staffRes.data : []);
         setDisplayedPeriod(dashboardPeriod);
+        setDisplayedDate(selectedDate);
         setError('');
       } catch (requestError) {
         if (requestId !== requestIdRef.current) return;
@@ -202,21 +213,25 @@ export default function Dashboard() {
     }
 
     fetchDashboard();
-  }, [dashboardPeriod]);
+  }, [dashboardPeriod, selectedDate]);
 
   const dashboardPeriodLabel = useMemo(() => {
+    if (displayedDate) {
+      return new Intl.DateTimeFormat('vi-VN').format(new Date(`${displayedDate}T00:00:00`));
+    }
     return dashboardPeriodOptions.find((option) => option.value === displayedPeriod)?.label || dashboardPeriodOptions[0].label;
-  }, [displayedPeriod]);
+  }, [displayedDate, displayedPeriod]);
 
   const revenueComparisonAmount = safeNumber(summary.todayRevenue) - safeNumber(summary.yesterdayRevenue);
+  const dailyComparisonLabel = displayedPeriod === 'today' && !displayedDate ? 'hôm qua' : 'ngày trước';
 
   const cards = [
     {
       id: 'revenue',
       label: 'Doanh thu',
       value: formatCurrency(summary.todayRevenue),
-      caption: displayedPeriod === 'today'
-        ? getTodayGrowthCaption(summary.revenueGrowth)
+      caption: ['today', 'yesterday'].includes(displayedPeriod) || displayedDate
+        ? getTodayGrowthCaption(summary.revenueGrowth, dailyComparisonLabel)
         : getRevenueCaption(summary.todayRevenue, summary.yesterdayRevenue),
       icon: WalletCards,
       tone: 'blue'
@@ -225,8 +240,8 @@ export default function Dashboard() {
       id: 'orders',
       label: 'Đơn hàng',
       value: safeNumber(summary.todayOrders).toLocaleString('vi-VN'),
-      caption: displayedPeriod === 'today'
-        ? getTodayGrowthCaption(summary.orderGrowth)
+      caption: ['today', 'yesterday'].includes(displayedPeriod) || displayedDate
+        ? getTodayGrowthCaption(summary.orderGrowth, dailyComparisonLabel)
         : getCountCaption(summary.todayOrders, summary.yesterdayOrders, 'đơn'),
       icon: ReceiptText,
       tone: 'gray'
@@ -244,8 +259,8 @@ export default function Dashboard() {
       id: 'products-sold',
       label: 'Sản phẩm đã bán',
       value: safeNumber(summary.productsSold).toLocaleString('vi-VN'),
-      caption: displayedPeriod === 'today'
-        ? getTodayGrowthCaption(summary.productsSoldGrowth)
+      caption: ['today', 'yesterday'].includes(displayedPeriod) || displayedDate
+        ? getTodayGrowthCaption(summary.productsSoldGrowth, dailyComparisonLabel)
         : getCountCaption(summary.productsSold, summary.previousProductsSold, 'sản phẩm'),
       icon: PackageOpen,
       tone: 'slate'
@@ -254,8 +269,8 @@ export default function Dashboard() {
       id: 'profit',
       label: 'Lợi nhuận tạm tính',
       value: formatCurrency(summary.estimatedProfit),
-      caption: displayedPeriod === 'today'
-        ? getTodayGrowthCaption(summary.estimatedProfitGrowth)
+      caption: ['today', 'yesterday'].includes(displayedPeriod) || displayedDate
+        ? getTodayGrowthCaption(summary.estimatedProfitGrowth, dailyComparisonLabel)
         : getRevenueCaption(summary.estimatedProfit, summary.previousEstimatedProfit),
       icon: TrendingUp,
       tone: 'gray'
@@ -339,7 +354,7 @@ export default function Dashboard() {
         id: 'transfer',
         label: 'Chuyá»ƒn khoáº£n',
         percent: paymentStats.transferPercent,
-        color: '#f59e0b',
+        color: '#7FAF9B',
         startAngle,
         endAngle: 360,
         connectorAngle,
@@ -360,18 +375,37 @@ export default function Dashboard() {
           <h1 className="text-2xl font-extrabold text-gray-950">Dashboard</h1>
           <p className="mt-1 text-sm font-medium text-gray-500">Theo dõi nhanh doanh thu, đơn hàng, tồn kho và hiệu quả bán hàng của cửa hàng.</p>
         </div>
-        <label className="relative w-full sm:w-[138px]">
-          <select
-            value={dashboardPeriod}
-            onChange={(event) => setDashboardPeriod(event.target.value)}
-            className="h-9 w-full appearance-none border border-[#b9d5e7] bg-white pl-3 pr-8 text-sm font-bold text-brand-ink outline-none transition hover:border-brand-strong focus:border-brand-strong focus:ring-2 focus:ring-brand-soft"
-          >
-            {dashboardPeriodOptions.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </select>
-          <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-brand-ink" size={16} />
-        </label>
+        <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+          <label className="relative min-w-[138px] flex-1 sm:flex-none">
+            <span className="sr-only">Lọc theo khoảng thời gian</span>
+            <select
+              value={dashboardPeriod}
+              onChange={(event) => {
+                setDashboardPeriod(event.target.value);
+                setSelectedDate('');
+              }}
+              className="h-9 w-full appearance-none border border-[#b9d5e7] bg-white pl-3 pr-8 text-sm font-bold text-brand-ink outline-none transition hover:border-brand-strong focus:border-brand-strong focus:ring-2 focus:ring-brand-soft"
+            >
+              {dashboardPeriodOptions.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-brand-ink" size={16} />
+          </label>
+
+          <label className="relative min-w-[172px] flex-1 sm:flex-none">
+            <span className="sr-only">Lọc theo ngày cụ thể</span>
+            <CalendarDays className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-brand-strong" size={16} />
+            <input
+              type="date"
+              value={selectedDate}
+              max={getLocalDateValue()}
+              onChange={(event) => setSelectedDate(event.target.value)}
+              className="h-9 w-full border border-[#b9d5e7] bg-white pl-9 pr-2 text-sm font-semibold text-brand-ink outline-none transition hover:border-brand-strong focus:border-brand-strong focus:ring-2 focus:ring-brand-soft"
+              title="Chọn ngày cụ thể"
+            />
+          </label>
+        </div>
       </div>
 
       {error && (
@@ -417,7 +451,7 @@ export default function Dashboard() {
           totalRevenue={summary.todayRevenue}
           comparisonAmount={revenueComparisonAmount}
           chartRows={revenueChart}
-          period={displayedPeriod}
+          period={displayedDate || displayedPeriod === 'yesterday' ? 'today' : displayedPeriod}
           periodLabel={dashboardPeriodLabel}
         />
 
@@ -561,10 +595,9 @@ export default function Dashboard() {
             <h2 className="text-sm font-bold leading-5 text-[#191c1d]">Đơn hàng gần đây</h2>
             <Link
               to="/orders"
-              className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-strong transition hover:text-brand-deep"
+              className="text-sm font-semibold text-[#191c1d] transition hover:text-[#43474d]"
             >
-              <span>Xem tất cả</span>
-              <ArrowRight size={15} />
+              Tất cả
             </Link>
           </div>
 
@@ -580,7 +613,7 @@ export default function Dashboard() {
                   <CalendarCheck size={14} />
                 </div>
                 <div className="min-w-0">
-                  <p className="truncate text-xs font-bold text-brand-strong">{order.order_number}</p>
+                  <p className="truncate text-xs font-bold text-[#191c1d]">{order.order_number}</p>
                   <p className="mt-0.5 text-[11px] font-medium text-[#73777d]">
                     {formatTime(order.created_at)} {formatDate(order.created_at)}
                   </p>

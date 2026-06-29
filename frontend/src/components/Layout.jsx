@@ -47,6 +47,7 @@ export default function Layout() {
     month: '2-digit',
     year: 'numeric',
   }).format(currentTime);
+  const isPosPage = location.pathname === '/pos';
 
   return (
     <div className="min-h-screen bg-[#f8f9fa] font-sans text-[#191c1d]">
@@ -101,7 +102,7 @@ export default function Layout() {
           </div>
         </header>
 
-        <main className="min-w-0 px-3 py-3 sm:px-4 md:px-5 lg:px-6 lg:py-4 xl:px-8">
+        <main className={isPosPage ? 'min-w-0 p-2 lg:p-3' : 'min-w-0 px-3 py-3 sm:px-4 md:px-5 lg:px-6 lg:py-4 xl:px-8'}>
           <Outlet />
         </main>
       </div>

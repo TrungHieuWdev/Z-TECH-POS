@@ -39,7 +39,7 @@ const paymentLabels = {
   transfer: 'Chuyển khoản'
 };
 
-const chartColors = ['#0f3b46', '#5fbfd1', '#c0edf7', '#e8f9fc', '#cbd5e1', '#94a3b8'];
+const chartColors = ['#5FA9D4', '#73C0CF', '#96D5E2', '#B7E4EC', '#C9D8E6', '#AFC7D7'];
 const ORDER_PAGE_SIZE = 8;
 
 const emptyReport = {
