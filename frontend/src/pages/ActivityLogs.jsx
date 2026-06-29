@@ -109,9 +109,9 @@ export default function ActivityLogs() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-extrabold text-[#111827]">Nhật ký hoạt động</h1>
-          <p className="mt-1 text-sm font-medium text-[#667085]">
-            Theo dõi hoạt động bán hàng và kho từ dữ liệu thật trong hệ thống.
+          <h1 className="text-2xl font-extrabold text-gray-950">Nhật ký hoạt động</h1>
+          <p className="mt-1 text-sm font-medium text-gray-500">
+            Xem lại các thao tác bán hàng, cập nhật kho và những thay đổi đã diễn ra trong hệ thống.
           </p>
         </div>
         <button

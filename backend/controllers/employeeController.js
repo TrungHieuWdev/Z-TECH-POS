@@ -77,6 +77,84 @@ export async function getAllEmployees(req, res) {
   }
 }
 
+export async function getEmployeeRevenue(req, res) {
+  try {
+    const employeeId = Number(req.query.employeeId);
+    const saleDate = String(req.query.date || new Date().toISOString().slice(0, 10)).slice(0, 10);
+
+    if (!employeeId) {
+      return res.status(400).json({ message: 'Vui lòng chọn nhân viên' });
+    }
+
+    const [employee] = await query(
+      `SELECT id, employee_code, name
+       FROM users
+       WHERE id = ? AND role IN ('cashier', 'employee', 'warehouse')`,
+      [employeeId]
+    );
+
+    if (!employee) {
+      return res.status(404).json({ message: 'Không tìm thấy nhân viên' });
+    }
+
+    const orders = await query(
+      `SELECT
+         o.id,
+         o.order_number,
+         o.payment_method,
+         o.total,
+         o.created_at,
+         COALESCE(c.name, 'Khách lẻ') AS customer_name
+       FROM orders o
+       LEFT JOIN customers c ON o.customer_id = c.id
+       WHERE o.user_id = ?
+         AND o.status = 'completed'
+         AND DATE(o.created_at) = ?
+       ORDER BY o.created_at DESC`,
+      [employeeId, saleDate]
+    );
+
+    const products = await query(
+      `SELECT
+         p.id,
+         p.name,
+         SUM(oi.quantity) AS quantity,
+         COALESCE(SUM(oi.subtotal), 0) AS revenue
+       FROM order_items oi
+       JOIN orders o ON oi.order_id = o.id
+       JOIN products p ON oi.product_id = p.id
+       WHERE o.user_id = ?
+         AND o.status = 'completed'
+         AND DATE(o.created_at) = ?
+       GROUP BY p.id, p.name
+       ORDER BY revenue DESC, quantity DESC`,
+      [employeeId, saleDate]
+    );
+
+    res.json({
+      employee: {
+        id: employee.id,
+        code: employee.employee_code,
+        name: employee.name
+      },
+      date: saleDate,
+      summary: {
+        revenue: orders.reduce((sum, order) => sum + Number(order.total || 0), 0),
+        orders: orders.length,
+        productsSold: products.reduce((sum, product) => sum + Number(product.quantity || 0), 0)
+      },
+      orders: orders.map((order) => ({ ...order, total: Number(order.total || 0) })),
+      products: products.map((product) => ({
+        ...product,
+        quantity: Number(product.quantity || 0),
+        revenue: Number(product.revenue || 0)
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Không thể lấy doanh thu nhân viên', error: error.message });
+  }
+}
+
 export async function createEmployee(req, res) {
   try {
     await ensureEmployeeSchema();

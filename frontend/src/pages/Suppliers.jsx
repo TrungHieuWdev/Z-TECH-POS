@@ -267,9 +267,9 @@ export default function Suppliers() {
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
         <div>
-          <h1 className="text-2xl font-bold text-gray-950">Quản lý nhà cung cấp</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            Theo dõi và quản lý thông tin các nhà cung cấp hàng hóa cho cửa hàng.
+          <h1 className="text-2xl font-extrabold text-gray-950">Quản lý nhà cung cấp</h1>
+          <p className="mt-1 text-sm font-medium text-gray-500">
+            Lưu thông tin liên hệ, theo dõi trạng thái và quản lý các đối tác cung cấp hàng hóa.
           </p>
         </div>
         <button

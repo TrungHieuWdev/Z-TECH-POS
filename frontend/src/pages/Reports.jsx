@@ -326,7 +326,8 @@ export default function Reports() {
   return (
     <div className="space-y-6">
       <section>
-        <h1 className="text-2xl font-bold text-gray-950">Báo cáo tổng quan</h1>
+        <h1 className="text-2xl font-extrabold text-gray-950">Báo cáo tổng quan</h1>
+        <p className="mt-1 text-sm font-medium text-gray-500">Phân tích doanh thu, lợi nhuận, sản phẩm và giao dịch theo từng khoảng thời gian.</p>
       </section>
 
       {error && (

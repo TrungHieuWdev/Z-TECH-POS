@@ -4,6 +4,7 @@ import {
   createEmployee,
   deleteEmployee,
   getAllEmployees,
+  getEmployeeRevenue,
   resetEmployeePassword,
   toggleEmployeeStatus,
   updateEmployee
@@ -12,6 +13,7 @@ import {
 const router = express.Router();
 
 router.get('/', auth, requireFullAccess, getAllEmployees);
+router.get('/revenue', auth, requireFullAccess, getEmployeeRevenue);
 router.post('/', auth, requireFullAccess, createEmployee);
 router.put('/:id', auth, requireFullAccess, updateEmployee);
 router.delete('/:id', auth, requireFullAccess, deleteEmployee);

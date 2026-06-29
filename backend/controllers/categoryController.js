@@ -6,23 +6,10 @@ export async function getAll(req, res) {
     const categories = await query(
       `SELECT c.*, COUNT(DISTINCT p.id) AS product_count
        FROM categories c
-       LEFT JOIN products p ON p.is_active = 1 AND (
-         p.category_id = c.id
-         OR (c.name = 'Cường lực camera' AND LOWER(p.name) LIKE '%camera%'
-             AND EXISTS (SELECT 1 FROM categories pc WHERE pc.id = p.category_id AND pc.name = 'Kính cường lực'))
-         OR (c.name = 'Cường lực màn hình' AND LOWER(p.name) NOT LIKE '%camera%'
-             AND EXISTS (SELECT 1 FROM categories pc WHERE pc.id = p.category_id AND pc.name = 'Kính cường lực'))
-         OR (c.name = 'Tai nghe' AND EXISTS (
-             SELECT 1 FROM categories pc WHERE pc.id = p.category_id
-             AND pc.name IN ('Tai nghe có dây', 'Tai nghe không dây')
-         ))
-         OR (c.name = 'Miếng dán PPF'
-             AND (LOWER(p.name) LIKE '%ppf%' OR LOWER(p.name) LIKE '%dán lưng%')
-             AND EXISTS (SELECT 1 FROM categories pc WHERE pc.id = p.category_id AND pc.name = 'Phụ kiện tiện ích'))
-       )
+       LEFT JOIN products p ON p.is_active = 1 AND p.category_id = c.id
        ${includeHidden ? '' : 'WHERE c.is_active = 1'}
        GROUP BY c.id
-       ORDER BY c.name`
+       ORDER BY FIELD(c.name, 'Ốp lưng', 'Kính cường lực', 'Miếng dán PPF', 'Thiết bị sạc', 'Tai nghe', 'Loa Bluetooth', 'Giá đỡ điện thoại', 'Phụ kiện chụp ảnh', 'Phụ kiện ô tô', 'Phụ kiện vệ sinh', 'Phụ kiện tiện ích', 'Phụ kiện khác'), c.name`
     );
     res.json(categories);
   } catch (error) {

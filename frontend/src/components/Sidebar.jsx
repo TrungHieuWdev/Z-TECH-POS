@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   BadgeCheck,
+  ContactRound,
   Boxes,
   BrainCircuit,
   CalendarClock,
@@ -33,7 +34,7 @@ const primaryItems = [
 const extraItems = [
   { to: '/categories', label: 'Danh mục', icon: Tags },
   { to: '/suppliers', label: 'Nhà cung cấp', icon: Truck },
-  { to: '/employees', label: 'Nhân viên', icon: BadgeCheck },
+  { to: '/employees', label: 'Nhân viên', icon: ContactRound },
   { to: '/shifts', label: 'Ca làm', icon: CalendarClock },
   { to: '/promotions', label: 'Khuyến mãi', icon: Tags },
   { to: '/warranties', label: 'Bảo hành', icon: BadgeCheck },

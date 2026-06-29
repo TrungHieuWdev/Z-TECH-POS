@@ -5,6 +5,47 @@ import { normalizeWarrantyPolicy } from '../utils/warrantyPolicy.js';
 import { ensureGenericDeviceModel } from './deviceModelController.js';
 
 const DEVICE_FAMILIES = new Set(['apple', 'samsung', 'vivo', 'oppo', 'xiaomi', 'generic']);
+const CATEGORY_ALIASES = new Map([
+  ['op lung', 'Ốp lưng'],
+  ['bao da', 'Ốp lưng'],
+  ['case', 'Ốp lưng'],
+  ['kinh cuong luc', 'Kính cường lực'],
+  ['cuong luc camera', 'Kính cường lực'],
+  ['cuong luc man hinh', 'Kính cường lực'],
+  ['mieng dan ppf', 'Miếng dán PPF'],
+  ['ppf', 'Miếng dán PPF'],
+  ['dan lung', 'Miếng dán PPF'],
+  ['sac cap', 'Thiết bị sạc'],
+  ['sac & cap', 'Thiết bị sạc'],
+  ['thiet bi sac', 'Thiết bị sạc'],
+  ['cap sac', 'Thiết bị sạc'],
+  ['cu sac', 'Thiết bị sạc'],
+  ['bo sac', 'Thiết bị sạc'],
+  ['sac du phong', 'Thiết bị sạc'],
+  ['de sac', 'Thiết bị sạc'],
+  ['sac khong day', 'Thiết bị sạc'],
+  ['tai nghe', 'Tai nghe'],
+  ['tai nghe am thanh', 'Tai nghe'],
+  ['tai nghe & am thanh', 'Tai nghe'],
+  ['tai nghe co day', 'Tai nghe'],
+  ['tai nghe khong day', 'Tai nghe'],
+  ['loa bluetooth', 'Loa Bluetooth'],
+  ['loa', 'Loa Bluetooth'],
+  ['gia do dien thoai', 'Giá đỡ điện thoại'],
+  ['gia do', 'Giá đỡ điện thoại'],
+  ['phu kien chup anh', 'Phụ kiện chụp ảnh'],
+  ['gay selfie', 'Phụ kiện chụp ảnh'],
+  ['tripod', 'Phụ kiện chụp ảnh'],
+  ['phu kien o to', 'Phụ kiện ô tô'],
+  ['o to', 'Phụ kiện ô tô'],
+  ['oto', 'Phụ kiện ô tô'],
+  ['phu kien ve sinh', 'Phụ kiện vệ sinh'],
+  ['ve sinh', 'Phụ kiện vệ sinh'],
+  ['phu kien tien ich', 'Phụ kiện tiện ích'],
+  ['tien ich', 'Phụ kiện tiện ích'],
+  ['phu kien khac', 'Phụ kiện khác'],
+  ['khac', 'Phụ kiện khác']
+]);
 
 const searchAliasSql = `
   CONCAT_WS(' ',
@@ -169,7 +210,8 @@ function inferDeviceFamily(name = '') {
 async function resolveImportCategory(item) {
   if (item.category_id) return Number(item.category_id);
 
-  const categoryName = String(item.category_name || item.category || item.danh_muc || 'Khác').trim() || 'Khác';
+  const rawCategoryName = String(item.category_name || item.category || item.danh_muc || 'Khác').trim() || 'Khác';
+  const categoryName = CATEGORY_ALIASES.get(normalizeCategoryAlias(rawCategoryName)) || rawCategoryName;
   const existing = await query(
     'SELECT id FROM categories WHERE LOWER(name) = LOWER(?) AND is_active = 1 LIMIT 1',
     [categoryName]
@@ -239,6 +281,23 @@ function normalizeHeader(value = '') {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '');
+}
+
+function appendOtherCategoryFilter(sql, params) {
+  sql += " AND c.name = 'Phụ kiện khác'";
+  return sql;
+}
+
+function normalizeCategoryAlias(value = '') {
+  return String(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/đ/g, 'd')
+    .replace(/[^a-z0-9&]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function getCell(row, keys) {
@@ -325,28 +384,24 @@ export async function getAll(req, res) {
     let sql = `${productSelect} WHERE p.is_active = 1`;
 
     if (category_id) {
-      const [selectedCategory] = await query('SELECT name FROM categories WHERE id = ? AND is_active = 1', [category_id]);
+      const [selectedCategory] = await query('SELECT name FROM categories WHERE id = ? LIMIT 1', [category_id]);
+      const canonicalCategoryName = CATEGORY_ALIASES.get(normalizeCategoryAlias(selectedCategory?.name)) || selectedCategory?.name;
+      let resolvedCategoryId = category_id;
 
-      if (!selectedCategory) {
-        return res.json([]);
+      if (canonicalCategoryName && canonicalCategoryName !== selectedCategory?.name) {
+        const [canonicalCategory] = await query(
+          'SELECT id FROM categories WHERE LOWER(name) = LOWER(?) AND is_active = 1 LIMIT 1',
+          [canonicalCategoryName]
+        );
+        resolvedCategoryId = canonicalCategory?.id || category_id;
       }
 
-      if (selectedCategory.name === 'Cường lực camera') {
-        sql += " AND (p.category_id = ? OR (c.name = 'Kính cường lực' AND LOWER(p.name) LIKE '%camera%'))";
-      } else if (selectedCategory.name === 'Cường lực màn hình') {
-        sql += " AND (p.category_id = ? OR (c.name = 'Kính cường lực' AND LOWER(p.name) NOT LIKE '%camera%'))";
-      } else if (selectedCategory.name === 'Tai nghe') {
-        sql += " AND (p.category_id = ? OR c.name IN ('Tai nghe có dây', 'Tai nghe không dây'))";
-      } else if (selectedCategory.name === 'Miếng dán PPF') {
-        sql += " AND (p.category_id = ? OR (c.name = 'Phụ kiện tiện ích' AND (LOWER(p.name) LIKE '%ppf%' OR LOWER(p.name) LIKE '%dán lưng%')))";
-      } else {
-        sql += ' AND p.category_id = ?';
-      }
-      params.push(category_id);
+      sql += ' AND p.category_id = ?';
+      params.push(resolvedCategoryId);
     }
 
     if (device_family === 'other') {
-      sql = appendGenericAccessoryFilter(sql, params);
+      sql = appendOtherCategoryFilter(sql, params);
     } else if (DEVICE_FAMILIES.has(device_family)) {
       sql += ' AND dm.family = ?';
       params.push(device_family);

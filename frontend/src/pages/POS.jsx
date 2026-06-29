@@ -3,10 +3,12 @@ import { useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   Banknote,
+  CalendarDays,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Copy,
+  CreditCard,
   Minus,
   Plus,
   Printer,
@@ -16,6 +18,7 @@ import {
   Smartphone,
   UserRound,
   UserSearch,
+  UsersRound,
   WalletCards,
   X
 } from 'lucide-react';
@@ -37,6 +40,7 @@ import { getPromotionDiscount, getPromotions, isPromotionEligible } from '../ser
 import { initialPromotions } from './Promotions';
 import { isVietnamPhone, normalizePhone, vietnamPhoneMessage } from '../utils/phone';
 import { customerNameMessage, isValidCustomerName, normalizeCustomerName } from '../utils/customerName';
+import { getUser } from '../utils/auth';
 
 const paymentOptions = [
   { value: 'cash', label: 'Tiền mặt', icon: Banknote },
@@ -61,7 +65,7 @@ const deviceFamilyOptions = [
   { value: 'vivo', label: 'Phụ kiện Vivo' },
   { value: 'oppo', label: 'Phụ kiện Oppo' },
   { value: 'xiaomi', label: 'Phụ kiện Xiaomi' },
-  { value: 'other', label: 'Phụ kiện khác' }
+  { value: 'other', label: 'Phụ kiện chung' }
 ];
 
 const initialCustomerForm = { name: '', phone: '', email: '', address: '' };
@@ -123,106 +127,178 @@ function MobileCartLauncher({ itemCount, onOpen }) {
 }
 
 function ReceiptContent({ receipt }) {
-  if (!receipt) {
-    return null;
-  }
+  if (!receipt) return null;
 
   const shopInfo = receipt.shopInfo || {};
   const logoSrc = getUploadedAssetUrl(shopInfo.logoUrl);
-  const receiptTitle = receipt.print?.header || shopInfo.name || 'Z-TECH POS';
-  const receiptFooter = receipt.print?.footer || '';
+  const shopName = shopInfo.name || 'Z-TECH POS';
+  const createdAt = receipt.createdAt ? new Date(receipt.createdAt) : new Date();
+  const createdAtLabel = Number.isNaN(createdAt.getTime())
+    ? String(receipt.createdAt || '')
+    : createdAt.toLocaleString('vi-VN', {
+        day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+      });
+  const discountTotal = Number(receipt.discount || 0) + Number(receipt.pointsDiscountAmount || 0);
+  const infoRows = [
+    { label: 'Mã đơn', value: receipt.orderNumber, icon: ReceiptText, emphasize: true },
+    { label: 'Ngày giờ', value: createdAtLabel, icon: CalendarDays },
+    { label: 'Thu ngân', value: receipt.cashierName || 'Nhân viên', icon: UserRound },
+    { label: 'Khách hàng', value: receipt.customerName || 'Khách thường', icon: UsersRound },
+    { label: 'Phương thức thanh toán', value: getPaymentLabel(receipt.paymentMethod), icon: CreditCard }
+  ];
 
   return (
-    <div className="space-y-4 text-sm text-[#191c1e]">
+    <div className="space-y-3 text-sm text-gray-950">
       <div className="text-center">
-        {logoSrc && <img src={logoSrc} alt={receiptTitle} className="mx-auto mb-2 h-14 w-14 object-contain" />}
-        <div className="text-lg font-extrabold text-brand-strong">{receiptTitle}</div>
-        {shopInfo.address && <div className="mt-1 text-[11px] font-medium text-[#737686]">{shopInfo.address}</div>}
-        {shopInfo.phone && <div className="text-[11px] font-medium text-[#737686]">{shopInfo.phone}</div>}
-        <div className="mt-1 text-xs font-semibold text-[#737686]">Hóa đơn bán hàng</div>
+        {logoSrc && <img src={logoSrc} alt={`Logo ${shopName}`} className="mx-auto mb-1.5 h-14 w-14 object-contain sm:h-16 sm:w-16" />}
+        <div className="text-xl font-extrabold tracking-tight text-[#74B8E0]">{shopName}</div>
+        {shopInfo.address && <div className="mt-1 text-xs font-medium text-gray-600">{shopInfo.address}</div>}
+        {shopInfo.phone && <div className="mt-0.5 text-xs font-semibold text-gray-700">Hotline: {shopInfo.phone}</div>}
+        <div className="mt-2 flex items-center justify-center gap-3 text-base font-extrabold uppercase tracking-wide text-[#74B8E0] before:h-px before:w-8 before:bg-gray-300 after:h-px after:w-8 after:bg-gray-300 sm:text-lg">
+          Hóa đơn bán hàng
+        </div>
       </div>
 
-      <div className="grid gap-2 rounded-lg border border-[#d7eef3] bg-[#f8fdfe] p-3">
-        <div className="flex justify-between gap-3">
-          <span className="text-[#737686]">Mã đơn</span>
-          <span className="font-bold">{receipt.orderNumber}</span>
-        </div>
-        <div className="flex justify-between gap-3">
-          <span className="text-[#737686]">Khách hàng</span>
-          <span className="font-semibold">{receipt.customerName}</span>
-        </div>
-        <div className="flex justify-between gap-3">
-          <span className="text-[#737686]">Thanh toán</span>
-          <span className="font-semibold">{getPaymentLabel(receipt.paymentMethod)}</span>
-        </div>
-        {receipt.transferMemo && (
-          <div className="flex justify-between gap-3">
-            <span className="text-[#737686]">Nội dung CK</span>
-            <span className="font-semibold">{receipt.transferMemo}</span>
-          </div>
-        )}
-      </div>
-
-      <div className="space-y-3">
-        {receipt.items.map((item) => (
-          <div key={item.id} className="border-b border-dashed border-[#d7eef3] pb-3 last:border-0 last:pb-0">
-            <div className="font-bold">{item.name}</div>
-            <div className="mt-1 flex justify-between text-xs text-[#737686]">
-              <span>
-                {item.quantity} x {formatCurrency(item.unitPrice)}
-              </span>
-              <span className="font-bold text-[#191c1e]">{formatCurrency(item.lineTotal)}</span>
-            </div>
-            <div className="mt-1 text-xs font-semibold text-[#434655]">
-              {getWarrantyLabel(item)}
-              {Number(item.warranty_period_days || 0) > 0 ? ` - ${Number(item.warranty_period_days).toLocaleString('vi-VN')} ngày` : ''}
-            </div>
-            {item.warranty_note && <div className="mt-0.5 text-[11px] text-[#737686]">{item.warranty_note}</div>}
+      <div className="grid gap-2 rounded-lg border border-gray-200 bg-gray-50/70 p-3 sm:grid-cols-2 sm:gap-x-8">
+        {infoRows.map(({ label, value, icon: Icon, emphasize }, index) => (
+          <div key={label} className={`grid grid-cols-[22px_115px_minmax(0,1fr)] items-center gap-1.5 ${index === infoRows.length - 1 ? 'sm:col-span-2' : ''}`}>
+            <Icon size={16} className="text-[#74B8E0]" />
+            <span className="font-medium text-gray-600">{label}</span>
+            <span className={`min-w-0 break-words font-semibold ${emphasize ? 'text-[#74B8E0]' : 'text-gray-950'}`}>{value}</span>
           </div>
         ))}
       </div>
 
-      <div className="space-y-2 border-t border-[#d7eef3] pt-3">
-        <div className="flex justify-between">
-          <span>Tạm tính</span>
-          <span>{formatCurrency(receipt.subtotal)}</span>
+      <div className="flex flex-col overflow-hidden rounded-lg border border-gray-200 sm:min-h-[380px]">
+        <div className="overflow-x-auto sm:flex-1">
+          <table className="w-full min-w-[620px] table-fixed text-left text-xs sm:text-sm">
+            <thead className="bg-[#74B8E0] text-white">
+              <tr>
+                <th className="w-12 px-3 py-2 text-center font-bold">STT</th>
+                <th className="px-3 py-2 font-bold">Tên sản phẩm</th>
+                <th className="w-20 px-3 py-2 text-center font-bold">Số lượng</th>
+                <th className="w-32 px-3 py-2 text-right font-bold">Đơn giá</th>
+                <th className="w-32 px-3 py-2 text-right font-bold">Thành tiền</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200 bg-white">
+              {receipt.items.map((item, index) => (
+                <tr key={item.id} className="align-top">
+                  <td className="px-3 py-2 text-center text-gray-600">{index + 1}</td>
+                  <td className="px-3 py-2">
+                    <div className="font-semibold text-gray-950">{item.name}</div>
+                    <div className="mt-0.5 text-[11px] text-gray-500">
+                      {getWarrantyLabel(item)}{Number(item.warranty_period_days || 0) > 0 ? ` · ${Number(item.warranty_period_days).toLocaleString('vi-VN')} ngày` : ''}
+                    </div>
+                    {item.warranty_note && <div className="mt-0.5 text-[11px] text-gray-500">{item.warranty_note}</div>}
+                  </td>
+                  <td className="px-3 py-2 text-center">{item.quantity}</td>
+                  <td className="px-3 py-2 text-right whitespace-nowrap">{formatCurrency(item.unitPrice)}</td>
+                  <td className="px-3 py-2 text-right font-semibold whitespace-nowrap">{formatCurrency(item.lineTotal)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-        {Number(receipt.discount || 0) > 0 && <div className="flex justify-between"><span>Khuyến mãi</span><span>-{formatCurrency(receipt.discount)}</span></div>}
-        {Number(receipt.pointsUsed || 0) > 0 && (
-          <div className="flex justify-between text-emerald-700">
-            <span>Dùng {Number(receipt.pointsUsed).toLocaleString('vi-VN')} điểm</span>
-            <span>-{formatCurrency(receipt.pointsDiscountAmount)}</span>
+
+        <div className="mt-auto border-t border-gray-200 bg-gray-50/50 px-3 py-2.5 sm:px-4">
+          <div className="grid w-full grid-cols-[minmax(0,1fr)_auto] gap-x-8 gap-y-1.5">
+            <span className="text-gray-600">Tạm tính</span><span className="text-right font-medium">{formatCurrency(receipt.subtotal)}</span>
+            <span className="text-gray-600">Giảm giá</span><span className="text-right font-medium">{discountTotal > 0 ? `-${formatCurrency(discountTotal)}` : formatCurrency(0)}</span>
+            <span className="text-gray-600">VAT ({Number(receipt.vatRate || 0).toLocaleString('vi-VN')}%)</span><span className="text-right font-medium">{formatCurrency(receipt.vatAmount)}</span>
+            {receipt.paymentMethod === 'cash' && (
+              <>
+                <span className="text-gray-600">Tiền khách đưa</span><span className="text-right font-medium">{formatCurrency(receipt.customerPaid)}</span>
+                <span className="text-gray-600">Tiền thừa</span><span className="text-right font-medium text-emerald-700">{formatCurrency(receipt.changeDue)}</span>
+              </>
+            )}
+            <span className="mt-1 border-t border-dashed border-gray-300 pt-2 text-base font-extrabold">Tổng cộng</span>
+            <span className="mt-1 border-t border-dashed border-gray-300 pt-2 text-right text-lg font-extrabold">{formatCurrency(receipt.total)}</span>
           </div>
-        )}
-        {Number(receipt.pointsEarned || 0) > 0 && (
-          <div className="flex justify-between text-xs font-semibold text-brand-strong">
-            <span>Điểm được cộng</span>
-            <span>+{Number(receipt.pointsEarned).toLocaleString('vi-VN')} điểm</span>
-          </div>
-        )}
-        {Number(receipt.vatAmount || 0) > 0 && (
-          <div className="flex justify-between">
-            <span>VAT {Number(receipt.vatRate || 0).toLocaleString('vi-VN')}%</span>
-            <span>{formatCurrency(receipt.vatAmount)}</span>
-          </div>
-        )}
-        <div className="flex justify-between text-base font-extrabold">
-          <span>Tổng cộng</span>
-          <span>{formatCurrency(receipt.total)}</span>
         </div>
+      </div>
+
+      {Number(receipt.pointsEarned || 0) > 0 && <p className="text-center text-xs font-semibold text-[#74B8E0]">Khách hàng được cộng {Number(receipt.pointsEarned).toLocaleString('vi-VN')} điểm sau giao dịch này.</p>}
+    </div>
+  );
+}
+
+function ThermalReceiptContent({ receipt }) {
+  if (!receipt) return null;
+
+  const shopInfo = receipt.shopInfo || {};
+  const logoSrc = getUploadedAssetUrl(shopInfo.logoUrl);
+  const shopName = shopInfo.name || 'Z-TECH POS';
+  const createdAt = receipt.createdAt ? new Date(receipt.createdAt) : new Date();
+  const createdAtLabel = Number.isNaN(createdAt.getTime())
+    ? String(receipt.createdAt || '')
+    : createdAt.toLocaleString('vi-VN', {
+        day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+      });
+  const printedAtLabel = createdAtLabel;
+  const discountTotal = Number(receipt.discount || 0) + Number(receipt.pointsDiscountAmount || 0);
+  const footer = receipt.print?.footer || 'Cảm ơn quý khách và hẹn gặp lại.';
+
+  return (
+    <div className="thermal-receipt">
+      <div className="thermal-meta">
+        <span>{printedAtLabel}</span>
+        <span>Hóa đơn {receipt.orderNumber} - {shopName}</span>
+      </div>
+      <header className="thermal-header">
+        {logoSrc && <img src={logoSrc} alt={`Logo ${shopName}`} />}
+        <h1>{shopName}</h1>
+        {shopInfo.address && <p>{shopInfo.address}</p>}
+        {shopInfo.phone && <p>Hotline: {shopInfo.phone}</p>}
+      </header>
+
+      <section className="thermal-section thermal-title">HÓA ĐƠN BÁN HÀNG</section>
+
+      <section className="thermal-info">
+        <div><strong>Mã hóa đơn:</strong><p>{receipt.orderNumber}</p></div>
+        <div><strong>Ngày giờ:</strong><p>{createdAtLabel}</p></div>
+        <div><strong>Thu ngân:</strong><p>{receipt.cashierName || 'Nhân viên'}</p></div>
+        <div><strong>Khách hàng:</strong><p>{receipt.customerName || 'Khách thường'}</p></div>
+      </section>
+
+      <section className="thermal-products">
+        <div className="thermal-product-head">
+          <strong>Tên sản phẩm</strong><strong>SL</strong><strong>Đơn giá</strong><strong>Thành tiền</strong>
+        </div>
+        {receipt.items.map((item) => (
+          <div key={item.id} className="thermal-product-row">
+            <div>
+              <strong>{item.name}</strong>
+              <small>PRD-{String(item.id).padStart(4, '0')}</small>
+              <small>{getWarrantyLabel(item)}</small>
+              {item.warranty_note && <small>{item.warranty_note}</small>}
+            </div>
+            <span>{item.quantity}</span>
+            <span>{Number(item.unitPrice || 0).toLocaleString('vi-VN')}</span>
+            <strong>{Number(item.lineTotal || 0).toLocaleString('vi-VN')}</strong>
+          </div>
+        ))}
+      </section>
+
+      <section className="thermal-totals">
+        <div><span>Tạm tính</span><span>{Number(receipt.subtotal || 0).toLocaleString('vi-VN')}</span></div>
+        {discountTotal > 0 && <div><span>Giảm giá</span><span>-{discountTotal.toLocaleString('vi-VN')}</span></div>}
+        {Number(receipt.vatAmount || 0) > 0 && <div><span>VAT ({Number(receipt.vatRate || 0).toLocaleString('vi-VN')}%)</span><span>{Number(receipt.vatAmount || 0).toLocaleString('vi-VN')}</span></div>}
+        <div><span>Hình thức thanh toán</span><span>{getPaymentLabel(receipt.paymentMethod)}</span></div>
         {receipt.paymentMethod === 'cash' && (
           <>
-            <div className="flex justify-between">
-              <span>Tiền khách đưa</span>
-              <span>{formatCurrency(receipt.customerPaid)}</span>
-            </div>
-            <div className="flex justify-between font-bold text-emerald-700">
-              <span>Tiền thừa</span>
-              <span>{formatCurrency(receipt.changeDue)}</span>
-            </div>
+            <div><span>Tiền khách đưa</span><span>{Number(receipt.customerPaid || 0).toLocaleString('vi-VN')}</span></div>
+            <div className="thermal-change"><strong>Tiền thừa</strong><strong>{Number(receipt.changeDue || 0).toLocaleString('vi-VN')}</strong></div>
           </>
         )}
-      </div>
+        <div className="thermal-total"><strong>TỔNG CỘNG</strong><strong>{Number(receipt.total || 0).toLocaleString('vi-VN')}</strong></div>
+      </section>
+
+      <footer className="thermal-footer">
+        <strong>Cảm ơn quý khách đã mua sắm!</strong>
+        <p>{footer}</p>
+        <small>POWERED BY {shopName}</small>
+      </footer>
     </div>
   );
 }
@@ -249,9 +325,9 @@ export default function POS() {
   const [isPromotionOpen, setIsPromotionOpen] = useState(false);
   const [customerPaid, setCustomerPaid] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
-  const [customerName, setCustomerName] = useState('Chọn khách hàng');
+  const [customerName, setCustomerName] = useState('Khách thường');
   const [selectedCustomer, setSelectedCustomer] = useState(null);
-  const [customerMode, setCustomerMode] = useState(null);
+  const [customerMode, setCustomerMode] = useState('regular');
   const [customerLookup, setCustomerLookup] = useState('');
   const [customerForm, setCustomerForm] = useState(initialCustomerForm);
   const [loading, setLoading] = useState(false);
@@ -795,6 +871,8 @@ export default function POS() {
 
       setReceipt({
         orderNumber: response.data.order_number,
+        createdAt: response.data.created_at || new Date().toISOString(),
+        cashierName: getUser()?.name || 'Nhân viên',
         customerName,
         paymentMethod,
         items: receiptItems,
@@ -821,7 +899,7 @@ export default function POS() {
       await loadProducts();
       toast.success('Thanh toán thành công');
       if (posSettings.print?.autoPrintAfterPayment) {
-        setTimeout(() => window.print(), 250);
+        setTimeout(() => printReceipt(), 250);
       }
       setIsMobileCartOpen(false);
     } catch (error) {
@@ -831,7 +909,40 @@ export default function POS() {
     }
   };
 
-  const printReceipt = () => {
+  const printReceipt = async () => {
+    if (document.fonts?.ready) await document.fonts.ready;
+
+    const receiptImages = Array.from(document.querySelectorAll('.print-receipt img'));
+    await Promise.all(receiptImages.map((image) => {
+      if (image.complete) return Promise.resolve();
+      return new Promise((resolve) => {
+        image.addEventListener('load', resolve, { once: true });
+        image.addEventListener('error', resolve, { once: true });
+      });
+    }));
+
+    const dynamicPageStyle = document.createElement('style');
+    dynamicPageStyle.setAttribute('data-thermal-page-size', 'true');
+    document.head.appendChild(dynamicPageStyle);
+
+    const prepareThermalPage = () => {
+      const bill = document.querySelector('.thermal-receipt');
+      if (!bill) return;
+
+      const contentHeightPx = Math.max(bill.scrollHeight, bill.getBoundingClientRect().height);
+      const contentHeightMm = (contentHeightPx * 25.4) / 96;
+      const pageHeightMm = Math.max(80, Math.ceil(contentHeightMm + 1));
+      dynamicPageStyle.textContent = `@page { size: 80mm ${pageHeightMm}mm; margin: 0; }`;
+    };
+
+    const cleanupPrintStyle = () => {
+      dynamicPageStyle.remove();
+      window.removeEventListener('beforeprint', prepareThermalPage);
+      window.removeEventListener('afterprint', cleanupPrintStyle);
+    };
+
+    window.addEventListener('beforeprint', prepareThermalPage);
+    window.addEventListener('afterprint', cleanupPrintStyle, { once: true });
     window.print();
   };
 
@@ -855,12 +966,14 @@ export default function POS() {
 
   return (
     <>
+    <div className="no-print mb-4">
+    </div>
     {pageError && (
       <div className="no-print mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
         {pageError}
       </div>
     )}
-    <div className="no-print grid min-h-0 overflow-visible border border-[#c3c6d7] bg-[#f7f9fb] xl:h-[calc(100vh-6.5rem)] xl:min-h-[680px] xl:overflow-hidden xl:grid-cols-[minmax(0,1fr)_minmax(360px,420px)]">
+    <div className="no-print grid min-h-0 overflow-visible border border-[#c3c6d7] bg-[#f7f9fb] xl:h-[calc(100vh-10.5rem)] xl:min-h-[680px] xl:overflow-hidden xl:grid-cols-[minmax(0,1fr)_minmax(360px,420px)]">
       <section className="flex min-w-0 flex-col overflow-visible p-3 pb-24 sm:p-4 sm:pb-24 xl:overflow-hidden xl:p-5">
         <form onSubmit={handleScanSubmit} className="mb-3">
           <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_150px]">
@@ -883,7 +996,7 @@ export default function POS() {
               type="button"
               onClick={() => setScanMode((current) => !current)}
               aria-pressed={scanMode}
-              className={`h-11 border px-4 text-sm font-bold ${scanMode ? 'border-[#ba1a1a] bg-red-50 text-[#ba1a1a]' : 'border-brand bg-brand text-brand-ink'}`}
+              className={`h-11 border px-4 text-sm font-bold ${scanMode ? 'border-[#74B8E0] bg-red-50 text-[#ba1a1a]' : 'border-brand bg-brand text-brand-ink'}`}
             >
               {scanMode ? 'Tắt quét' : 'Quét sản phẩm'}
             </button>
@@ -1657,24 +1770,51 @@ export default function POS() {
       </div>
     </Modal>
 
-    <Modal isOpen={Boolean(receipt)} onClose={() => setReceipt(null)} title="Thanh toán thành công">
-      <div className="space-y-5">
-        <ReceiptContent receipt={receipt} />
-        <div className="flex justify-end gap-3">
+    <Modal
+      isOpen={Boolean(receipt)}
+      onClose={() => setReceipt(null)}
+      maxWidth="max-w-4xl"
+      panelClassName="rounded-t-2xl shadow-2xl sm:rounded-2xl"
+      headerClassName="sm:mb-3"
+      hideClose
+      headerActions={(
+        <>
           <button
             type="button"
             onClick={() => setReceipt(null)}
-            className="rounded-lg border border-[#c3c6d7] px-4 py-2 font-semibold text-[#434655]"
+            className="hidden h-10 rounded-lg border border-gray-300 bg-white px-4 text-sm font-bold text-gray-700 transition hover:bg-gray-50 sm:inline-flex sm:items-center"
           >
             Hoàn tất
           </button>
           <button
             type="button"
             onClick={printReceipt}
-            className="inline-flex items-center gap-2 rounded-lg bg-[#74B8E0] px-4 py-2 font-bold text-white"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-[#74B8E0] px-4 text-sm font-bold text-white shadow-sm transition hover:bg-[#5fa9d4]"
           >
-            <Printer size={18} />
-            <span>In bill</span>
+            <Printer size={17} />
+            <span className="hidden sm:inline">In hóa đơn</span>
+            <span className="sm:hidden">In</span>
+          </button>
+        </>
+      )}
+      title={(
+        <span className="flex items-center gap-2.5 text-lg font-extrabold text-gray-950 sm:text-xl">
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-emerald-100 text-emerald-600">
+            <CheckCircle2 size={22} strokeWidth={2.7} />
+          </span>
+          Thanh toán thành công
+        </span>
+      )}
+    >
+      <div className="space-y-4">
+        <ReceiptContent receipt={receipt} />
+        <div className="flex justify-end gap-2 border-t border-gray-100 pt-3 sm:hidden">
+          <button
+            type="button"
+            onClick={() => setReceipt(null)}
+            className="h-11 rounded-lg border border-gray-300 bg-white px-5 font-bold text-gray-700 transition hover:bg-gray-50"
+          >
+            Hoàn tất
           </button>
         </div>
       </div>
@@ -1682,7 +1822,7 @@ export default function POS() {
     </div>
 
     <div className="print-receipt">
-      <ReceiptContent receipt={receipt} />
+      <ThermalReceiptContent receipt={receipt} />
     </div>
     </>
   );

@@ -43,8 +43,8 @@ export default function SettingsPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-extrabold text-[#191c1d]">Cài đặt</h1>
-        <p className="mt-1 text-sm font-medium text-[#66727c]">Thiết lập vận hành cơ bản cho hệ thống POS cửa hàng phụ kiện điện thoại.</p>
+        <h1 className="text-2xl font-extrabold text-gray-950">Cài đặt</h1>
+        <p className="mt-1 text-sm font-medium text-gray-500">Thiết lập cửa hàng, thanh toán, in hóa đơn, bảo mật và các tùy chọn vận hành hệ thống.</p>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">

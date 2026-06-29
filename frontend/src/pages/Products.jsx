@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   Barcode,
   Boxes,
+  ArrowLeft,
   ChevronLeft,
   ChevronRight,
   Download,
@@ -13,6 +14,7 @@ import {
   Package,
   Plus,
   Search,
+  TrendingUp,
   Trash2,
   Upload
 } from 'lucide-react';
@@ -34,6 +36,14 @@ const deviceFamilyOptions = [
 ];
 
 const PAGE_SIZE = 8;
+const topPeriodLabels = {
+  today: 'hôm nay',
+  '7days': '7 ngày',
+  '14days': '14 ngày',
+  '30days': '30 ngày',
+  '90days': '90 ngày'
+};
+
 const quickTabs = [
   { value: 'all', label: 'Tất cả' },
   { value: 'low', label: 'Sắp hết hàng' },
@@ -84,6 +94,48 @@ const importColumnAliases = {
   image_url: ['image_url', 'link_hinh_anh_url', 'link_hinh_anh', 'link_anh', 'anh', 'url', 'image'],
   mo_ta: ['mo_ta', 'mo_ta_chi_tiet', 'mo_ta_chi_tiet_', 'description', 'ghi_chu']
 };
+
+const categoryAliases = new Map([
+  ['op lung', 'Ốp lưng'],
+  ['bao da', 'Ốp lưng'],
+  ['case', 'Ốp lưng'],
+  ['kinh cuong luc', 'Kính cường lực'],
+  ['cuong luc camera', 'Kính cường lực'],
+  ['cuong luc man hinh', 'Kính cường lực'],
+  ['mieng dan ppf', 'Miếng dán PPF'],
+  ['ppf', 'Miếng dán PPF'],
+  ['dan lung', 'Miếng dán PPF'],
+  ['sac cap', 'Thiết bị sạc'],
+  ['sac & cap', 'Thiết bị sạc'],
+  ['thiet bi sac', 'Thiết bị sạc'],
+  ['cap sac', 'Thiết bị sạc'],
+  ['cu sac', 'Thiết bị sạc'],
+  ['bo sac', 'Thiết bị sạc'],
+  ['sac du phong', 'Thiết bị sạc'],
+  ['de sac', 'Thiết bị sạc'],
+  ['sac khong day', 'Thiết bị sạc'],
+  ['tai nghe', 'Tai nghe'],
+  ['tai nghe am thanh', 'Tai nghe'],
+  ['tai nghe & am thanh', 'Tai nghe'],
+  ['tai nghe co day', 'Tai nghe'],
+  ['tai nghe khong day', 'Tai nghe'],
+  ['loa bluetooth', 'Loa Bluetooth'],
+  ['loa', 'Loa Bluetooth'],
+  ['gia do dien thoai', 'Giá đỡ điện thoại'],
+  ['gia do', 'Giá đỡ điện thoại'],
+  ['phu kien chup anh', 'Phụ kiện chụp ảnh'],
+  ['gay selfie', 'Phụ kiện chụp ảnh'],
+  ['tripod', 'Phụ kiện chụp ảnh'],
+  ['phu kien o to', 'Phụ kiện ô tô'],
+  ['o to', 'Phụ kiện ô tô'],
+  ['oto', 'Phụ kiện ô tô'],
+  ['phu kien ve sinh', 'Phụ kiện vệ sinh'],
+  ['ve sinh', 'Phụ kiện vệ sinh'],
+  ['phu kien tien ich', 'Phụ kiện tiện ích'],
+  ['tien ich', 'Phụ kiện tiện ích'],
+  ['phu kien khac', 'Phụ kiện khác'],
+  ['khac', 'Phụ kiện khác']
+]);
 
 function normalizeImportText(value = '') {
   return String(value)
@@ -148,27 +200,14 @@ function getCategoryName(categories, categoryId) {
   return categories.find((category) => String(category.id) === String(categoryId))?.name || '';
 }
 
+function normalizeCategoryName(value = '') {
+  const normalized = normalizeImportText(value).replace(/[^a-z0-9&]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return categoryAliases.get(normalized) || String(value || '').trim();
+}
+
 function productMatchesCategory(product, category) {
   if (!category) return true;
-  if (String(product.category_id) === String(category.id)) return true;
-
-  const productName = String(product.name || '').toLowerCase();
-  const primaryCategory = String(product.category_name || '');
-
-  if (category.name === 'Cường lực camera') {
-    return primaryCategory === 'Kính cường lực' && productName.includes('camera');
-  }
-  if (category.name === 'Cường lực màn hình') {
-    return primaryCategory === 'Kính cường lực' && !productName.includes('camera');
-  }
-  if (category.name === 'Tai nghe') {
-    return ['Tai nghe có dây', 'Tai nghe không dây'].includes(primaryCategory);
-  }
-  if (category.name === 'Miếng dán PPF') {
-    return primaryCategory === 'Phụ kiện tiện ích'
-      && (productName.includes('ppf') || productName.includes('dán lưng'));
-  }
-  return false;
+  return String(product.category_id) === String(category.id);
 }
 
 function getWarrantyBadgeClass(product) {
@@ -181,8 +220,12 @@ export default function Products() {
   const [searchParams, setSearchParams] = useSearchParams();
   const hasFullAccess = isFullAccessRole(getUser()?.role);
   const lowStockOnly = searchParams.get('lowStock') === '1';
+  const showTopProducts = searchParams.get('view') === 'top-products';
+  const topProductsPeriod = topPeriodLabels[searchParams.get('period')] ? searchParams.get('period') : '30days';
   const selectedCategoryId = searchParams.get('category_id') || '';
   const [products, setProducts] = useState([]);
+  const [topProducts, setTopProducts] = useState([]);
+  const [isTopProductsLoading, setIsTopProductsLoading] = useState(false);
   const [categories, setCategories] = useState([]);
   const [deviceModels, setDeviceModels] = useState([]);
   const [search, setSearch] = useState('');
@@ -281,7 +324,7 @@ export default function Products() {
       {
         ten_san_pham: 'Tai nghe Bluetooth Z-Tech Air',
         dong_may: 'Phụ kiện chung',
-        danh_muc: 'Tai nghe & âm thanh',
+        danh_muc: 'Tai nghe',
         gia: 349000,
         ton_kho: 12,
         image_url: 'https://example.com/tai-nghe.jpg',
@@ -317,7 +360,7 @@ export default function Products() {
 
         const name = String(getImportCell(normalized, 'ten_san_pham')).trim();
         const deviceText = String(getImportCell(normalized, 'dong_may')).trim() || 'Phụ kiện chung';
-        const categoryText = String(getImportCell(normalized, 'danh_muc')).trim() || 'Khác';
+        const categoryText = normalizeCategoryName(getImportCell(normalized, 'danh_muc')) || 'Phụ kiện khác';
         const price = readImportNumber(getImportCell(normalized, 'gia'));
         const stockQuantity = readImportNumber(getImportCell(normalized, 'ton_kho'));
         const category = categoryMap.get(normalizeImportText(categoryText)) || { id: '' };
@@ -429,6 +472,19 @@ export default function Products() {
   useEffect(() => {
     loadProducts();
   }, []);
+
+  useEffect(() => {
+    if (!showTopProducts) return;
+
+    setIsTopProductsLoading(true);
+    api.get('/dashboard/top-products', { params: { period: topProductsPeriod } })
+      .then((response) => setTopProducts(Array.isArray(response.data) ? response.data : []))
+      .catch((error) => {
+        toast.error(error.response?.data?.message || 'Không thể tải top sản phẩm bán chạy');
+        setTopProducts([]);
+      })
+      .finally(() => setIsTopProductsLoading(false));
+  }, [showTopProducts, topProductsPeriod]);
 
   useEffect(() => {
     if (lowStockOnly) setActiveTab('low');
@@ -545,7 +601,7 @@ export default function Products() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-extrabold text-gray-950">Sản phẩm</h1>
-          <p className="mt-1 text-sm font-medium text-gray-500">Quản lý hàng hóa, tồn kho, mã vạch và bảo hành</p>
+          <p className="mt-1 text-sm font-medium text-gray-500">Thêm và cập nhật sản phẩm, quản lý giá bán, mã vạch, tồn kho và chính sách bảo hành.</p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2" style={{ display: hasFullAccess ? undefined : 'none' }}>
           <button
@@ -579,6 +635,73 @@ export default function Products() {
           </article>
         ))}
       </section>
+
+      {showTopProducts && (
+        <section className="border border-gray-200 bg-white shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-4 py-3">
+            <div className="flex items-center gap-3">
+              <div className="grid h-10 w-10 place-items-center bg-brand-surface text-brand-strong">
+                <TrendingUp size={20} />
+              </div>
+              <div>
+                <h2 className="text-lg font-extrabold text-gray-950">Top sản phẩm bán chạy</h2>
+                <p className="text-sm font-medium text-gray-500">Xếp hạng theo doanh thu trong {topPeriodLabels[topProductsPeriod]}.</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSearchParams({})}
+              className="inline-flex items-center gap-2 border border-gray-200 bg-white px-3 py-2 text-sm font-bold text-gray-700 transition hover:bg-gray-50"
+            >
+              <ArrowLeft size={16} />
+              Danh sách sản phẩm
+            </button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[860px] text-left text-sm">
+              <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+                <tr>
+                  <th className="px-4 py-3 font-bold">Hạng</th>
+                  <th className="px-4 py-3 font-bold">Sản phẩm</th>
+                  <th className="px-4 py-3 font-bold">Danh mục</th>
+                  <th className="px-4 py-3 text-right font-bold">Số lượng bán</th>
+                  <th className="px-4 py-3 text-right font-bold">Giá bán</th>
+                  <th className="px-4 py-3 text-right font-bold">Doanh thu</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {isTopProductsLoading ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-12 text-center font-semibold text-gray-500">Đang tải top sản phẩm...</td>
+                  </tr>
+                ) : topProducts.length > 0 ? (
+                  topProducts.map((product, index) => (
+                    <tr key={product.product_id} className="hover:bg-brand-surface/50">
+                      <td className="px-4 py-3">
+                        <span className={`inline-grid h-8 w-8 place-items-center font-extrabold ${index < 3 ? 'bg-brand text-white' : 'bg-gray-100 text-gray-600'}`}>
+                          {index + 1}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <p className="font-bold text-gray-950">{product.name}</p>
+                        <p className="mt-0.5 text-xs text-gray-500">Mã SP: {product.product_id}</p>
+                      </td>
+                      <td className="px-4 py-3 text-gray-600">{product.category_name || '-'}</td>
+                      <td className="px-4 py-3 text-right font-bold text-gray-800">{Number(product.quantity || 0).toLocaleString('vi-VN')}</td>
+                      <td className="px-4 py-3 text-right font-semibold text-gray-700">{formatCurrency(product.price)}</td>
+                      <td className="px-4 py-3 text-right font-extrabold text-gray-950">{formatCurrency(product.revenue)}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-12 text-center font-semibold text-gray-500">Chưa có sản phẩm bán chạy trong kỳ này.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       <section className="border border-gray-200 bg-white shadow-sm">
         <div className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-5">

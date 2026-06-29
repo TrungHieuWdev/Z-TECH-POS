@@ -214,7 +214,7 @@ export default function Categories() {
         <div>
           <h1 className="text-2xl font-extrabold text-gray-950">Danh mục sản phẩm</h1>
           <p className="mt-1 text-sm font-medium text-gray-500">
-            Quản lý nhóm sản phẩm dùng để phân loại hàng hóa, nhập kho và báo cáo bán hàng.
+            Sắp xếp sản phẩm theo từng nhóm để dễ tìm kiếm, quản lý kho và theo dõi báo cáo bán hàng.
           </p>
         </div>
       </div>

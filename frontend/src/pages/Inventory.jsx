@@ -250,8 +250,8 @@ export default function Inventory() {
     <div className="space-y-5">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-950">Kho hàng</h1>
-          <p className="mt-1 text-sm text-gray-500">Quản lý tồn kho, nhập hàng và điều chỉnh số lượng sản phẩm</p>
+          <h1 className="text-2xl font-extrabold text-gray-950">Kho hàng</h1>
+          <p className="mt-1 text-sm font-medium text-gray-500">Theo dõi tồn kho, nhập thêm hàng và điều chỉnh số lượng sản phẩm khi cần.</p>
         </div>
         {hasFullAccess && (
           <div className="flex flex-wrap gap-2">

@@ -351,11 +351,14 @@ export default function Dashboard() {
     return segments;
   }, [paymentChart, paymentStats.cashPercent, paymentStats.transferPercent]);
 
+  const isFullPaymentDonut = paymentSegments.length === 1 && paymentSegments[0].percent >= 100;
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-extrabold text-gray-950">Dashboard</h1>
+          <p className="mt-1 text-sm font-medium text-gray-500">Theo dõi nhanh doanh thu, đơn hàng, tồn kho và hiệu quả bán hàng của cửa hàng.</p>
         </div>
         <label className="relative w-full sm:w-[138px]">
           <select
@@ -421,7 +424,7 @@ export default function Dashboard() {
         <article className="rounded-lg border border-[#e1e3e4] bg-white p-3 shadow-[0_1px_3px_rgba(25,28,29,0.08)]">
           <div className="mb-2 flex items-center justify-between gap-4">
             <h2 className="text-base font-semibold leading-6 text-[#191c1d]">Top sản phẩm bán chạy</h2>
-            <Link to="/products" className="text-sm font-semibold text-brand-strong transition hover:text-brand-deep">
+            <Link to={`/products?view=top-products&period=${displayedPeriod}`} className="text-sm font-semibold text-brand-strong transition hover:text-brand-deep">
               Tất cả
             </Link>
           </div>
@@ -475,17 +478,34 @@ export default function Dashboard() {
                       />
                     </mask>
                   </defs>
-                  <g mask="url(#payment-donut-reveal)">
-                    {paymentSegments.map((segment) => (
-                      <path
-                        key={segment.id}
-                        d={describeDonutSegment(paymentChart.centerX, paymentChart.centerY, paymentChart.outerRadius, paymentChart.innerRadius, segment.startAngle, segment.endAngle)}
-                        fill={segment.color}
-                        stroke="#ffffff"
-                        strokeWidth="3"
+                  {isFullPaymentDonut ? (
+                    <>
+                      <circle
+                        cx={paymentChart.centerX}
+                        cy={paymentChart.centerY}
+                        r={paymentChart.outerRadius}
+                        fill={paymentSegments[0].color}
                       />
-                    ))}
-                  </g>
+                      <circle
+                        cx={paymentChart.centerX}
+                        cy={paymentChart.centerY}
+                        r={paymentChart.innerRadius}
+                        fill="#ffffff"
+                      />
+                    </>
+                  ) : (
+                    <g mask="url(#payment-donut-reveal)">
+                      {paymentSegments.map((segment) => (
+                        <path
+                          key={segment.id}
+                          d={describeDonutSegment(paymentChart.centerX, paymentChart.centerY, paymentChart.outerRadius, paymentChart.innerRadius, segment.startAngle, segment.endAngle)}
+                          fill={segment.color}
+                          stroke="#ffffff"
+                          strokeWidth="3"
+                        />
+                      ))}
+                    </g>
+                  )}
                   <g className="payment-chart-details">
                     {paymentSegments.map((segment) => (
                       <polyline

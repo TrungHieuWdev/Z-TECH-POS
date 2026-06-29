@@ -400,9 +400,9 @@ export default function Shifts() {
     <div className="space-y-6">
       <section>
         <div>
-          <h1 className="text-2xl font-bold text-gray-950">Quản lý ca làm</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            Theo dõi lịch làm việc, phân công nhân viên và trạng thái các ca bán hàng.
+          <h1 className="text-2xl font-extrabold text-gray-950">Quản lý ca làm</h1>
+          <p className="mt-1 text-sm font-medium text-gray-500">
+            Sắp xếp lịch làm việc, phân công nhân viên và theo dõi trạng thái từng ca bán hàng.
           </p>
         </div>
       </section>

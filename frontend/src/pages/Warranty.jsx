@@ -586,9 +586,9 @@ export default function Warranty() {
     <div className="w-full space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold text-gray-950">Bảo hành</h1>
-          <p className="mt-2 text-sm text-gray-700">
-            Tra cứu hạn bảo hành từ hóa đơn, sản phẩm đã bán và thông tin khách hàng.
+          <h1 className="text-2xl font-extrabold text-gray-950">Bảo hành</h1>
+          <p className="mt-1 text-sm font-medium text-gray-500">
+            Tra cứu thời hạn, tiếp nhận yêu cầu và theo dõi quá trình xử lý bảo hành cho khách hàng.
           </p>
         </div>
         <button

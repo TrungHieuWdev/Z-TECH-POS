@@ -463,8 +463,8 @@ export default function Orders() {
     <div className="w-full space-y-5">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold text-gray-950">Hóa đơn</h1>
-          <p className="mt-2 text-sm text-gray-700">Quản lý và theo dõi lịch sử giao dịch bán hàng của cửa hàng.</p>
+          <h1 className="text-2xl font-extrabold text-gray-950">Hóa đơn</h1>
+          <p className="mt-1 text-sm font-medium text-gray-500">Tra cứu hóa đơn, kiểm tra thanh toán và theo dõi lịch sử bán hàng của cửa hàng.</p>
         </div>
         <button
           type="button"
