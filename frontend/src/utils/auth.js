@@ -1,3 +1,8 @@
+import { canAccessRoute } from './permissions';
+import { readJsonStorage } from './storage';
+
+const isUserRecord = (value) => Boolean(value && typeof value === 'object' && !Array.isArray(value));
+
 export function saveAuth(user, token, remember = false) {
   const primaryStorage = remember ? localStorage : sessionStorage;
   const secondaryStorage = remember ? sessionStorage : localStorage;
@@ -9,12 +14,24 @@ export function saveAuth(user, token, remember = false) {
 }
 
 export function getToken() {
-  return localStorage.getItem('token') || sessionStorage.getItem('token');
+  for (const storage of [localStorage, sessionStorage]) {
+    const token = storage.getItem('token');
+    if (!token) continue;
+    const user = readJsonStorage(storage, 'user', null, isUserRecord);
+    if (user) return token;
+    storage.removeItem('token');
+  }
+  return null;
 }
 
 export function getUser() {
-  const rawUser = localStorage.getItem('user') || sessionStorage.getItem('user');
-  return rawUser ? JSON.parse(rawUser) : null;
+  for (const storage of [localStorage, sessionStorage]) {
+    if (!storage.getItem('token')) continue;
+    const user = readJsonStorage(storage, 'user', null, isUserRecord);
+    if (user) return user;
+    storage.removeItem('token');
+  }
+  return null;
 }
 
 export function isFullAccessRole(role) {
@@ -42,4 +59,3 @@ export function logout() {
   sessionStorage.removeItem('user');
   window.location.href = '/login';
 }
-import { canAccessRoute } from './permissions';

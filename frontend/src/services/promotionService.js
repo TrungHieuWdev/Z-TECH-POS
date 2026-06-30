@@ -1,6 +1,8 @@
+import { readLocalJson } from '../utils/storage';
+
 const KEY = 'ztech_promotions';
 export function getPromotions(fallback = []) {
-  try { const saved = JSON.parse(localStorage.getItem(KEY) || 'null'); return Array.isArray(saved) ? saved : fallback; } catch { return fallback; }
+  return readLocalJson(KEY, fallback, Array.isArray);
 }
 export function savePromotions(promotions) {
   localStorage.setItem(KEY, JSON.stringify(promotions));
@@ -23,6 +25,7 @@ export function isPromotionEligible(promotion, { cart, subtotal, isMember }) {
   if (promotion.startDate && promotion.startDate > today) return false;
   if (promotion.endDate && promotion.endDate < today) return false;
   if (subtotal < Number(promotion.minOrder || 0)) return false;
+  if (Number(promotion.maxOrder || 0) > 0 && subtotal > Number(promotion.maxOrder)) return false;
   if (promotion.memberOnly && !isMember) return false;
   if (cart.reduce((sum, item) => sum + Number(item.quantity || 0), 0) < Number(promotion.minQuantity || 0)) return false;
   const scope = normalizePromotionText(promotion.scope);

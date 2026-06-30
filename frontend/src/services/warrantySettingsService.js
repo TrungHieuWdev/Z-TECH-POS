@@ -1,4 +1,5 @@
 import api from '../api/axios';
+import { readLocalJson } from '../utils/storage';
 const KEY = 'ztech_warranty_settings';
 export const defaults = {
   durations: [{ id: 1, scope: 'Danh mục', target: 'Cáp sạc', warrantyDays: 180, exchangeDays: 7, active: true }],
@@ -8,7 +9,10 @@ export const defaults = {
   exchange: { days: 7, same: true, other: false, deduct: true, note: '' },
   receipt: { store: 'Z-TECH', phone: '', address: '', policy: 'Vui lòng giữ phiếu hoặc mã bảo hành để được hỗ trợ.', footer: 'Cảm ơn quý khách.', qr: true }, history: []
 };
-export async function getWarrantySettings() { const raw = localStorage.getItem(KEY); return raw ? { ...defaults, ...JSON.parse(raw) } : structuredClone(defaults); }
+export async function getWarrantySettings() {
+  const saved = readLocalJson(KEY, null, (value) => Boolean(value && typeof value === 'object' && !Array.isArray(value)));
+  return saved ? { ...defaults, ...saved } : structuredClone(defaults);
+}
 function policyType(status) {
   if (status === 'Không bảo hành') return { warranty_enabled: 0, warranty_type: 'none' };
   if (status === 'Chỉ đổi lỗi ban đầu') return { warranty_enabled: 0, warranty_type: 'initial_exchange' };

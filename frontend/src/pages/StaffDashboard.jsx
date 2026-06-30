@@ -3,16 +3,17 @@ import { Banknote, ReceiptText, WalletCards } from 'lucide-react';
 import api from '../api/axios';
 import { formatCurrency } from '../utils/format';
 import { getUser } from '../utils/auth';
+import { readLocalJson } from '../utils/storage';
 
 export default function StaffDashboard() {
   const [orders, setOrders] = useState([]);
   const user = getUser();
-  useEffect(() => { api.get('/orders').then((response) => setOrders(response.data || [])).catch(() => setOrders([])); }, []);
+  useEffect(() => { api.get('/orders').then((response) => setOrders(Array.isArray(response.data) ? response.data : [])).catch(() => setOrders([])); }, []);
   const summary = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
     const ownToday = orders.filter((order) => String(order.created_at || '').slice(0, 10) === today && order.status !== 'cancelled');
     const cash = ownToday.filter((order) => order.payment_method === 'cash').reduce((sum, order) => sum + Number(order.total || 0), 0);
-    const shifts = JSON.parse(localStorage.getItem('ztech-shifts') || '[]');
+    const shifts = readLocalJson('ztech-shifts', [], Array.isArray);
     const activeShift = shifts.find((shift) => shift.employee === user?.name && shift.workDate === today && shift.status === 'active');
     const openingCash = Number(activeShift?.openingCash || 0);
     return { count: ownToday.length, revenue: ownToday.reduce((sum, order) => sum + Number(order.total || 0), 0), cash, openingCash, expectedCash: openingCash + cash, transfer: ownToday.filter((order) => order.payment_method === 'transfer').reduce((sum, order) => sum + Number(order.total || 0), 0) };

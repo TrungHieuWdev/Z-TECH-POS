@@ -159,8 +159,8 @@ export default function Dashboard() {
     previousProductsSold: 0,
     estimatedProfit: 0,
     previousEstimatedProfit: 0,
-    paymentCash: 0,
-    paymentTransfer: 0,
+    paymentCashCount: 0,
+    paymentTransferCount: 0,
     revenueGrowth: 0,
     orderGrowth: 0,
     productsSoldGrowth: 0,
@@ -196,9 +196,9 @@ export default function Dashboard() {
 
         if (requestId !== requestIdRef.current) return;
 
-        setSummary(summaryRes.data);
-        setTopProducts(topRes.data);
-        setRecentOrders(recentRes.data);
+        setSummary(summaryRes.data && typeof summaryRes.data === 'object' ? summaryRes.data : {});
+        setTopProducts(Array.isArray(topRes.data) ? topRes.data : []);
+        setRecentOrders(Array.isArray(recentRes.data) ? recentRes.data : []);
         setRevenueChart(Array.isArray(chartRes.data) ? chartRes.data : []);
         setStaffPerformance(Array.isArray(staffRes.data) ? staffRes.data : []);
         setDisplayedPeriod(dashboardPeriod);
@@ -279,8 +279,8 @@ export default function Dashboard() {
 
   const paymentStats = useMemo(() => {
     const totals = {
-      cash: safeNumber(summary.paymentCash),
-      transfer: safeNumber(summary.paymentTransfer)
+      cash: safeNumber(summary.paymentCashCount),
+      transfer: safeNumber(summary.paymentTransferCount)
     };
     const total = totals.cash + totals.transfer;
     const cashPercent = total > 0 ? Math.round((totals.cash / total) * 100) : 0;
@@ -292,7 +292,7 @@ export default function Dashboard() {
       cashPercent,
       transferPercent
     };
-  }, [summary.paymentCash, summary.paymentTransfer]);
+  }, [summary.paymentCashCount, summary.paymentTransferCount]);
 
   const staffStats = useMemo(() => {
     return staffPerformance

@@ -535,20 +535,28 @@ export default function Orders() {
           <div className="space-y-4">
             <div className="grid gap-3 rounded-lg bg-gray-50 p-4 text-sm md:grid-cols-2">
               <div>
-                <span className="text-gray-500">Mã đơn</span>
+                <span className="font-medium text-gray-700">Mã đơn</span>
                 <div className="font-semibold text-gray-950">{selectedOrder.order_number}</div>
               </div>
               <div>
-                <span className="text-gray-500">Khách hàng</span>
+                <span className="font-medium text-gray-700">Khách hàng</span>
                 <div className="font-semibold text-gray-950">{selectedOrder.customer_name || 'Khách lẻ'}</div>
               </div>
               <div>
-                <span className="text-gray-500">Thu ngân</span>
+                <span className="font-medium text-gray-700">Thu ngân</span>
                 <div className="font-semibold text-gray-950">{selectedOrder.cashier_name}</div>
               </div>
               <div>
-                <span className="text-gray-500">Ngày tạo</span>
+                <span className="font-medium text-gray-700">Ngày tạo</span>
                 <div className="font-semibold text-gray-950">{formatDate(selectedOrder.created_at)}</div>
+              </div>
+              <div className="md:col-span-2">
+                <span className="font-medium text-gray-700">Phương thức thanh toán</span>
+                <div className="mt-1">
+                  <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${paymentBadgeClasses[selectedOrder.payment_method] || 'bg-gray-100 text-gray-700'}`}>
+                    {paymentLabels[selectedOrder.payment_method] || selectedOrder.payment_method || 'Chưa xác định'}
+                  </span>
+                </div>
               </div>
             </div>
 

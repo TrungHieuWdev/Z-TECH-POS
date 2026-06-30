@@ -17,6 +17,7 @@ import {
   Unlock
 } from 'lucide-react';
 import Modal from '../components/Modal';
+import { readLocalJson } from '../utils/storage';
 
 const STORAGE_KEY = 'ztech-suppliers';
 const PAGE_SIZE = 5;
@@ -137,8 +138,7 @@ function buildCsv(suppliers) {
 
 export default function Suppliers() {
   const [suppliers, setSuppliers] = useState(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? JSON.parse(saved) : initialSuppliers;
+    return readLocalJson(STORAGE_KEY, initialSuppliers, Array.isArray);
   });
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');

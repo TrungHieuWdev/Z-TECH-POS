@@ -1,27 +1,32 @@
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import toast, { Toaster } from 'react-hot-toast';
-import Layout from './components/Layout';
-import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import StaffDashboard from './pages/StaffDashboard';
-import POS from './pages/POS';
-import Products from './pages/Products';
-import Categories from './pages/Categories';
-import Customers from './pages/Customers';
-import Orders from './pages/Orders';
-import Inventory from './pages/Inventory';
-import Suppliers from './pages/Suppliers';
-import Employees from './pages/Employees';
-import Shifts from './pages/Shifts';
-import Promotions from './pages/Promotions';
-import Reports from './pages/Reports';
-import ActivityLogs from './pages/ActivityLogs';
-import Warranty from './pages/Warranty';
-import WarrantyLookupPublic from './pages/WarrantyLookupPublic';
-import SettingsPage from './components/settings/SettingsPage';
 import { canAccessPath, getToken, getUser } from './utils/auth';
 import { isFullAccessRole } from './utils/auth';
+
+const Layout = lazy(() => import('./components/Layout'));
+const Login = lazy(() => import('./pages/Login'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const StaffDashboard = lazy(() => import('./pages/StaffDashboard'));
+const POS = lazy(() => import('./pages/POS'));
+const Products = lazy(() => import('./pages/Products'));
+const Categories = lazy(() => import('./pages/Categories'));
+const Customers = lazy(() => import('./pages/Customers'));
+const Orders = lazy(() => import('./pages/Orders'));
+const Inventory = lazy(() => import('./pages/Inventory'));
+const Suppliers = lazy(() => import('./pages/Suppliers'));
+const Employees = lazy(() => import('./pages/Employees'));
+const Shifts = lazy(() => import('./pages/Shifts'));
+const Promotions = lazy(() => import('./pages/Promotions'));
+const Reports = lazy(() => import('./pages/Reports'));
+const ActivityLogs = lazy(() => import('./pages/ActivityLogs'));
+const Warranty = lazy(() => import('./pages/Warranty'));
+const WarrantyLookupPublic = lazy(() => import('./pages/WarrantyLookupPublic'));
+const SettingsPage = lazy(() => import('./components/settings/SettingsPage'));
+
+function PageLoader() {
+  return <main className="grid min-h-screen place-items-center bg-slate-50 text-sm font-medium text-slate-600">Đang tải Z-TECH POS...</main>;
+}
 
 function ProtectedRoute() {
   const token = getToken();
@@ -49,7 +54,8 @@ export default function App() {
   return (
     <BrowserRouter future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
       <Toaster position="top-right" />
-      <Routes>
+      <Suspense fallback={<PageLoader />}>
+       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/tra-cuu-bao-hanh/:publicToken" element={<WarrantyLookupPublic />} />
         <Route element={<ProtectedRoute />}>
@@ -73,7 +79,9 @@ export default function App() {
             </Route>
           </Route>
         </Route>
-      </Routes>
+        <Route path="*" element={<Navigate to={getToken() ? "/" : "/login"} replace />} />
+       </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }

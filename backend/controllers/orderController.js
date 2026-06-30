@@ -212,7 +212,14 @@ export async function create(req, res) {
       }
 
       const created = await db('SELECT * FROM orders WHERE id = ?', [orderResult.insertId]);
-      return created[0];
+      return {
+        ...created[0],
+        inventory: orderItems.map((item) => ({
+          product_id: item.product_id,
+          product_name: item.name,
+          remaining_stock: Number(item.stock_quantity) - item.quantity
+        }))
+      };
     });
 
     res.status(201).json(createdOrder);

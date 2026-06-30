@@ -124,8 +124,8 @@ export async function getSummary(req, res) {
       ),
       query(
         `SELECT
-           COALESCE(SUM(CASE WHEN payment_method = 'cash' THEN total ELSE 0 END), 0) AS cash,
-           COALESCE(SUM(CASE WHEN payment_method = 'transfer' THEN total ELSE 0 END), 0) AS transfer
+           SUM(CASE WHEN payment_method = 'cash' THEN 1 ELSE 0 END) AS cash_count,
+           SUM(CASE WHEN payment_method = 'transfer' THEN 1 ELSE 0 END) AS transfer_count
          FROM orders
          WHERE status = 'completed' AND ${filters.current}`
       )
@@ -155,8 +155,8 @@ export async function getSummary(req, res) {
       orderGrowth: getPercentChange(todayOrdersValue, yesterdayOrdersValue),
       productsSoldGrowth: getPercentChange(productsSoldValue, previousProductsSoldValue),
       estimatedProfitGrowth: getPercentChange(estimatedProfitValue, previousEstimatedProfitValue),
-      paymentCash: toNumber(paymentTotals[0].cash),
-      paymentTransfer: toNumber(paymentTotals[0].transfer)
+      paymentCashCount: toNumber(paymentTotals[0].cash_count),
+      paymentTransferCount: toNumber(paymentTotals[0].transfer_count)
     });
   } catch (error) {
     res.status(500).json({ message: 'Không thể lấy tổng quan', error: error.message });

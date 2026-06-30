@@ -16,6 +16,7 @@ import {
 import api from '../api/axios';
 import Modal from '../components/Modal';
 import { getUser, isFullAccessRole } from '../utils/auth';
+import { readLocalJson } from '../utils/storage';
 import { formatCurrency } from '../utils/format';
 
 const STORAGE_KEY = 'ztech-shifts';
@@ -92,6 +93,17 @@ const initialShifts = [
   }
 ];
 
+// Used until the employee API responds, and as a safe fallback when it is
+// unavailable. This must be declared before emptyForm is initialized.
+const employeeOptions = Array.from(
+  new Set(initialShifts.map((shift) => shift.employee).filter(Boolean))
+);
+
+function sanitizeShifts(value, fallback = []) {
+  if (!Array.isArray(value)) return fallback;
+  return value.filter((shift) => shift && typeof shift === 'object' && !Array.isArray(shift));
+}
+
 const emptyForm = {
   name: shiftNameOptions[0],
   employee: employeeOptions[0],
@@ -131,7 +143,7 @@ function getStatusMeta(status) {
 }
 
 function getInitials(name) {
-  return name
+  return String(name || '?')
     .trim()
     .split(/\s+/)
     .slice(-2)
@@ -178,11 +190,12 @@ function getDateRange(period) {
 
 function isDateInRange(date, range) {
   if (!range) return true;
-  return date >= range.from && date <= range.to;
+  const normalizedDate = String(date || '').slice(0, 10);
+  return normalizedDate >= range.from && normalizedDate <= range.to;
 }
 
 function getShiftStats(shifts) {
-  const todayShifts = shifts.filter((shift) => shift.workDate === TODAY);
+  const todayShifts = sanitizeShifts(shifts).filter((shift) => shift.workDate === TODAY);
   const active = todayShifts.filter((shift) => shift.status === 'active').length;
   const completed = todayShifts.filter((shift) => shift.status === 'completed').length;
   const employees = new Set(todayShifts.map((shift) => shift.employee)).size;
@@ -200,8 +213,7 @@ export default function Shifts() {
   const hasFullAccess = isFullAccessRole(user?.role);
   const currentEmployeeName = user?.name || 'Nhân viên';
   const [shifts, setShifts] = useState(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? JSON.parse(saved) : initialShifts;
+    return sanitizeShifts(readLocalJson(STORAGE_KEY, initialShifts, Array.isArray), initialShifts);
   });
   const [search, setSearch] = useState('');
   const [period, setPeriod] = useState('today');
@@ -218,7 +230,7 @@ export default function Shifts() {
 
   useEffect(() => {
     api.get('/shifts').then(async (response) => {
-      const sharedShifts = Array.isArray(response.data) ? response.data : [];
+      const sharedShifts = sanitizeShifts(response.data);
       if (sharedShifts.length) setShifts(sharedShifts);
       else if (hasFullAccess) await api.put('/shifts', shifts);
       setShiftStoreReady(true);
@@ -271,12 +283,13 @@ export default function Shifts() {
     const dateRange = getDateRange(period);
 
     return shifts.filter((shift) => {
+      if (!shift || typeof shift !== 'object') return false;
       const matchesEmployee = hasFullAccess || shift.employee === currentEmployeeName;
       const matchesPeriod = isDateInRange(shift.workDate, dateRange);
       const matchesStatus = statusFilter === 'all' || shift.status === statusFilter;
       const matchesKeyword = [shift.code, shift.name, shift.employee, shift.note]
         .filter(Boolean)
-        .some((value) => value.toLowerCase().includes(keyword));
+        .some((value) => String(value).toLowerCase().includes(keyword));
 
       return matchesEmployee && matchesPeriod && matchesStatus && matchesKeyword;
     });

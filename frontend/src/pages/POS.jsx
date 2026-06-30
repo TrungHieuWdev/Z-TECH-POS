@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import api from '../api/axios';
 import Modal from '../components/Modal';``
+import PrintBill from '../components/PrintBill';
 import ProductImage from '../components/ProductImage';
 import { DEFAULT_SETTINGS, mergeSettings } from '../constants/settingsDefaults';
 import { getSettings, getUploadedAssetUrl } from '../services/settingsService';
@@ -174,11 +175,11 @@ function ReceiptContent({ receipt }) {
           <table className="w-full min-w-[620px] table-fixed text-left text-xs sm:text-sm">
             <thead className="bg-[#74B8E0] text-white">
               <tr>
-                <th className="w-12 px-3 py-2 text-center font-bold">STT</th>
-                <th className="px-3 py-2 font-bold">Tên sản phẩm</th>
-                <th className="w-20 px-3 py-2 text-center font-bold">Số lượng</th>
-                <th className="w-32 px-3 py-2 text-right font-bold">Đơn giá</th>
-                <th className="w-32 px-3 py-2 text-right font-bold">Thành tiền</th>
+                <th className="w-12 px-3 py-1.5 text-center font-bold">STT</th>
+                <th className="px-3 py-1.5 font-bold">Tên sản phẩm</th>
+                <th className="w-16 whitespace-nowrap px-3 py-1.5 text-center font-bold">SL</th>
+                <th className="w-32 px-3 py-1.5 text-right font-bold">Đơn giá</th>
+                <th className="w-32 px-3 py-1.5 text-right font-bold">Thành tiền</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 bg-white">
@@ -235,16 +236,11 @@ function ThermalReceiptContent({ receipt }) {
     : createdAt.toLocaleString('vi-VN', {
         day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
       });
-  const printedAtLabel = createdAtLabel;
   const discountTotal = Number(receipt.discount || 0) + Number(receipt.pointsDiscountAmount || 0);
   const footer = receipt.print?.footer || 'Cảm ơn quý khách và hẹn gặp lại.';
 
   return (
     <div className="thermal-receipt">
-      <div className="thermal-meta">
-        <span>{printedAtLabel}</span>
-        <span>Hóa đơn {receipt.orderNumber} - {shopName}</span>
-      </div>
       <header className="thermal-header">
         {logoSrc && <img src={logoSrc} alt={`Logo ${shopName}`} />}
         <h1>{shopName}</h1>
@@ -259,6 +255,7 @@ function ThermalReceiptContent({ receipt }) {
         <div><strong>Ngày giờ:</strong><p>{createdAtLabel}</p></div>
         <div><strong>Thu ngân:</strong><p>{receipt.cashierName || 'Nhân viên'}</p></div>
         <div><strong>Khách hàng:</strong><p>{receipt.customerName || 'Khách thường'}</p></div>
+        <div><strong>Phương thức:</strong><p>{getPaymentLabel(receipt.paymentMethod)}</p></div>
       </section>
 
       <section className="thermal-products">
@@ -282,22 +279,23 @@ function ThermalReceiptContent({ receipt }) {
 
       <section className="thermal-totals">
         <div><span>Tạm tính</span><span>{Number(receipt.subtotal || 0).toLocaleString('vi-VN')}</span></div>
-        {discountTotal > 0 && <div><span>Giảm giá</span><span>-{discountTotal.toLocaleString('vi-VN')}</span></div>}
-        {Number(receipt.vatAmount || 0) > 0 && <div><span>VAT ({Number(receipt.vatRate || 0).toLocaleString('vi-VN')}%)</span><span>{Number(receipt.vatAmount || 0).toLocaleString('vi-VN')}</span></div>}
-        <div><span>Hình thức thanh toán</span><span>{getPaymentLabel(receipt.paymentMethod)}</span></div>
+        <div><span>Giảm giá</span><span>{discountTotal > 0 ? `-${discountTotal.toLocaleString('vi-VN')}` : '0'}</span></div>
+        <div><span>VAT ({Number(receipt.vatRate || 0).toLocaleString('vi-VN')}%)</span><span>{Number(receipt.vatAmount || 0).toLocaleString('vi-VN')}</span></div>
+        <div className="thermal-total"><strong>TỔNG CỘNG</strong><strong>{Number(receipt.total || 0).toLocaleString('vi-VN')}</strong></div>
         {receipt.paymentMethod === 'cash' && (
           <>
             <div><span>Tiền khách đưa</span><span>{Number(receipt.customerPaid || 0).toLocaleString('vi-VN')}</span></div>
             <div className="thermal-change"><strong>Tiền thừa</strong><strong>{Number(receipt.changeDue || 0).toLocaleString('vi-VN')}</strong></div>
           </>
         )}
-        <div className="thermal-total"><strong>TỔNG CỘNG</strong><strong>{Number(receipt.total || 0).toLocaleString('vi-VN')}</strong></div>
       </section>
 
       <footer className="thermal-footer">
-        <strong>Cảm ơn quý khách đã mua sắm!</strong>
+        <strong>Xin cảm ơn Quý khách!</strong>
         <p>{footer}</p>
-        <small>POWERED BY {shopName}</small>
+        {shopInfo.phone && <p className="thermal-support">☎&nbsp; Hotline hỗ trợ: {shopInfo.phone}</p>}
+        <p className="thermal-policy">♢&nbsp; Chính sách đổi trả trong 7 ngày.</p>
+        <small>Cảm ơn bạn đã lựa chọn {shopName}!</small>
       </footer>
     </div>
   );
@@ -869,13 +867,24 @@ export default function POS() {
         payment_method: paymentMethod === 'qr' ? 'transfer' : paymentMethod
       });
 
+      const remainingStockByProduct = new Map(
+        (Array.isArray(response.data.inventory) ? response.data.inventory : [])
+          .map((item) => [String(item.product_id), Number(item.remaining_stock)])
+      );
+      const completedReceiptItems = receiptItems.map((item) => ({
+        ...item,
+        remainingStock: remainingStockByProduct.has(String(item.id))
+          ? remainingStockByProduct.get(String(item.id))
+          : null
+      }));
+
       setReceipt({
         orderNumber: response.data.order_number,
         createdAt: response.data.created_at || new Date().toISOString(),
         cashierName: getUser()?.name || 'Nhân viên',
         customerName,
         paymentMethod,
-        items: receiptItems,
+        items: completedReceiptItems,
         subtotal,
         discount: promotionDiscount,
         pointsUsed: normalizedUsedPoints,
@@ -910,40 +919,81 @@ export default function POS() {
   };
 
   const printReceipt = async () => {
-    if (document.fonts?.ready) await document.fonts.ready;
+    const sourceBill = document.querySelector('.print-bill');
+    if (!sourceBill) {
+      toast.error('Không tìm thấy nội dung hóa đơn để in');
+      return;
+    }
 
-    const receiptImages = Array.from(document.querySelectorAll('.print-receipt img'));
-    await Promise.all(receiptImages.map((image) => {
-      if (image.complete) return Promise.resolve();
-      return new Promise((resolve) => {
-        image.addEventListener('load', resolve, { once: true });
-        image.addEventListener('error', resolve, { once: true });
-      });
-    }));
+    const printFrame = document.createElement('iframe');
+    printFrame.className = 'receipt-print-frame';
+    printFrame.setAttribute('title', 'In hóa đơn Z-TECH POS');
+    document.body.appendChild(printFrame);
 
-    const dynamicPageStyle = document.createElement('style');
-    dynamicPageStyle.setAttribute('data-thermal-page-size', 'true');
-    document.head.appendChild(dynamicPageStyle);
+    const styleMarkup = Array.from(document.head.querySelectorAll('style, link[rel="stylesheet"]'))
+      .map((node) => node.outerHTML)
+      .join('');
 
-    const prepareThermalPage = () => {
-      const bill = document.querySelector('.thermal-receipt');
-      if (!bill) return;
+    const frameDocument = printFrame.contentDocument;
+    frameDocument.open();
+    frameDocument.write(`<!doctype html><html><head><meta charset="UTF-8"><title></title><base href="${document.baseURI}">${styleMarkup}</head><body>${sourceBill.outerHTML}</body></html>`);
+    frameDocument.close();
 
-      const contentHeightPx = Math.max(bill.scrollHeight, bill.getBoundingClientRect().height);
-      const contentHeightMm = (contentHeightPx * 25.4) / 96;
-      const pageHeightMm = Math.max(80, Math.ceil(contentHeightMm + 1));
-      dynamicPageStyle.textContent = `@page { size: 80mm ${pageHeightMm}mm; margin: 0; }`;
-    };
+    await new Promise((resolve) => {
+      if (frameDocument.readyState === 'complete') resolve();
+      else printFrame.addEventListener('load', resolve, { once: true });
+    });
+    await Promise.all(Array.from(frameDocument.querySelectorAll('link[rel="stylesheet"]')).map((link) => link.sheet
+      ? Promise.resolve()
+      : new Promise((resolve) => {
+          link.addEventListener('load', resolve, { once: true });
+          link.addEventListener('error', resolve, { once: true });
+        })));
+    if (frameDocument.fonts?.ready) await frameDocument.fonts.ready;
 
-    const cleanupPrintStyle = () => {
-      dynamicPageStyle.remove();
-      window.removeEventListener('beforeprint', prepareThermalPage);
-      window.removeEventListener('afterprint', cleanupPrintStyle);
-    };
+    const frameImages = Array.from(frameDocument.images);
+    await Promise.all(frameImages.map((image) => image.complete
+      ? Promise.resolve()
+      : new Promise((resolve) => {
+          image.addEventListener('load', resolve, { once: true });
+          image.addEventListener('error', resolve, { once: true });
+        })));
 
-    window.addEventListener('beforeprint', prepareThermalPage);
-    window.addEventListener('afterprint', cleanupPrintStyle, { once: true });
-    window.print();
+    const bill = frameDocument.querySelector('.print-bill');
+    const contentHeightPx = Math.max(bill.scrollHeight, bill.getBoundingClientRect().height);
+    const pageHeightMm = Math.max(80, Math.ceil((contentHeightPx * 25.4) / 96) + 1);
+    const isolatedPrintStyle = frameDocument.createElement('style');
+    isolatedPrintStyle.textContent = `
+      @page { size: 80mm ${pageHeightMm}mm; margin: 0; }
+      html, body { width: 80mm !important; height: auto !important; margin: 0 !important; padding: 0 !important; background: #fff !important; }
+      body * { visibility: visible !important; }
+      .print-bill { display: block !important; position: static !important; width: 80mm !important; height: auto !important; margin: 0 !important; overflow: visible !important; box-shadow: none !important; }
+      .print-bill header, .print-bill footer, .print-bill section { display: block !important; }
+      .no-print { display: none !important; }
+    `;
+    frameDocument.head.appendChild(isolatedPrintStyle);
+
+    const cleanup = () => window.setTimeout(() => printFrame.remove(), 500);
+    printFrame.contentWindow.addEventListener('afterprint', cleanup, { once: true });
+    printFrame.contentWindow.focus();
+    printFrame.contentWindow.print();
+  };
+
+  const completeReceipt = () => {
+    if (!receipt) return;
+
+    const stockLines = receipt.items.map((item) => {
+      const remaining = item.remainingStock !== null && item.remainingStock !== undefined && Number.isFinite(Number(item.remainingStock))
+        ? Number(item.remainingStock).toLocaleString('vi-VN')
+        : 'chưa xác định';
+      return `• ${item.name}: còn ${remaining}`;
+    });
+
+    setReceipt(null);
+    toast.success(`Tồn kho sau khi bán:\n${stockLines.join('\n')}`, {
+      duration: 7000,
+      style: { maxWidth: '520px', whiteSpace: 'pre-line' }
+    });
   };
 
   const copyToClipboard = async (value, label) => {
@@ -1770,7 +1820,7 @@ export default function POS() {
 
     <Modal
       isOpen={Boolean(receipt)}
-      onClose={() => setReceipt(null)}
+      onClose={completeReceipt}
       maxWidth="max-w-4xl"
       panelClassName="rounded-t-2xl shadow-2xl sm:rounded-2xl"
       headerClassName="sm:mb-3"
@@ -1779,7 +1829,7 @@ export default function POS() {
         <>
           <button
             type="button"
-            onClick={() => setReceipt(null)}
+            onClick={completeReceipt}
             className="hidden h-10 rounded-lg border border-gray-300 bg-white px-4 text-sm font-bold text-gray-700 transition hover:bg-gray-50 sm:inline-flex sm:items-center"
           >
             Hoàn tất
@@ -1809,7 +1859,7 @@ export default function POS() {
         <div className="flex justify-end gap-2 border-t border-gray-100 pt-3 sm:hidden">
           <button
             type="button"
-            onClick={() => setReceipt(null)}
+            onClick={completeReceipt}
             className="h-11 rounded-lg border border-gray-300 bg-white px-5 font-bold text-gray-700 transition hover:bg-gray-50"
           >
             Hoàn tất
@@ -1819,8 +1869,8 @@ export default function POS() {
     </Modal>
     </div>
 
-    <div className="print-receipt">
-      <ThermalReceiptContent receipt={receipt} />
+    <div className="print-bill-host">
+      <PrintBill receipt={receipt} />
     </div>
     </>
   );

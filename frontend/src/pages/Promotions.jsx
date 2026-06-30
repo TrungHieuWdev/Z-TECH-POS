@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   BarChart3,
   CalendarX,
@@ -16,6 +17,7 @@ import { formatCurrency } from '../utils/format';
 import { getPromotions, savePromotions } from '../services/promotionService';
 import api from '../api/axios';
 import { getUser, isFullAccessRole } from '../utils/auth';
+import Modal from '../components/Modal';
 
 export const initialPromotions = [
   {
@@ -90,6 +92,7 @@ const emptyForm = {
   discountType: 'percent',
   discountValue: '',
   minOrder: '',
+  maxOrder: '',
   maxDiscount: '',
   scope: 'Toàn đơn hàng',
   categoryId: '',
@@ -166,6 +169,7 @@ export default function Promotions() {
   });
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingPromotion, setEditingPromotion] = useState(null);
+  const [viewingPromotion, setViewingPromotion] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [codeError, setCodeError] = useState('');
   const [categories, setCategories] = useState([]);
@@ -223,6 +227,7 @@ export default function Promotions() {
       discountType: promotion.discountType,
       discountValue: promotion.discountValue,
       minOrder: promotion.minOrder,
+      maxOrder: promotion.maxOrder || '',
       maxDiscount: promotion.maxDiscount,
       scope: promotion.scope,
       categoryId: promotion.categoryId || '',
@@ -297,6 +302,7 @@ export default function Promotions() {
       name: form.name.trim(),
       discountValue: Number(form.discountValue || 0),
       minOrder: Number(form.minOrder || 0),
+      maxOrder: Number(form.maxOrder || 0),
       maxDiscount: Number(form.maxDiscount || 0),
       categoryId: form.scope === 'Theo danh mục sản phẩm' ? Number(form.categoryId || 0) || '' : '',
       productId: form.scope === 'Theo sản phẩm cụ thể' ? Number(form.productId || 0) || '' : '',
@@ -304,7 +310,9 @@ export default function Promotions() {
       targetName: form.scope === 'Theo danh mục sản phẩm' ? categories.find((item) => Number(item.id) === Number(form.categoryId))?.name : form.scope === 'Theo sản phẩm cụ thể' ? products.find((item) => Number(item.id) === Number(form.productId))?.name : form.scope === 'Theo dòng thiết bị' ? form.deviceFamily : '',
       condition:
         form.scope === 'Toàn đơn hàng'
-          ? `Đơn từ ${formatCurrency(Number(form.minOrder || 0))}`
+          ? Number(form.maxOrder || 0) > 0
+            ? `Đơn từ ${formatCurrency(Number(form.minOrder || 0))} đến ${formatCurrency(Number(form.maxOrder))}`
+            : `Đơn từ ${formatCurrency(Number(form.minOrder || 0))}`
           : form.scope,
       status: form.enabled ? 'active' : 'ended'
     };
@@ -484,7 +492,7 @@ export default function Promotions() {
                     </td>
                     <td className="px-5 py-4">
                       <div className="flex items-center justify-end gap-3">
-                        <button type="button" className="text-[#68707a] transition hover:text-brand-deep" title="Xem">
+                        <button type="button" onClick={() => setViewingPromotion(promotion)} className="text-[#68707a] transition hover:text-brand-deep" title="Xem chi tiết" aria-label={`Xem chi tiết ${promotion.code}`}>
                           <Eye size={18} />
                         </button>
                         <button
@@ -521,7 +529,34 @@ export default function Promotions() {
         </div>
       </section>
 
-      {isDrawerOpen && (
+      <Modal
+        isOpen={Boolean(viewingPromotion)}
+        onClose={() => setViewingPromotion(null)}
+        title="Chi tiết khuyến mãi"
+        maxWidth="max-w-2xl"
+      >
+        {viewingPromotion && (
+          <div className="space-y-4 text-sm">
+            <div className="flex items-start justify-between gap-4 border bg-[#f8fbfd] p-4">
+              <div><p className="text-xs font-bold uppercase text-[#68707a]">Mã khuyến mãi</p><p className="mt-1 text-lg font-extrabold text-brand-strong">{viewingPromotion.code}</p></div>
+              <span className={`px-2.5 py-1 text-xs font-bold ring-1 ${statusStyles[getPromotionStatus(viewingPromotion)]}`}>{statusLabels[getPromotionStatus(viewingPromotion)]}</span>
+            </div>
+            <dl className="grid gap-4 sm:grid-cols-2">
+              <div><dt className="text-[#68707a]">Tên chương trình</dt><dd className="mt-1 font-bold text-[#1f2933]">{viewingPromotion.name}</dd></div>
+              <div><dt className="text-[#68707a]">Giá trị giảm</dt><dd className="mt-1 font-bold text-[#1f2933]">{formatDiscount(viewingPromotion)}</dd></div>
+              <div><dt className="text-[#68707a]">Đơn tối thiểu</dt><dd className="mt-1 font-semibold">{formatCurrency(viewingPromotion.minOrder || 0)}</dd></div>
+              <div><dt className="text-[#68707a]">Đơn tối đa</dt><dd className="mt-1 font-semibold">{Number(viewingPromotion.maxOrder || 0) > 0 ? formatCurrency(viewingPromotion.maxOrder) : 'Không giới hạn'}</dd></div>
+              <div><dt className="text-[#68707a]">Giảm tối đa</dt><dd className="mt-1 font-semibold">{Number(viewingPromotion.maxDiscount || 0) > 0 ? formatCurrency(viewingPromotion.maxDiscount) : 'Không giới hạn'}</dd></div>
+              <div><dt className="text-[#68707a]">Phạm vi áp dụng</dt><dd className="mt-1 font-semibold">{viewingPromotion.scope}</dd></div>
+              <div><dt className="text-[#68707a]">Ngày bắt đầu</dt><dd className="mt-1 font-semibold">{formatDateText(viewingPromotion.startDate)}</dd></div>
+              <div><dt className="text-[#68707a]">Ngày kết thúc</dt><dd className="mt-1 font-semibold">{formatDateText(viewingPromotion.endDate)}</dd></div>
+            </dl>
+            <div><p className="text-[#68707a]">Mô tả</p><p className="mt-1 whitespace-pre-wrap font-medium text-[#1f2933]">{viewingPromotion.description || 'Không có mô tả'}</p></div>
+          </div>
+        )}
+      </Modal>
+
+      {isDrawerOpen && createPortal(
         <div className="fixed inset-0 z-[70]">
           <button
             type="button"
@@ -629,7 +664,7 @@ export default function Promotions() {
                   </label>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-4 sm:grid-cols-3">
                   <label>
                     <span className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#68707a]">Đơn tối thiểu</span>
                     <input
@@ -639,6 +674,17 @@ export default function Promotions() {
                       onChange={(event) => setForm({ ...form, minOrder: event.target.value })}
                       className="h-10 w-full rounded-lg border border-[#d5dbe3] px-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft"
                       placeholder="0"
+                    />
+                  </label>
+                  <label>
+                    <span className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#68707a]">Đơn tối đa</span>
+                    <input
+                      type="number"
+                      min={Number(form.minOrder || 0)}
+                      value={form.maxOrder}
+                      onChange={(event) => setForm({ ...form, maxOrder: event.target.value })}
+                      className="h-10 w-full rounded-lg border border-[#d5dbe3] px-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft"
+                      placeholder="Không giới hạn"
                     />
                   </label>
                   <label>
@@ -747,7 +793,8 @@ export default function Promotions() {
               </div>
             </form>
           </aside>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

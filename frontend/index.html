@@ -8,6 +8,38 @@
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
+    <script type="module">
+      // Report a real module-loading failure without mistaking a slow cold start
+      // (Vite may need to transform thousands of modules) for an application crash.
+      let bootFinished = false;
+      const showBootError = (error) => {
+        const root = document.getElementById('root');
+        if (!root || bootFinished || root.childElementCount > 0) return;
+        console.error('[app] Failed to load the application', error);
+        root.innerHTML = `
+          <main style="min-height:100vh;display:grid;place-items:center;padding:24px;background:#f8fafc;font-family:Arial,sans-serif;color:#0f172a">
+            <section style="max-width:560px;padding:28px;border:1px solid #e2e8f0;border-radius:16px;background:white;text-align:center;box-shadow:0 8px 30px rgba(15,23,42,.08)">
+              <h1 style="margin:0;font-size:24px">Không thể khởi động Z-TECH POS</h1>
+              <p style="margin:14px 0;line-height:1.6;color:#475569">Hãy tải lại trang. Khi dùng điện thoại, mở địa chỉ IP của máy tính, không dùng <b>localhost</b>.</p>
+              <button onclick="location.reload()" style="border:0;border-radius:8px;padding:10px 16px;background:#0369a1;color:white;font-weight:700">Tải lại trang</button>
+            </section>
+          </main>`;
+      };
+
+      const bootTimeout = window.setTimeout(
+        () => showBootError(new Error('Application startup timed out')),
+        30000
+      );
+
+      import('/src/main.jsx')
+        .then(() => {
+          bootFinished = true;
+          window.clearTimeout(bootTimeout);
+        })
+        .catch((error) => {
+          window.clearTimeout(bootTimeout);
+          showBootError(error);
+        });
+    </script>
   </body>
 </html>
