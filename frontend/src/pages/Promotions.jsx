@@ -87,6 +87,7 @@ export const initialPromotions = [
 ];
 
 const emptyForm = {
+  promotionType: 'standard',
   code: '',
   name: '',
   discountType: 'percent',
@@ -101,7 +102,13 @@ const emptyForm = {
   startDate: '',
   endDate: '',
   enabled: true,
-  description: ''
+  description: '',
+  buyProductId: '',
+  buyQuantity: 1,
+  giftProductId: '',
+  giftQuantity: 1,
+  tier2Percent: 5,
+  tier3Percent: 10
 };
 
 const statusOptions = [
@@ -114,7 +121,9 @@ const statusOptions = [
 const discountTypeOptions = [
   { value: 'all', label: 'Tất cả' },
   { value: 'percent', label: 'Giảm %' },
-  { value: 'amount', label: 'Giảm tiền' }
+  { value: 'amount', label: 'Giảm tiền' },
+  { value: 'buy_x_get_y', label: 'Mua X tặng Y' },
+  { value: 'quantity_tier', label: 'Giảm theo bậc số lượng' }
 ];
 
 const statusStyles = {
@@ -146,14 +155,58 @@ function formatDateText(value) {
 }
 
 function formatDiscount(promotion) {
+  if (promotion.promotionType === 'buy_x_get_y') return `${promotion.buyQuantity || 1} tặng ${promotion.giftQuantity || 1}`;
+  if (promotion.promotionType === 'quantity_tier') return (promotion.quantityTiers || []).map((tier) => `${tier.quantity} SP: -${tier.percent}%`).join(', ');
   return promotion.discountType === 'percent'
     ? `${promotion.discountValue}%`
     : formatCurrency(promotion.discountValue);
 }
 
+function getPromotionTypeLabel(promotion) {
+  if (promotion.promotionType === 'buy_x_get_y') return 'Mua X tặng Y';
+  if (promotion.promotionType === 'quantity_tier') return 'Giảm theo số lượng';
+  return promotion.discountType === 'percent' ? 'Giảm %' : 'Giảm tiền';
+}
+
 function getPromotionStatus(promotion) {
   if (!promotion.enabled) return 'ended';
   return promotion.status;
+}
+
+function SearchableProductSelect({ products, value, onChange, placeholder }) {
+  const selected = products.find((product) => Number(product.id) === Number(value));
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const results = useMemo(() => {
+    const keyword = query.trim().toLowerCase();
+    return products.filter((product) => {
+      const sku = product.sku || `SKU-${String(product.id).padStart(5, '0')}`;
+      return !keyword || `${sku} ${product.name}`.toLowerCase().includes(keyword);
+    }).slice(0, 12);
+  }, [products, query]);
+
+  return <div className="relative">
+    <div className="flex h-10 border border-[#d5dbe3] bg-white focus-within:border-brand">
+      <Search size={16} className="ml-3 mt-3 shrink-0 text-[#7b8490]" />
+      <input
+        value={open ? query : selected ? `${selected.sku || `SKU-${String(selected.id).padStart(5, '0')}`} - ${selected.name}` : ''}
+        onFocus={() => { setQuery(''); setOpen(true); }}
+        onBlur={() => window.setTimeout(() => setOpen(false), 150)}
+        onChange={(event) => { setQuery(event.target.value); setOpen(true); }}
+        placeholder={placeholder}
+        className="min-w-0 flex-1 px-2 text-sm outline-none"
+      />
+      {value && <button type="button" onClick={() => { onChange(''); setQuery(''); setOpen(true); }} className="px-3 text-[#68707a] hover:text-red-600" aria-label="Xóa sản phẩm"><X size={15} /></button>}
+    </div>
+    {open && <div className="absolute z-50 mt-1 max-h-56 w-full overflow-y-auto border border-[#d5dbe3] bg-white shadow-xl">
+      {results.length === 0 ? <p className="p-3 text-sm text-[#68707a]">Không tìm thấy sản phẩm.</p> : results.map((product) => {
+        const sku = product.sku || `SKU-${String(product.id).padStart(5, '0')}`;
+        return <button key={product.id} type="button" onClick={() => { onChange(product.id); setQuery(''); setOpen(false); }} className="block w-full border-b px-3 py-2 text-left hover:bg-brand-surface">
+          <span className="block text-xs font-bold text-brand-strong">{sku}</span><span className="block truncate text-sm text-[#26313d]">{product.name}</span>
+        </button>;
+      })}
+    </div>}
+  </div>;
 }
 
 export default function Promotions() {
@@ -222,6 +275,7 @@ export default function Promotions() {
   const openEditDrawer = (promotion) => {
     setEditingPromotion(promotion);
     setForm({
+      promotionType: promotion.promotionType || 'standard',
       code: promotion.code,
       name: promotion.name,
       discountType: promotion.discountType,
@@ -236,7 +290,11 @@ export default function Promotions() {
       startDate: promotion.startDate,
       endDate: promotion.endDate,
       enabled: promotion.enabled,
-      description: promotion.description
+      description: promotion.description,
+      buyProductId: promotion.buyProductId || '', buyQuantity: promotion.buyQuantity || 1,
+      giftProductId: promotion.giftProductId || '', giftQuantity: promotion.giftQuantity || 1,
+      tier2Percent: promotion.quantityTiers?.[0]?.percent || 5,
+      tier3Percent: promotion.quantityTiers?.[1]?.percent || 10
     });
     setCodeError('');
     setProductSearch(promotion.targetName || '');
@@ -275,6 +333,11 @@ export default function Promotions() {
   const handleSubmit = (event) => {
     event.preventDefault();
 
+    if (form.promotionType === 'buy_x_get_y' && (!form.buyProductId || !form.giftProductId)) {
+      setProductSearchError('Vui lòng chọn đủ sản phẩm mua và sản phẩm tặng');
+      return;
+    }
+
     if (form.scope === 'Theo sản phẩm cụ thể' && !form.productId) {
       setProductSearchError('Vui lòng chọn một sản phẩm trong danh sách gợi ý');
       return;
@@ -298,12 +361,18 @@ export default function Promotions() {
 
     const payload = {
       ...form,
+      discountType: form.promotionType === 'standard' ? form.discountType : form.promotionType,
       code: normalizedCode,
       name: form.name.trim(),
       discountValue: Number(form.discountValue || 0),
       minOrder: Number(form.minOrder || 0),
       maxOrder: Number(form.maxOrder || 0),
       maxDiscount: Number(form.maxDiscount || 0),
+      buyProductId: Number(form.buyProductId || 0) || '',
+      buyQuantity: Number(form.buyQuantity || 1),
+      giftProductId: Number(form.giftProductId || 0) || '',
+      giftQuantity: Number(form.giftQuantity || 1),
+      quantityTiers: form.promotionType === 'quantity_tier' ? [{ quantity: 2, percent: Number(form.tier2Percent || 0) }, { quantity: 3, percent: Number(form.tier3Percent || 0) }] : [],
       categoryId: form.scope === 'Theo danh mục sản phẩm' ? Number(form.categoryId || 0) || '' : '',
       productId: form.scope === 'Theo sản phẩm cụ thể' ? Number(form.productId || 0) || '' : '',
       deviceFamily: form.scope === 'Theo dòng thiết bị' ? form.deviceFamily : '',
@@ -478,7 +547,7 @@ export default function Promotions() {
                     <td className="px-5 py-4 font-bold text-brand-strong">{promotion.code}</td>
                     <td className="px-5 py-4 font-semibold text-[#1f2933]">{promotion.name}</td>
                     <td className="px-5 py-4 text-[#4f5965]">
-                      {promotion.discountType === 'percent' ? 'Giảm %' : 'Giảm tiền'}
+                      {getPromotionTypeLabel(promotion)}
                     </td>
                     <td className="px-5 py-4 font-bold text-[#1f2933]">{formatDiscount(promotion)}</td>
                     <td className="px-5 py-4 text-[#4f5965]">{promotion.condition}</td>
@@ -634,7 +703,32 @@ export default function Promotions() {
                   />
                 </label>
 
-                <div className="grid grid-cols-2 gap-4">
+                <label className="block">
+                  <span className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#68707a]">Hình thức khuyến mãi</span>
+                  <select value={form.promotionType} onChange={(event) => setForm({ ...form, promotionType: event.target.value })} className="h-10 w-full rounded-lg border border-[#d5dbe3] px-3 text-sm outline-none focus:border-brand">
+                    <option value="standard">Mã giảm giá thông thường</option>
+                    <option value="buy_x_get_y">Mua X tặng Y</option>
+                    <option value="quantity_tier">Giảm giá theo bậc số lượng</option>
+                  </select>
+                </label>
+
+                {form.promotionType === 'buy_x_get_y' && <div className="rounded-lg border border-brand-soft bg-[#f8fbfd] p-4">
+                  <p className="mb-3 text-sm font-bold text-brand-deep">Cấu hình sản phẩm mua và quà tặng</p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label><span className="mb-1 block text-xs font-bold text-[#68707a]">SẢN PHẨM KHÁCH MUA</span><SearchableProductSelect products={products} value={form.buyProductId} onChange={(id) => { setForm({ ...form, buyProductId: id }); setProductSearchError(''); }} placeholder="Tìm theo tên hoặc SKU..." /></label>
+                    <label><span className="mb-1 block text-xs font-bold text-[#68707a]">SỐ LƯỢNG MUA</span><input type="number" min="1" value={form.buyQuantity} onChange={(e) => setForm({ ...form, buyQuantity: e.target.value })} className="h-10 w-full border px-3 text-sm" /></label>
+                    <label><span className="mb-1 block text-xs font-bold text-[#68707a]">SẢN PHẨM TẶNG</span><SearchableProductSelect products={products} value={form.giftProductId} onChange={(id) => { setForm({ ...form, giftProductId: id }); setProductSearchError(''); }} placeholder="Tìm quà theo tên hoặc SKU..." /></label>
+                    <label><span className="mb-1 block text-xs font-bold text-[#68707a]">SỐ LƯỢNG TẶNG</span><input type="number" min="1" value={form.giftQuantity} onChange={(e) => setForm({ ...form, giftQuantity: e.target.value })} className="h-10 w-full border px-3 text-sm" /></label>
+                  </div>
+                  {productSearchError && <p className="mt-2 text-xs font-semibold text-red-600">{productSearchError}</p>}
+                </div>}
+
+                {form.promotionType === 'quantity_tier' && <div className="rounded-lg border border-brand-soft bg-[#f8fbfd] p-4">
+                  <p className="mb-3 text-sm font-bold text-brand-deep">Các bậc giảm giá</p>
+                  <div className="grid grid-cols-2 gap-3"><label className="text-xs font-bold text-[#68707a]">MUA 2 GIẢM (%)<input type="number" min="0" max="100" value={form.tier2Percent} onChange={(e) => setForm({ ...form, tier2Percent: e.target.value })} className="mt-1 h-10 w-full border px-3 text-sm" /></label><label className="text-xs font-bold text-[#68707a]">MUA TỪ 3 GIẢM (%)<input type="number" min={form.tier2Percent || 0} max="100" value={form.tier3Percent} onChange={(e) => setForm({ ...form, tier3Percent: e.target.value })} className="mt-1 h-10 w-full border px-3 text-sm" /></label></div>
+                </div>}
+
+                <div className={`${form.promotionType === 'standard' ? 'grid' : 'hidden'} grid-cols-2 gap-4`}>
                   <label>
                     <span className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#68707a]">Loại giảm</span>
                     <select

@@ -13,7 +13,7 @@ const Products = lazy(() => import('./pages/Products'));
 const Categories = lazy(() => import('./pages/Categories'));
 const Customers = lazy(() => import('./pages/Customers'));
 const Orders = lazy(() => import('./pages/Orders'));
-const Inventory = lazy(() => import('./pages/Inventory'));
+const Inventory = lazy(() => import('./pages/inventory/InventoryPage'));
 const Suppliers = lazy(() => import('./pages/Suppliers'));
 const Employees = lazy(() => import('./pages/Employees'));
 const Shifts = lazy(() => import('./pages/Shifts'));

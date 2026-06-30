@@ -518,7 +518,7 @@ export default function POS() {
   );
 
   const eligiblePromotions = useMemo(() => promotions.filter((promotion) => isPromotionEligible(promotion, { cart, subtotal, isMember: Boolean(selectedCustomer) })), [promotions, cart, subtotal, selectedCustomer]);
-  const promotionDiscount = selectedPromotion ? getPromotionDiscount(selectedPromotion, subtotal) : 0;
+  const promotionDiscount = selectedPromotion ? getPromotionDiscount(selectedPromotion, subtotal, cart) : 0;
 
   const amountAfterPromotion = Math.max(subtotal - promotionDiscount, 0);
   const availablePoints = selectedCustomer ? Math.max(Number(selectedCustomer.points) || 0, 0) : 0;
@@ -1460,8 +1460,8 @@ export default function POS() {
       <button type="button" onClick={() => { setSelectedPromotion(null); setIsPromotionOpen(false); }} className="mb-3 h-10 w-full border border-[#c3c6d7] bg-white text-sm font-bold text-[#434655]">Không áp dụng khuyến mãi</button>
       {eligiblePromotions.length === 0 ? <div className="border border-dashed border-[#c3c6d7] p-8 text-center text-sm font-semibold text-[#737686]">Hiện chưa có khuyến mãi phù hợp với giỏ hàng này.</div> : <div className="max-h-[60vh] space-y-3 overflow-y-auto">
         {eligiblePromotions.map((promotion) => <article key={promotion.id} className="border border-[#d8e4eb] bg-white p-4">
-          <div className="flex items-start justify-between gap-3"><div><h3 className="font-bold text-[#191c1e]">{promotion.name}</h3><p className="mt-1 text-sm text-[#5f6670]">{promotion.description || promotion.condition}</p></div><span className="shrink-0 bg-brand-soft px-2 py-1 text-sm font-bold text-brand-strong">-{formatCurrency(getPromotionDiscount(promotion, subtotal))}</span></div>
-          <div className="mt-3 grid gap-1 text-xs text-[#5f6670] sm:grid-cols-2"><p>Điều kiện: {promotion.condition || 'Không có'}</p><p>Giá trị: {promotion.discountType === 'percent' ? `${promotion.discountValue}%` : formatCurrency(promotion.discountValue)}</p><p>Hiệu lực: {promotion.startDate || '-'} đến {promotion.endDate || '-'}</p></div>
+          <div className="flex items-start justify-between gap-3"><div><h3 className="font-bold text-[#191c1e]">{promotion.name}</h3><p className="mt-1 text-sm text-[#5f6670]">{promotion.description || promotion.condition}</p></div><span className="shrink-0 bg-brand-soft px-2 py-1 text-sm font-bold text-brand-strong">-{formatCurrency(getPromotionDiscount(promotion, subtotal, cart))}</span></div>
+          <div className="mt-3 grid gap-1 text-xs text-[#5f6670] sm:grid-cols-2"><p>Điều kiện: {promotion.condition || 'Không có'}</p><p>Hình thức: {promotion.promotionType === 'buy_x_get_y' ? 'Mua X tặng Y' : promotion.promotionType === 'quantity_tier' ? 'Giảm theo bậc số lượng' : promotion.discountType === 'percent' ? `${promotion.discountValue}%` : formatCurrency(promotion.discountValue)}</p><p>Hiệu lực: {promotion.startDate || '-'} đến {promotion.endDate || '-'}</p></div>
           <button type="button" onClick={() => { setSelectedPromotion(promotion); setIsPromotionOpen(false); toast.success('Đã áp dụng khuyến mãi'); }} className="mt-3 h-10 w-full bg-brand px-4 text-sm font-bold text-white">Áp dụng</button>
         </article>)}
       </div>}

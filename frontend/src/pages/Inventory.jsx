@@ -19,6 +19,10 @@ import api from '../api/axios';
 import Modal from '../components/Modal';
 import { formatCurrency, formatDate } from '../utils/format';
 import { getUser, isFullAccessRole } from '../utils/auth';
+import InventoryTabs from '../components/inventory/InventoryTabs';
+import ProductAIAnalysisTab from '../components/inventory/ai-analysis/ProductAIAnalysisTab';
+import ProductAIStats from '../components/inventory/ai-analysis/ProductAIStats';
+import useProductAIAnalysis from '../hooks/useProductAIAnalysis';
 
 const initialForm = { product_id: '', quantity: '', note: '' };
 const initialCurrentFilters = { category: '', model: '', stock: '', barcode: '' };
@@ -99,6 +103,7 @@ function Pagination({ page, totalItems, onChange }) {
 }
 
 export default function Inventory() {
+  const productAIAnalysis = useProductAIAnalysis();
   const hasFullAccess = isFullAccessRole(getUser()?.role);
   const [logs, setLogs] = useState([]);
   const [products, setProducts] = useState([]);
@@ -195,7 +200,7 @@ export default function Inventory() {
     });
   }, [historyRows, search, historyFilters]);
 
-  const activeRows = activeTab === 'current' ? filteredProducts : filteredLogs;
+  const activeRows = activeTab === 'current' ? filteredProducts : activeTab === 'history' ? filteredLogs : [];
   const totalPages = Math.max(1, Math.ceil(activeRows.length / PAGE_SIZE));
   const paginatedRows = activeRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
@@ -268,33 +273,30 @@ export default function Inventory() {
         )}
       </header>
 
-      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <SummaryCard icon={Boxes} label="Tổng sản phẩm" value={stats.products.toLocaleString('vi-VN')} note="Tất cả sản phẩm trong kho" />
-        <SummaryCard icon={PackageCheck} label="Tổng số lượng tồn" value={stats.quantity.toLocaleString('vi-VN')} note="Đơn vị sản phẩm" iconColor="#1687a7" iconBackground="#e9f8fb" />
-        <SummaryCard icon={AlertTriangle} label="Sắp hết hàng" value={stats.low.toLocaleString('vi-VN')} note="Chạm mức tồn tối thiểu" iconColor="#d97706" iconBackground="#fff7e6" />
-        <SummaryCard icon={XCircle} label="Hết hàng" value={stats.out.toLocaleString('vi-VN')} note="Cần bổ sung sớm" iconColor="#dc2626" iconBackground="#fff0f0" />
-        <SummaryCard icon={WalletCards} label="Giá trị tồn kho" value={formatCurrency(stats.value)} note="Theo số lượng tồn và giá nhập" iconColor="#059669" iconBackground="#ecfdf5" />
-      </section>
+      {activeTab === 'ai' ? (
+        <ProductAIStats products={productAIAnalysis.analyzedProducts} totalAnalyzed={productAIAnalysis.totalAnalyzed} />
+      ) : (
+        <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <SummaryCard icon={Boxes} label="Tổng sản phẩm" value={stats.products.toLocaleString('vi-VN')} note="Tất cả sản phẩm trong kho" />
+          <SummaryCard icon={PackageCheck} label="Tổng số lượng tồn" value={stats.quantity.toLocaleString('vi-VN')} note="Đơn vị sản phẩm" iconColor="#1687a7" iconBackground="#e9f8fb" />
+          <SummaryCard icon={AlertTriangle} label="Sắp hết hàng" value={stats.low.toLocaleString('vi-VN')} note="Chạm mức tồn tối thiểu" iconColor="#d97706" iconBackground="#fff7e6" />
+          <SummaryCard icon={XCircle} label="Hết hàng" value={stats.out.toLocaleString('vi-VN')} note="Cần bổ sung sớm" iconColor="#dc2626" iconBackground="#fff0f0" />
+          <SummaryCard icon={WalletCards} label="Giá trị tồn kho" value={formatCurrency(stats.value)} note="Theo số lượng tồn và giá nhập" iconColor="#059669" iconBackground="#ecfdf5" />
+        </section>
+      )}
 
       <section className="border border-gray-200 bg-white shadow-sm">
         <div
-          className="items-center gap-5 border-b border-gray-200 p-4"
-          style={{ display: 'grid', gridTemplateColumns: 'minmax(420px, 1fr) auto' }}
+          className={`items-center gap-5 border-b border-gray-200 px-4 ${activeTab === 'ai' ? 'flex min-h-12 justify-end py-0' : 'grid py-4'}`}
+          style={activeTab === 'ai' ? undefined : { gridTemplateColumns: 'minmax(420px, 1fr) auto' }}
         >
-          <div className="flex min-w-0 items-center gap-2 border border-gray-300 px-3 py-2.5 focus-within:border-[#69afd6]">
+          {activeTab !== 'ai' && <div className="flex min-w-0 items-center gap-2 border border-gray-300 px-3 py-2.5 focus-within:border-[#69afd6]">
             <Search size={18} className="shrink-0 text-[#499bc6]" />
             <input value={search} onChange={(event) => setSearch(event.target.value)} className="w-full min-w-0 text-sm outline-none" placeholder={searchPlaceholder} />
-          </div>
-          <div className="flex shrink-0 justify-end whitespace-nowrap">
-            <button type="button" onClick={() => { setActiveTab('current'); setSearch(''); }} className={`flex items-center gap-2 border-b-2 px-3 py-3 text-sm font-semibold ${activeTab === 'current' ? 'border-sky-600 text-sky-700' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>
-              <Boxes size={16} className={activeTab === 'current' ? 'text-[#398fbd]' : 'text-sky-400'} /> Tồn kho hiện tại
-            </button>
-            <button type="button" onClick={() => { setActiveTab('history'); setSearch(''); }} className={`flex items-center gap-2 border-b-2 px-3 py-3 text-sm font-semibold ${activeTab === 'history' ? 'border-sky-600 text-sky-700' : 'border-transparent text-gray-500 hover:text-gray-800'}`}>
-              <History size={16} className={activeTab === 'history' ? 'text-[#398fbd]' : 'text-sky-400'} /> Lịch sử kho
-            </button>
-          </div>
+          </div>}
+          <InventoryTabs value={activeTab} onChange={(tab) => { setActiveTab(tab); setSearch(''); }}/>
         </div>
-        <div className="border-b border-gray-200 bg-gray-50/60 px-4 py-3">
+        {activeTab === 'ai' ? <ProductAIAnalysisTab analysis={productAIAnalysis}/> : <><div className="border-b border-gray-200 bg-gray-50/60 px-4 py-3">
           {activeTab === 'current' ? (
             <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
               <select value={currentFilters.category} onChange={(event) => setCurrentFilters({ ...currentFilters, category: event.target.value })} className="h-10 border border-gray-300 bg-white px-3 text-sm text-gray-700 outline-none focus:border-[#69afd6]">
@@ -426,6 +428,7 @@ export default function Inventory() {
           <div className="px-4 py-12 text-center text-sm text-gray-500">Không tìm thấy dữ liệu phù hợp.</div>
         )}
         <Pagination page={page} totalItems={activeRows.length} onChange={setPage} />
+        </>}
       </section>
 
       <Modal isOpen={isOpen} onClose={closeModal} title={mode === 'in' ? 'Nhập kho' : mode === 'count' ? 'Kiểm kê kho' : 'Điều chỉnh tồn kho'}>

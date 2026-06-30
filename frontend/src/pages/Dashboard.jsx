@@ -433,7 +433,7 @@ export default function Dashboard() {
             >
               <div className="flex min-h-[76px] items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className={`truncate text-xs font-semibold ${card.tone === 'amber' && summary.lowStockCount > 0 ? 'text-red-700' : 'text-[#73777d]'}`}>{card.label}</p>
+                  <p className={`truncate text-[13px] font-bold leading-4 ${card.tone === 'amber' && summary.lowStockCount > 0 ? 'text-red-700' : 'text-[#4f5459]'}`}>{card.label}</p>
                   <p className="mt-2 min-h-6 text-lg font-bold leading-6 text-[#191c1d]">{card.value}</p>
                   <p className="mt-1 line-clamp-1 text-xs font-medium leading-4 text-[#43474d]">{card.caption}</p>
                 </div>
