@@ -1,5 +1,16 @@
 SET NAMES utf8mb4;
 
+DROP TABLE IF EXISTS warranty_claims;
+DROP TABLE IF EXISTS warranties;
+DROP TABLE IF EXISTS promotion_categories;
+DROP TABLE IF EXISTS promotion_products;
+DROP TABLE IF EXISTS payments;
+DROP TABLE IF EXISTS purchase_order_items;
+DROP TABLE IF EXISTS purchase_orders;
+DROP TABLE IF EXISTS system_activity_logs;
+DROP TABLE IF EXISTS shift_store;
+DROP TABLE IF EXISTS system_settings;
+DROP TABLE IF EXISTS promotions;
 DROP TABLE IF EXISTS inventory_logs;
 DROP TABLE IF EXISTS order_items;
 DROP TABLE IF EXISTS orders;
@@ -7,16 +18,54 @@ DROP TABLE IF EXISTS products;
 DROP TABLE IF EXISTS device_models;
 DROP TABLE IF EXISTS customers;
 DROP TABLE IF EXISTS categories;
+DROP TABLE IF EXISTS suppliers;
+DROP TABLE IF EXISTS brands;
 DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS roles;
+
+CREATE TABLE roles (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  role_name VARCHAR(100) UNIQUE NOT NULL,
+  description TEXT,
+  status ENUM('active','inactive') NOT NULL DEFAULT 'active',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
 
 CREATE TABLE users (
   id INT AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(100) NOT NULL,
   employee_code VARCHAR(20) UNIQUE NOT NULL,
   email VARCHAR(100) UNIQUE NOT NULL,
+  phone VARCHAR(20),
   password VARCHAR(255) NOT NULL,
-  role ENUM('owner', 'manager', 'employee', 'admin', 'cashier') DEFAULT 'employee',
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  role ENUM('owner', 'manager', 'employee', 'admin', 'cashier', 'warehouse') DEFAULT 'employee',
+  role_id INT NULL,
+  status ENUM('active','inactive') NOT NULL DEFAULT 'active',
+  note TEXT,
+  last_login_at DATETIME NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE SET NULL
+);
+
+CREATE TABLE brands (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  brand_name VARCHAR(100) UNIQUE NOT NULL,
+  description TEXT,
+  status ENUM('active','inactive') NOT NULL DEFAULT 'active',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE suppliers (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  supplier_code VARCHAR(30) UNIQUE,
+  supplier_name VARCHAR(150) NOT NULL,
+  phone VARCHAR(20), email VARCHAR(150), address TEXT, note TEXT,
+  status ENUM('active','inactive') NOT NULL DEFAULT 'active',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_suppliers_name (supplier_name), INDEX idx_suppliers_status (status)
 );
 
 CREATE TABLE categories (
@@ -44,6 +93,7 @@ CREATE TABLE products (
   sku VARCHAR(100) NULL,
   barcode VARCHAR(50) NULL,
   category_id INT NOT NULL,
+  brand_id INT NULL,
   device_model_id INT NOT NULL,
   name VARCHAR(200) NOT NULL,
   description TEXT,
@@ -51,6 +101,7 @@ CREATE TABLE products (
   cost_price DECIMAL(15,0),
   stock_quantity INT DEFAULT 0,
   min_stock INT DEFAULT 5,
+  max_stock INT NULL,
   image_url TEXT,
   warranty_enabled BOOLEAN DEFAULT FALSE,
   warranty_period_days INT DEFAULT 0,
@@ -71,6 +122,7 @@ CREATE TABLE products (
   CHECK (stock_quantity >= 0),
   CHECK (min_stock >= 0),
   FOREIGN KEY (category_id) REFERENCES categories(id),
+  FOREIGN KEY (brand_id) REFERENCES brands(id) ON DELETE SET NULL,
   FOREIGN KEY (device_model_id) REFERENCES device_models(id)
 );
 
@@ -145,10 +197,106 @@ CREATE TABLE inventory_logs (
   id INT AUTO_INCREMENT PRIMARY KEY,
   product_id INT NOT NULL,
   user_id INT NOT NULL,
-  type ENUM('in', 'out', 'adjust') NOT NULL,
+  type ENUM('IMPORT','SALE','ADJUSTMENT','RETURN','WARRANTY','CANCEL_ORDER') NOT NULL,
   quantity INT NOT NULL,
+  before_quantity INT NULL,
+  after_quantity INT NULL,
+  reference_type VARCHAR(50) NULL,
+  reference_id INT NULL,
   note TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (product_id) REFERENCES products(id),
   FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE promotions (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  code VARCHAR(20) UNIQUE NOT NULL,
+  promotion_name VARCHAR(150) NULL,
+  discount_type ENUM('percentage','fixed_amount') NULL,
+  discount_value DECIMAL(15,2) NULL,
+  start_date DATETIME NULL,
+  end_date DATETIME NULL,
+  status ENUM('draft','active','inactive','expired') NOT NULL DEFAULT 'draft',
+  note TEXT NULL,
+  data LONGTEXT NOT NULL,
+  created_by INT NULL,
+  updated_by INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (created_by) REFERENCES users(id),
+  FOREIGN KEY (updated_by) REFERENCES users(id)
+);
+
+CREATE TABLE purchase_orders (
+  id INT AUTO_INCREMENT PRIMARY KEY, purchase_code VARCHAR(30) UNIQUE NOT NULL,
+  supplier_id INT NOT NULL, user_id INT NOT NULL, total_amount DECIMAL(15,0) NOT NULL DEFAULT 0,
+  note TEXT, status ENUM('draft','completed','cancelled') NOT NULL DEFAULT 'draft',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (supplier_id) REFERENCES suppliers(id), FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE purchase_order_items (
+  id INT AUTO_INCREMENT PRIMARY KEY, purchase_order_id INT NOT NULL, product_id INT NOT NULL,
+  quantity INT NOT NULL, import_price DECIMAL(15,0) NOT NULL, subtotal DECIMAL(15,0) NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (purchase_order_id) REFERENCES purchase_orders(id) ON DELETE CASCADE,
+  FOREIGN KEY (product_id) REFERENCES products(id), CHECK (quantity > 0)
+);
+
+CREATE TABLE payments (
+  id INT AUTO_INCREMENT PRIMARY KEY, order_id INT NOT NULL,
+  payment_method ENUM('cash','card','transfer','e_wallet','refund','other') NOT NULL,
+  amount DECIMAL(15,0) NOT NULL, paid_amount DECIMAL(15,0), change_amount DECIMAL(15,0),
+  status ENUM('pending','completed','failed','refunded','partially_refunded') NOT NULL DEFAULT 'completed',
+  paid_at DATETIME, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (order_id) REFERENCES orders(id), CHECK (amount >= 0)
+);
+
+CREATE TABLE warranties (
+  id INT AUTO_INCREMENT PRIMARY KEY, warranty_code VARCHAR(40) UNIQUE NOT NULL,
+  order_item_id INT UNIQUE NOT NULL, customer_id INT NULL, product_id INT NOT NULL,
+  warranty_start DATE NOT NULL, warranty_end DATE NULL,
+  status ENUM('active','expired','void','claimed') NOT NULL DEFAULT 'active', note TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (order_item_id) REFERENCES order_items(id),
+  FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL,
+  FOREIGN KEY (product_id) REFERENCES products(id)
+);
+
+CREATE TABLE warranty_claims (
+  id INT AUTO_INCREMENT PRIMARY KEY, warranty_id INT NOT NULL,
+  issue_description TEXT NOT NULL, resolution TEXT,
+  status ENUM('received','inspecting','repairing','resolved','rejected','cancelled') NOT NULL DEFAULT 'received',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (warranty_id) REFERENCES warranties(id) ON DELETE CASCADE
+);
+
+CREATE TABLE promotion_products (
+  id INT AUTO_INCREMENT PRIMARY KEY, promotion_id INT NOT NULL, product_id INT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY uk_promotion_products (promotion_id, product_id),
+  FOREIGN KEY (promotion_id) REFERENCES promotions(id) ON DELETE CASCADE,
+  FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+);
+
+CREATE TABLE promotion_categories (
+  id INT AUTO_INCREMENT PRIMARY KEY, promotion_id INT NOT NULL, category_id INT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY uk_promotion_categories (promotion_id, category_id),
+  FOREIGN KEY (promotion_id) REFERENCES promotions(id) ON DELETE CASCADE,
+  FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE
+);
+
+CREATE TABLE shift_store (
+  id TINYINT PRIMARY KEY DEFAULT 1, shifts_json LONGTEXT NOT NULL,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE system_activity_logs (
+  id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NULL, module VARCHAR(50) NOT NULL,
+  action_label VARCHAR(100) NOT NULL, target_name VARCHAR(255), description TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, INDEX idx_system_activity_created (created_at),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 );

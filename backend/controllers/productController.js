@@ -1,6 +1,6 @@
 import { query } from '../config/db.js';
 import { logActivity } from '../utils/activityLogger.js';
-import XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { normalizeWarrantyPolicy } from '../utils/warrantyPolicy.js';
 import { ensureGenericDeviceModel } from './deviceModelController.js';
 
@@ -310,16 +310,15 @@ function getCell(row, keys) {
   return '';
 }
 
-function parseProductImageRows(file) {
-  const workbook = XLSX.read(file.buffer, { type: 'buffer' });
-  const sheetName = workbook.SheetNames[0];
-  const sheet = workbook.Sheets[sheetName];
-
-  if (!sheet) {
-    return [];
-  }
-
-  const rows = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false });
+async function parseProductImageRows(file) {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(file.buffer);
+  const sheet = workbook.worksheets[0];
+  if (!sheet) return [];
+  const matrix = [];
+  sheet.eachRow({ includeEmpty: false }, (row) => matrix.push(row.values.slice(1).map((value) => value?.text || value || '')));
+  const headers = matrix.shift() || [];
+  const rows = matrix.map((values) => Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ''])));
 
   return rows.map((row) => {
     const normalized = {};
@@ -751,7 +750,7 @@ export async function importImages(req, res) {
       return res.status(400).json({ message: 'Vui lòng chọn file CSV hoặc Excel' });
     }
 
-    const rows = parseProductImageRows(req.file);
+    const rows = await parseProductImageRows(req.file);
 
     if (rows.length === 0) {
       return res.status(400).json({ message: 'File không có dữ liệu import' });

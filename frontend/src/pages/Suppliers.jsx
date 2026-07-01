@@ -17,9 +17,8 @@ import {
   Unlock
 } from 'lucide-react';
 import Modal from '../components/Modal';
-import { readLocalJson } from '../utils/storage';
+import api from '../api/axios';
 
-const STORAGE_KEY = 'ztech-suppliers';
 const PAGE_SIZE = 5;
 
 const statusOptions = [
@@ -137,9 +136,7 @@ function buildCsv(suppliers) {
 }
 
 export default function Suppliers() {
-  const [suppliers, setSuppliers] = useState(() => {
-    return readLocalJson(STORAGE_KEY, initialSuppliers, Array.isArray);
-  });
+  const [suppliers, setSuppliers] = useState([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [form, setForm] = useState(emptyForm);
@@ -148,9 +145,16 @@ export default function Suppliers() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
 
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(suppliers));
-  }, [suppliers]);
+  const loadSuppliers = async () => {
+    try {
+      const response = await api.get('/suppliers');
+      setSuppliers(response.data.map((item) => ({ ...item, region: item.address || '', group: '', contact: '' })));
+    } catch {
+      toast.error('Không thể tải danh sách nhà cung cấp');
+    }
+  };
+
+  useEffect(() => { loadSuppliers(); }, []);
 
   const stats = useMemo(() => getSupplierStats(suppliers), [suppliers]);
 
@@ -214,42 +218,36 @@ export default function Suppliers() {
     setForm(emptyForm);
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
-
-    const nextSupplier = {
-      ...form,
-      id: editingSupplier?.id ?? Date.now(),
-      code: editingSupplier?.code ?? getNextSupplierCode(suppliers),
-      name: form.name.trim(),
-      group: form.group.trim(),
-      contact: form.contact.trim(),
-      phone: form.phone.trim(),
-      email: form.email.trim(),
-      region: form.region.trim(),
-      note: form.note.trim()
+    const payload = {
+      supplier_code: editingSupplier?.code ?? getNextSupplierCode(suppliers),
+      supplier_name: form.name.trim(), phone: form.phone.replace(/\s/g, ''),
+      email: form.email.trim() || null, address: form.region.trim() || null,
+      note: form.note.trim() || null, status: form.status
     };
-
-    if (editingSupplier) {
-      setSuppliers((current) =>
-        current.map((supplier) => (supplier.id === editingSupplier.id ? nextSupplier : supplier))
-      );
-      toast.success('Đã cập nhật nhà cung cấp');
-    } else {
-      setSuppliers((current) => [nextSupplier, ...current]);
-      toast.success('Đã thêm nhà cung cấp');
+    try {
+      if (editingSupplier) await api.put(`/suppliers/${editingSupplier.id}`, payload);
+      else await api.post('/suppliers', payload);
+      await loadSuppliers();
+      toast.success(editingSupplier ? 'Đã cập nhật nhà cung cấp' : 'Đã thêm nhà cung cấp');
+      closeForm();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Không thể lưu nhà cung cấp');
     }
-
-    closeForm();
   };
 
-  const toggleStatus = (supplier) => {
+  const toggleStatus = async (supplier) => {
     const nextStatus = supplier.status === 'active' ? 'inactive' : 'active';
-
-    setSuppliers((current) =>
-      current.map((item) => (item.id === supplier.id ? { ...item, status: nextStatus } : item))
-    );
-    toast.success(nextStatus === 'active' ? 'Đã mở lại hợp tác' : 'Đã ngừng hợp tác');
+    try {
+      await api.put(`/suppliers/${supplier.id}`, {
+        supplier_code: supplier.code, supplier_name: supplier.name, phone: supplier.phone || null,
+        email: supplier.email || null, address: supplier.region || null, note: supplier.note || null,
+        status: nextStatus
+      });
+      await loadSuppliers();
+      toast.success(nextStatus === 'active' ? 'Đã mở lại hợp tác' : 'Đã ngừng hợp tác');
+    } catch (error) { toast.error(error.response?.data?.message || 'Không thể cập nhật trạng thái'); }
   };
 
   const exportCsv = () => {

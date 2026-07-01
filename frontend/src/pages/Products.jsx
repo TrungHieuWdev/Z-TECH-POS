@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import {
   AlertTriangle,
   Barcode,
@@ -172,11 +172,13 @@ function getImportHeaderScore(row = []) {
 }
 
 function readImportSheetRows(worksheet) {
-  const matrix = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '', raw: false });
+  const matrix = [];
+  worksheet.eachRow({ includeEmpty: false }, (row) => matrix.push(row.values.slice(1).map((value) => value?.text || value || '')));
   const headerIndex = matrix.findIndex((row) => getImportHeaderScore(row) >= 3);
 
   if (headerIndex === -1) {
-    return XLSX.utils.sheet_to_json(worksheet, { defval: '', raw: false });
+    const headers = (matrix.shift() || []).map((cell) => normalizeImportKey(cell));
+    return matrix.map((row) => Object.fromEntries(headers.map((header, index) => [header, row[index] ?? ''])));
   }
 
   const headers = matrix[headerIndex].map((cell) => normalizeImportKey(cell));
@@ -319,8 +321,8 @@ export default function Products() {
     setIsImporting(false);
   };
 
-  const downloadImportTemplate = () => {
-    const worksheet = XLSX.utils.json_to_sheet([
+  const downloadImportTemplate = async () => {
+    const rows = [
       {
         ten_san_pham: 'Tai nghe Bluetooth Z-Tech Air',
         dong_may: 'Phụ kiện chung',
@@ -339,10 +341,14 @@ export default function Products() {
         image_url: 'https://example.com/image.jpg',
         mo_ta: 'Mô tả sản phẩm'
       }
-    ], { header: importTemplateHeaders });
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'products');
-    XLSX.writeFile(workbook, 'template_import_san_pham.xlsx');
+    ];
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('products');
+    worksheet.columns = importTemplateHeaders.map((key) => ({ header: key, key, width: 24 }));
+    worksheet.addRows(rows);
+    const buffer = await workbook.xlsx.writeBuffer();
+    const url = URL.createObjectURL(new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+    const link = document.createElement('a'); link.href = url; link.download = 'template_import_san_pham.xlsx'; link.click(); URL.revokeObjectURL(url);
   };
 
   const buildImportRows = (rows) => {
@@ -404,8 +410,9 @@ export default function Products() {
 
     try {
       const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(buffer, { type: 'array' });
-      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const workbook = new ExcelJS.Workbook();
+      if (/\.csv$/i.test(file.name)) await workbook.csv.readBuffer(buffer); else await workbook.xlsx.load(buffer);
+      const worksheet = workbook.worksheets[0];
       const rows = readImportSheetRows(worksheet);
       const nextRows = buildImportRows(rows);
 

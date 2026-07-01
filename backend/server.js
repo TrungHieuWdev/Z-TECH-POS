@@ -1,6 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import path from 'path';
 import authRoutes from './routes/auth.js';
 import productRoutes from './routes/products.js';
@@ -17,6 +19,10 @@ import warrantyRoutes from './routes/warranties.js';
 import publicWarrantyRoutes from './routes/publicWarranties.js';
 import shiftRoutes from './routes/shifts.js';
 import settingsRoutes from './routes/settings.js';
+import promotionRoutes from './routes/promotions.js';
+import supplierRoutes from './routes/suppliers.js';
+import purchaseOrderRoutes from './routes/purchaseOrders.js';
+import paymentRoutes from './routes/payments.js';
 
 dotenv.config();
 
@@ -61,6 +67,16 @@ app.use(cors({
     return callback(new Error('Origin không được CORS cho phép'));
   },
   credentials: true
+}));
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' }
+}));
+app.use('/api/', rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: Number(process.env.API_RATE_LIMIT || 600),
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Quá nhiều yêu cầu, vui lòng thử lại sau' }
 }));
 app.use(express.json());
 app.use('/uploads', express.static(path.resolve('uploads')));
@@ -142,6 +158,21 @@ app.use('/api/warranties', warrantyRoutes);
 app.use('/api/public/warranties', publicWarrantyRoutes);
 app.use('/api/shifts', shiftRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/promotions', promotionRoutes);
+app.use('/api/suppliers', supplierRoutes);
+app.use('/api/purchase-orders', purchaseOrderRoutes);
+app.use('/api/payments', paymentRoutes);
+
+app.use((error, req, res, next) => {
+  if (res.headersSent) return next(error);
+
+  const status = error.status || error.statusCode || 500;
+  const isProductionError = isProduction && status >= 500;
+
+  return res.status(status).json({
+    message: isProductionError ? 'Lỗi hệ thống, vui lòng thử lại sau' : error.message || 'Lỗi hệ thống'
+  });
+});
 
 app.use((req, res) => {
   res.status(404).json({ message: 'Không tìm thấy API' });

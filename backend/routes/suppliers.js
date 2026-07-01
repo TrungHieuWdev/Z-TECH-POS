@@ -1,0 +1,10 @@
+import express from 'express';
+import auth, { requireFullAccess } from '../middleware/auth.js';
+import { validateSupplier } from '../middleware/validate.js';
+import { getAll, create, update, remove } from '../controllers/supplierController.js';
+const router = express.Router();
+router.get('/', auth, getAll);
+router.post('/', auth, requireFullAccess, validateSupplier, create);
+router.put('/:id', auth, requireFullAccess, validateSupplier, update);
+router.delete('/:id', auth, requireFullAccess, remove);
+export default router;

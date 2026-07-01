@@ -34,6 +34,7 @@ const primaryItems = [
 const extraItems = [
   { to: '/categories', label: 'Danh mục', icon: Tags },
   { to: '/suppliers', label: 'Nhà cung cấp', icon: Truck },
+  { to: '/purchase-orders', label: 'Nhập hàng', icon: Boxes },
   { to: '/employees', label: 'Nhân viên', icon: ContactRound },
   { to: '/shifts', label: 'Ca làm', icon: CalendarClock },
   { to: '/promotions', label: 'Khuyến mãi', icon: Tags },

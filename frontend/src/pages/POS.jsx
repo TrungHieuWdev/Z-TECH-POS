@@ -318,7 +318,7 @@ export default function POS() {
   const [categoryId, setCategoryId] = useState('');
   const [deviceFamily, setDeviceFamily] = useState('');
   const [usedPoints, setUsedPoints] = useState(0);
-  const [promotions, setPromotions] = useState(() => getPromotions(initialPromotions));
+  const [promotions, setPromotions] = useState(initialPromotions);
   const [selectedPromotion, setSelectedPromotion] = useState(null);
   const [isPromotionOpen, setIsPromotionOpen] = useState(false);
   const [customerPaid, setCustomerPaid] = useState('');
@@ -559,10 +559,12 @@ export default function POS() {
   }, [posSettings.payment?.methods]);
 
   useEffect(() => {
-    const refresh = () => setPromotions(getPromotions(initialPromotions));
+    const refresh = () => {
+      getPromotions(initialPromotions).then(setPromotions).catch(() => setPromotions(initialPromotions));
+    };
+    refresh();
     window.addEventListener('ztech-promotions-changed', refresh);
-    window.addEventListener('storage', refresh);
-    return () => { window.removeEventListener('ztech-promotions-changed', refresh); window.removeEventListener('storage', refresh); };
+    return () => { window.removeEventListener('ztech-promotions-changed', refresh); };
   }, []);
 
   useEffect(() => {
@@ -864,7 +866,8 @@ export default function POS() {
         items: buildOrderItems(cart),
         promotion_discount: promotionDiscount,
         points_used: normalizedUsedPoints,
-        payment_method: paymentMethod === 'qr' ? 'transfer' : paymentMethod
+        payment_method: paymentMethod === 'qr' ? 'transfer' : paymentMethod,
+        paid_amount: paymentMethod === 'cash' ? customerPaidValue : total
       });
 
       const remainingStockByProduct = new Map(

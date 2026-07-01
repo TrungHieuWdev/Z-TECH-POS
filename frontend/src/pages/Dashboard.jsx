@@ -39,6 +39,14 @@ const cardTones = {
   slate: 'bg-[#eef7fc] text-brand-deep'
 };
 
+const topProductRankStyles = [
+  'border-[#f4c542] bg-[#fff7d6] text-[#8a5b00] shadow-[0_5px_14px_rgba(244,197,66,0.25)]',
+  'border-[#cbd5e1] bg-[#f8fafc] text-[#475569] shadow-[0_5px_14px_rgba(148,163,184,0.2)]',
+  'border-[#d59a5c] bg-[#fff1e6] text-[#8b4b16] shadow-[0_5px_14px_rgba(213,154,92,0.22)]',
+  'border-[#c8dff0] bg-[#eef7fc] text-brand-deep',
+  'border-[#d7ece3] bg-[#effaf5] text-[#1f6f4a]'
+];
+
 function formatPercent(value) {
   const numberValue = Number(value || 0);
   const cappedValue = Math.max(-100, Math.min(100, numberValue));
@@ -336,7 +344,7 @@ export default function Dashboard() {
       const connectorAngle = paymentStats.cashPercent >= 100 ? 180 : paymentChart.cashConnectorAngle;
       segments.push({
         id: 'cash',
-        label: 'Tiá»n máº·t',
+        label: 'Tiền mặt',
         percent: paymentStats.cashPercent,
         color: '#74B8E0',
         startAngle: 0,
@@ -352,7 +360,7 @@ export default function Dashboard() {
       const connectorAngle = paymentStats.transferPercent >= 100 ? 180 : paymentChart.transferConnectorAngle;
       segments.push({
         id: 'transfer',
-        label: 'Chuyá»ƒn khoáº£n',
+        label: 'Chuyển khoản',
         percent: paymentStats.transferPercent,
         color: '#7FAF9B',
         startAngle,
@@ -467,13 +475,18 @@ export default function Dashboard() {
             {topProducts.length === 0 && (
               <p className="text-sm font-medium text-[#73777d]">Chưa có sản phẩm bán chạy trong kỳ này.</p>
             )}
-            {topProducts.slice(0, 4).map((product) => (
-              <div key={product.product_id} className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold leading-5 text-[#191c1d]">{product.name}</p>
-                  <p className="mt-0.5 text-xs font-medium text-[#73777d]">
-                    {product.category_name} - SL {Number(product.quantity || 0).toLocaleString('vi-VN')}
-                  </p>
+            {topProducts.slice(0, 5).map((product, index) => (
+              <div key={product.product_id} className="flex items-start justify-between gap-4 rounded-md px-1 py-1.5">
+                <div className="flex min-w-0 items-start gap-2.5">
+                  <div className={`grid h-8 w-8 shrink-0 place-items-center rounded-full border text-xs font-extrabold ${topProductRankStyles[index] || topProductRankStyles[4]}`}>
+                    {index + 1}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold leading-5 text-[#191c1d]">{product.name}</p>
+                    <p className="mt-0.5 text-xs font-medium text-[#73777d]">
+                      {product.category_name} - SL {Number(product.quantity || 0).toLocaleString('vi-VN')}
+                    </p>
+                  </div>
                 </div>
                 <div className="shrink-0 text-right">
                   <p className="text-sm font-bold text-[#191c1d]">{formatCurrency(product.revenue)}</p>

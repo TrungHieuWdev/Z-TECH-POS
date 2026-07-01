@@ -44,26 +44,8 @@ function formatDateTimeForClient(value) {
   return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 }
 
-async function ensureEmployeeSchema() {
-  await query('ALTER TABLE users ADD COLUMN phone VARCHAR(20) NULL AFTER email').catch(ignoreDuplicateColumn);
-  await query("ALTER TABLE users ADD COLUMN status ENUM('active','inactive') NOT NULL DEFAULT 'active' AFTER role").catch(ignoreDuplicateColumn);
-  await query('ALTER TABLE users ADD COLUMN note TEXT NULL AFTER status').catch(ignoreDuplicateColumn);
-  await query('ALTER TABLE users ADD COLUMN last_login_at DATETIME NULL AFTER note').catch(ignoreDuplicateColumn);
-  await query(
-    "ALTER TABLE users MODIFY role ENUM('owner', 'manager', 'employee', 'admin', 'cashier', 'warehouse') DEFAULT 'employee'"
-  );
-}
-
-function ignoreDuplicateColumn(error) {
-  if (error.code !== 'ER_DUP_FIELDNAME') {
-    throw error;
-  }
-}
-
 export async function getAllEmployees(req, res) {
   try {
-    await ensureEmployeeSchema();
-
     const rows = await query(
       `SELECT id, employee_code, name, phone, role, status, note, created_at, last_login_at
        FROM users

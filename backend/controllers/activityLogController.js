@@ -76,14 +76,14 @@ const activityLogUnionSql = `
     'inventory' AS type,
     'Kho hàng' AS module,
     CASE
-      WHEN il.type = 'in' THEN 'Nhập kho'
-      WHEN il.type = 'out' THEN 'Xuất kho'
+      WHEN il.type = 'IMPORT' THEN 'Nhập kho'
+      WHEN il.type = 'SALE' THEN 'Xuất kho'
       ELSE 'Điều chỉnh kho'
     END AS action_label,
     CONCAT(
       CASE
-        WHEN il.type = 'in' THEN 'Nhập kho '
-        WHEN il.type = 'out' THEN 'Xuất kho '
+        WHEN il.type = 'IMPORT' THEN 'Nhập kho '
+        WHEN il.type = 'SALE' THEN 'Xuất kho '
         ELSE 'Điều chỉnh '
       END,
       p.name

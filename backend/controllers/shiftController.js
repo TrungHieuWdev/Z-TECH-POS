@@ -1,11 +1,7 @@
 import { query } from '../config/db.js';
 
 export async function ensureShiftStore() {
-  await query(`CREATE TABLE IF NOT EXISTS shift_store (
-    id TINYINT PRIMARY KEY DEFAULT 1,
-    shifts_json LONGTEXT NOT NULL,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-  )`);
+  return true;
 }
 
 export async function getShifts(req, res) {

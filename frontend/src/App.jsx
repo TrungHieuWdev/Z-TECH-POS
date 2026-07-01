@@ -15,6 +15,7 @@ const Customers = lazy(() => import('./pages/Customers'));
 const Orders = lazy(() => import('./pages/Orders'));
 const Inventory = lazy(() => import('./pages/inventory/InventoryPage'));
 const Suppliers = lazy(() => import('./pages/Suppliers'));
+const PurchaseOrders = lazy(() => import('./pages/PurchaseOrders'));
 const Employees = lazy(() => import('./pages/Employees'));
 const Shifts = lazy(() => import('./pages/Shifts'));
 const Promotions = lazy(() => import('./pages/Promotions'));
@@ -67,6 +68,7 @@ export default function App() {
             <Route path="/categories" element={<Categories />} />
             <Route path="/customers" element={<Customers />} />
             <Route path="/suppliers" element={<Suppliers />} />
+            <Route path="/purchase-orders" element={<PurchaseOrders />} />
             <Route path="/employees" element={<Employees />} />
             <Route path="/shifts" element={<Shifts />} />
             <Route path="/promotions" element={<Promotions />} />

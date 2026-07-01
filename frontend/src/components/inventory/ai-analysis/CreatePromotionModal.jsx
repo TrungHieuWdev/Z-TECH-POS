@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import Modal from '../../Modal';
-import { getPromotions, savePromotions } from '../../../services/promotionService';
+import { savePromotion } from '../../../services/promotionService';
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
@@ -23,41 +23,37 @@ export default function CreatePromotionModal({ product, onClose }) {
 
   if (!product) return null;
 
-  const submit = (e) => {
-    e.preventDefault();
+  const submit = async (event) => {
+    event.preventDefault();
     const now = Date.now();
-    const code = `AI${product.id}-${now.toString().slice(-5)}`;
 
-    savePromotions([
-      {
-        id: now,
-        code,
-        name: `Ưu đãi ${product.name}`,
-        promotionType: 'standard',
-        discountType: 'percent',
-        discountValue: Number(discount),
-        minOrder: 0,
-        maxOrder: 0,
-        maxDiscount: 0,
-        scope: 'Theo sản phẩm cụ thể',
-        categoryId: '',
-        productId: product.id,
-        deviceFamily: '',
-        targetName: productLabel(product),
-        condition: `Sản phẩm bán chậm - cảnh báo ${product.alertLevel}`,
-        description: product.analysisComment || product.actionSuggestion || `Ưu đãi cho ${product.name}`,
-        startDate: todayISO(),
-        endDate: addDaysISO(30),
-        status: 'active',
-        enabled: true,
-        buyProductId: '',
-        buyQuantity: 1,
-        giftProductId: '',
-        giftQuantity: 1,
-        quantityTiers: []
-      },
-      ...getPromotions([])
-    ]);
+    await savePromotion({
+      code: `AI${product.id}-${now.toString().slice(-5)}`,
+      name: `Ưu đãi ${product.name}`,
+      promotionType: 'standard',
+      discountType: 'percent',
+      discountValue: Number(discount),
+      minOrder: 0,
+      maxOrder: 0,
+      maxDiscount: 0,
+      scope: 'Theo sản phẩm cụ thể',
+      categoryId: '',
+      productId: product.id,
+      deviceFamily: '',
+      targetName: productLabel(product),
+      condition: `Sản phẩm bán chậm - cảnh báo ${product.alertLevel}`,
+      description: product.analysisComment || product.actionSuggestion || `Ưu đãi cho ${product.name}`,
+      startDate: todayISO(),
+      endDate: addDaysISO(30),
+      status: 'active',
+      enabled: true,
+      buyProductId: '',
+      buyQuantity: 1,
+      giftProductId: '',
+      giftQuantity: 1,
+      quantityTiers: []
+    });
+
     toast.success('Đã tạo khuyến mãi từ gợi ý phân tích');
     onClose();
   };
@@ -75,7 +71,7 @@ export default function CreatePromotionModal({ product, onClose }) {
         </label>
         <label className="block text-sm font-semibold text-gray-700">
           Mức giảm gợi ý (%)
-          <input type="number" min="0" max="100" value={discount} onChange={(e) => setDiscount(e.target.value)} className="mt-1 h-10 w-full border border-gray-300 px-3" />
+          <input type="number" min="0" max="100" value={discount} onChange={(event) => setDiscount(event.target.value)} className="mt-1 h-10 w-full border border-gray-300 px-3" />
         </label>
         {product.alertLevel === 'low' && <p className="text-xs text-amber-700">Mức thấp chỉ nên tiếp tục theo dõi; bạn vẫn có thể chủ động tạo ưu đãi nếu cần.</p>}
         <p className="text-xs text-gray-500">AI chỉ đưa ra gợi ý. Người quản lý quyết định mức giảm và việc kích hoạt chương trình.</p>

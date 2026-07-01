@@ -12,19 +12,20 @@ const dbConfig = {
   charset: 'utf8mb4'
 };
 
-export async function query(sql, params = []) {
-  const connection = await mysql.createConnection(dbConfig);
+const pool = mysql.createPool({
+  ...dbConfig,
+  waitForConnections: true,
+  connectionLimit: Number(process.env.DB_CONNECTION_LIMIT || 10),
+  queueLimit: Number(process.env.DB_QUEUE_LIMIT || 0)
+});
 
-  try {
-    const [rows] = await connection.execute(sql, params);
-    return rows;
-  } finally {
-    await connection.end();
-  }
+export async function query(sql, params = []) {
+  const [rows] = await pool.execute(sql, params);
+  return rows;
 }
 
 export async function withTransaction(callback) {
-  const connection = await mysql.createConnection(dbConfig);
+  const connection = await pool.getConnection();
 
   try {
     await connection.beginTransaction();
@@ -39,6 +40,6 @@ export async function withTransaction(callback) {
     await connection.rollback();
     throw error;
   } finally {
-    await connection.end();
+    connection.release();
   }
 }

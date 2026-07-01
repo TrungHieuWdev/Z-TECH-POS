@@ -1,5 +1,22 @@
 SET NAMES utf8mb4;
 
+INSERT INTO roles (id, role_name, description, status) VALUES
+(1, 'Admin', 'Quản trị toàn bộ hệ thống', 'active'),
+(2, 'Quản lý', 'Quản lý hoạt động cửa hàng', 'active'),
+(3, 'Nhân viên bán hàng', 'Bán hàng và xử lý hóa đơn', 'active'),
+(4, 'Nhân viên kho', 'Nhập hàng và quản lý tồn kho', 'active');
+
+INSERT INTO brands (id, brand_name, description, status) VALUES
+(1, 'Anker', 'Phụ kiện sạc và âm thanh', 'active'), (2, 'Baseus', 'Phụ kiện điện thoại', 'active'),
+(3, 'Remax', 'Phụ kiện điện tử', 'active'), (4, 'Hoco', 'Phụ kiện điện thoại', 'active'),
+(5, 'Ugreen', 'Cáp và thiết bị kết nối', 'active'), (6, 'Samsung', 'Thiết bị Samsung', 'active'),
+(7, 'Apple', 'Thiết bị Apple', 'active'), (8, 'Xiaomi', 'Thiết bị Xiaomi', 'active');
+
+INSERT INTO suppliers (id, supplier_code, supplier_name, phone, email, address, note, status) VALUES
+(1, 'NCC001', 'Nhà phân phối phụ kiện miền Nam', '0909000001', 'sales1@example.com', 'TP.HCM', 'Nhà cung cấp tổng hợp', 'active'),
+(2, 'NCC002', 'Kho phụ kiện chính hãng', '0909000002', 'sales2@example.com', 'Hà Nội', 'Ưu tiên hàng chính hãng', 'active'),
+(3, 'NCC003', 'Đối tác thiết bị di động', '0909000003', 'sales3@example.com', 'Đà Nẵng', NULL, 'active');
+
 INSERT INTO users (id, name, employee_code, email, password, role) VALUES
 (1, 'Chủ cửa hàng', 'CH001', 'owner@pos.com', '$2a$10$zJ0vlNynsAv7pjIDZJnD2.wctQCc5BglAf3qlasqs1YWNuaWoV5ii', 'owner'),
 (2, 'Quản lý', 'QL001', 'manager@pos.com', '$2a$10$zJ0vlNynsAv7pjIDZJnD2.wctQCc5BglAf3qlasqs1YWNuaWoV5ii', 'manager'),
@@ -112,6 +129,18 @@ INSERT INTO customers (id, name, phone, email, address) VALUES
 (5, 'Phạm Minh Châu', '0901000004', 'chau.pham@example.com', 'TP.HCM');
 
 INSERT INTO inventory_logs (product_id, user_id, type, quantity, note, created_at)
-SELECT id, 1, 'in', stock_quantity, CONCAT('Nhập tồn đầu kỳ - ', name), '2026-06-10 08:00:00'
+SELECT id, 1, 'IMPORT', stock_quantity, CONCAT('Nhập tồn đầu kỳ - ', name), '2026-06-10 08:00:00'
 FROM products
 WHERE id IN (1, 51, 101, 151, 201, 250);
+
+UPDATE users SET role_id = CASE role
+  WHEN 'owner' THEN 1 WHEN 'admin' THEN 1 WHEN 'manager' THEN 2
+  WHEN 'warehouse' THEN 4 ELSE 3 END;
+
+INSERT INTO promotions
+  (code, promotion_name, discount_type, discount_value, start_date, end_date, status, note, data, created_by, updated_by)
+VALUES
+('WELCOME10', 'Ưu đãi khách hàng mới', 'percentage', 10, '2026-01-01', '2027-12-31', 'active',
+ 'Giảm 10% cho chương trình chào mừng', '{"code":"WELCOME10","name":"Ưu đãi khách hàng mới","type":"percentage","value":10,"enabled":true}', 1, 1),
+('SALE50000', 'Giảm 50.000 đồng', 'fixed_amount', 50000, '2026-01-01', '2027-12-31', 'active',
+ 'Áp dụng theo điều kiện bán hàng', '{"code":"SALE50000","name":"Giảm 50.000 đồng","type":"fixed","value":50000,"enabled":true}', 1, 1);

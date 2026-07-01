@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import { getJwtSecret } from '../config/auth.js';
 
 const fullAccessRoles = new Set(['admin', 'owner', 'manager']);
 
@@ -16,7 +17,7 @@ export default function auth(req, res, next) {
   }
 
   try {
-    req.user = jwt.verify(token, process.env.JWT_SECRET || 'pos_secret_key_2024');
+    req.user = jwt.verify(token, getJwtSecret());
     next();
   } catch (error) {
     return res.status(401).json({ message: 'Phiên đăng nhập đã hết hạn hoặc không hợp lệ' });

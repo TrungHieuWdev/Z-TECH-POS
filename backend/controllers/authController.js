@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { query } from '../config/db.js';
+import { getJwtExpiresIn, getJwtSecret } from '../config/auth.js';
 import { hasActiveShift } from './shiftController.js';
 
 function normalizeEmployeeCode(value = '') {
@@ -60,8 +61,8 @@ export async function login(req, res) {
 
     const token = jwt.sign(
       safeUser,
-      process.env.JWT_SECRET || 'pos_secret_key_2024',
-      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+      getJwtSecret(),
+      { expiresIn: getJwtExpiresIn() }
     );
 
     await query('UPDATE users SET last_login_at = NOW() WHERE id = ?', [user.id]).catch(() => {});

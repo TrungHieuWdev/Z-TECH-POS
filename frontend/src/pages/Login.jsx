@@ -10,7 +10,7 @@ import {
   UserRound
 } from 'lucide-react';
 import api from '../api/axios';
-import loginVisual from '../assets/images/anhlogin.png';
+import loginVisual from '../assets/images/login11.png';
 import ztechLogo from '../assets/images/1111.png';
 import { isFullAccessRole, saveAuth } from '../utils/auth';
 
@@ -55,11 +55,24 @@ function Field({ label, icon: Icon, children }) {
   );
 }
 
-function LoginCard({ form, loading, remember, showPassword, errorMessage, onFormChange, onRememberChange, onPasswordToggle, onSubmit }) {
+function LoginCard({
+  form,
+  loading,
+  remember,
+  showPassword,
+  errorMessage,
+  onFormChange,
+  onRememberChange,
+  onPasswordToggle,
+  onSubmit
+}) {
   const inputClass = 'h-[54px] w-full rounded-xl border border-[#d8e0eb] bg-white pl-12 pr-4 text-[15px] font-medium text-[#17233a] outline-none transition placeholder:text-[#9aa6b8] focus:border-[#5ba9e7] focus:ring-2 focus:ring-[#d9efff]';
 
   return (
-    <div data-preserve-radius="login-card" className="w-full max-w-[462px] border border-white/80 bg-white/95 px-5 py-6 shadow-[0_24px_70px_rgba(55,119,169,0.14)] backdrop-blur sm:px-8 sm:py-8 xl:px-9 xl:py-9">
+    <div
+      data-preserve-radius="login-card"
+      className="w-full max-w-[462px] border border-white/80 bg-white/95 px-5 py-6 shadow-[0_24px_70px_rgba(55,119,169,0.14)] backdrop-blur sm:px-8 sm:py-8 xl:px-9 xl:py-9"
+    >
       <Brand compact />
 
       <div className="mb-6 mt-5 text-center sm:mb-7 sm:mt-6">
@@ -134,7 +147,6 @@ function LoginCard({ form, loading, remember, showPassword, errorMessage, onForm
           <span>{loading ? 'Đang đăng nhập...' : 'Đăng nhập'}</span>
           {!loading && <ArrowRight size={20} />}
         </button>
-
       </form>
     </div>
   );
@@ -172,10 +184,10 @@ export default function Login() {
       const message = error.response?.status === 401
         ? 'Mật khẩu hoặc mã đăng nhập bạn nhập bị sai'
         : error.code === 'ECONNABORTED'
-        ? 'Máy chủ phản hồi quá chậm. Vui lòng kiểm tra backend đang chạy.'
-        : !error.response
-          ? 'Không kết nối được máy chủ. Vui lòng kiểm tra backend và kết nối mạng.'
-          : error.response?.data?.error || error.response?.data?.message || 'Không thể đăng nhập';
+          ? 'Máy chủ phản hồi quá chậm. Vui lòng kiểm tra backend đang chạy.'
+          : !error.response
+            ? 'Không kết nối được máy chủ. Vui lòng kiểm tra backend và kết nối mạng.'
+            : error.response?.data?.error || error.response?.data?.message || 'Không thể đăng nhập';
       setErrorMessage(message);
       toast.error(message);
     } finally {

@@ -446,23 +446,34 @@ export default function Warranty() {
     openModal(action, warranty);
   }
 
-  function handleReceiveSubmit(event) {
+  async function handleReceiveSubmit(event) {
     event.preventDefault();
     const warranty = activeModal.warranty;
     const productState = receiveForm.productState.trim();
 
-    setLocalStatusByCode((current) => ({ ...current, [warranty.code]: 'processing' }));
-    setReceiptByCode((current) => ({ ...current, [warranty.code]: { ...receiveForm, productState } }));
-    addHistory(warranty, 'Tiếp nhận bảo hành', receiveForm.staffName, `${receiveForm.issue}. Tình trạng: ${productState}. ${receiveForm.note}`);
-    toast.success('Đã tiếp nhận bảo hành');
-    closeModal();
+    try {
+      const response = await api.post(`/warranties/${warranty.id}/claims`, {
+        issue_description: `${receiveForm.issue}. Tình trạng: ${productState}. ${receiveForm.note}`,
+        status: 'received'
+      });
+      setLocalStatusByCode((current) => ({ ...current, [warranty.code]: 'processing' }));
+      setReceiptByCode((current) => ({ ...current, [warranty.code]: { ...receiveForm, productState, claimId: response.data.id } }));
+      addHistory(warranty, 'Tiếp nhận bảo hành', receiveForm.staffName, `${receiveForm.issue}. Tình trạng: ${productState}. ${receiveForm.note}`);
+      toast.success('Đã tiếp nhận bảo hành');
+      closeModal();
+    } catch (error) { toast.error(error.response?.data?.message || 'Không thể tiếp nhận bảo hành'); }
   }
 
-  function handleStatusSubmit(event) {
+  async function handleStatusSubmit(event) {
     event.preventDefault();
     const warranty = activeModal.warranty;
     const nextStatusLabel = statusMeta[statusForm.status]?.label || statusForm.status;
 
+    const claimId = receiptByCode[warranty.code]?.claimId;
+    if (!claimId) return toast.error('Hãy tiếp nhận bảo hành trước khi cập nhật');
+    const apiStatus = { processing: 'repairing', replaced: 'resolved', rejected: 'rejected', active: 'inspecting' }[statusForm.status] || statusForm.status;
+    try { await api.put(`/warranties/claims/${claimId}`, { status: apiStatus, resolution: statusForm.note }); }
+    catch (error) { return toast.error(error.response?.data?.message || 'Không thể cập nhật bảo hành'); }
     setLocalStatusByCode((current) => ({ ...current, [warranty.code]: statusForm.status }));
     addHistory(warranty, 'Cập nhật trạng thái', currentStaffName, `${nextStatusLabel}. ${statusForm.note || 'Không có ghi chú.'}`);
     toast.success('Đã cập nhật trạng thái');

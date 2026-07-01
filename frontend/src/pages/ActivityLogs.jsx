@@ -13,6 +13,8 @@ import {
 import api from '../api/axios';
 import { formatCurrency, formatDate, formatTime } from '../utils/format';
 
+const PAGE_SIZE = 5;
+
 const typeOptions = [
   { value: '', label: 'Tất cả hoạt động' },
   { value: 'order', label: 'Bán hàng' },
@@ -63,6 +65,7 @@ export default function ActivityLogs() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
 
   async function loadLogs(forceRefresh = false) {
     setIsLoading(true);
@@ -87,6 +90,10 @@ export default function ActivityLogs() {
     loadLogs();
   }, [search, type, dateFrom, dateTo]);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, type, dateFrom, dateTo]);
+
   const summary = useMemo(() => {
     const today = toInputDate(new Date());
 
@@ -104,6 +111,16 @@ export default function ActivityLogs() {
     setDateFrom('');
     setDateTo('');
   };
+
+  const totalPages = Math.max(1, Math.ceil(logs.length / PAGE_SIZE));
+  const safePage = Math.min(currentPage, totalPages);
+  const pagedLogs = useMemo(() => {
+    const startIndex = (safePage - 1) * PAGE_SIZE;
+    return logs.slice(startIndex, startIndex + PAGE_SIZE);
+  }, [logs, safePage]);
+
+  const goToPreviousPage = () => setCurrentPage((page) => Math.max(1, page - 1));
+  const goToNextPage = () => setCurrentPage((page) => Math.min(totalPages, page + 1));
 
   return (
     <div className="space-y-6">
@@ -198,9 +215,35 @@ export default function ActivityLogs() {
               Không có hoạt động phù hợp với bộ lọc hiện tại.
             </div>
           ) : (
-            logs.map((log) => <ActivityLogRow key={log.id} log={log} />)
+            pagedLogs.map((log) => <ActivityLogRow key={log.id} log={log} />)
           )}
         </div>
+
+        {!isLoading && logs.length > 0 && (
+          <div className="flex items-center justify-center gap-4 border-t border-[#edf7f9] px-5 py-4">
+            <button
+              type="button"
+              onClick={goToPreviousPage}
+              disabled={safePage === 1}
+              className="grid h-9 w-9 place-items-center rounded-lg border border-[#d8eef4] bg-white text-lg font-extrabold text-[#0f3b46] transition hover:bg-[#f8fdfe] disabled:cursor-not-allowed disabled:opacity-40"
+              aria-label="Trang trước"
+            >
+              {'<'}
+            </button>
+            <span className="min-w-20 rounded-lg bg-[#e8f9fc] px-4 py-2 text-center text-sm font-extrabold text-[#0f3b46]">
+              {safePage}/{totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={goToNextPage}
+              disabled={safePage === totalPages}
+              className="grid h-9 w-9 place-items-center rounded-lg border border-[#d8eef4] bg-white text-lg font-extrabold text-[#0f3b46] transition hover:bg-[#f8fdfe] disabled:cursor-not-allowed disabled:opacity-40"
+              aria-label="Trang sau"
+            >
+              {'>'}
+            </button>
+          </div>
+        )}
       </section>
     </div>
   );

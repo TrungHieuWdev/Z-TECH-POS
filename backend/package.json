@@ -7,6 +7,11 @@
   "scripts": {
     "dev": "node scripts/freePort.js && nodemon server.js",
     "start": "node server.js",
+    "test": "node --test",
+    "test:integration": "node --test tests/database.integration.test.js",
+    "migrate:hardening": "node scripts/applyHardeningMigration.js",
+    "migrate:pos-business": "node scripts/runPosBusinessMigration.js",
+    "check:pos-business-db": "node scripts/checkPosBusinessDatabase.js",
     "reset-db": "node scripts/resetDatabase.js",
     "normalize-images": "node scripts/normalizeProductImages.js",
     "normalize-categories": "node scripts/normalizeCategoriesAndProducts.js"
@@ -15,11 +20,14 @@
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
+    "exceljs": "^4.4.0",
     "express": "^4.21.2",
+    "express-rate-limit": "^8.5.2",
+    "helmet": "^8.2.0",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.1.1",
     "mysql2": "^3.11.5",
-    "nodemon": "^3.1.7",
-    "xlsx": "^0.18.5"
-  }
+    "nodemon": "^3.1.7"
+  },
+  "overrides": { "uuid": "^11.1.0" }
 }

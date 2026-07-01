@@ -14,7 +14,7 @@ import {
   X
 } from 'lucide-react';
 import { formatCurrency } from '../utils/format';
-import { getPromotions, savePromotions } from '../services/promotionService';
+import { getPromotions, savePromotion } from '../services/promotionService';
 import api from '../api/axios';
 import { getUser, isFullAccessRole } from '../utils/auth';
 import Modal from '../components/Modal';
@@ -211,8 +211,7 @@ function SearchableProductSelect({ products, value, onChange, placeholder }) {
 
 export default function Promotions() {
   const hasFullAccess = isFullAccessRole(getUser()?.role);
-  const [promotions, setPromotions] = useState(() => getPromotions(initialPromotions));
-  useEffect(() => { savePromotions(promotions); }, [promotions]);
+  const [promotions, setPromotions] = useState(initialPromotions);
   const [filters, setFilters] = useState({
     search: '',
     status: 'all',
@@ -230,6 +229,7 @@ export default function Promotions() {
   const [productSearch, setProductSearch] = useState('');
   const [productSearchError, setProductSearchError] = useState('');
   useEffect(() => { Promise.all([api.get('/categories'), api.get('/products')]).then(([categoryResponse, productResponse]) => { setCategories(categoryResponse.data || []); setProducts(productResponse.data || []); }).catch(() => {}); }, []);
+  useEffect(() => { getPromotions(initialPromotions).then(setPromotions).catch(() => setPromotions(initialPromotions)); }, []);
 
   const stats = useMemo(() => {
     const total = promotions.length;
@@ -322,15 +322,14 @@ export default function Promotions() {
     }).slice(0, 30);
   }, [products, productSearch]);
 
-  const togglePromotion = (promotionId) => {
-    setPromotions((current) =>
-      current.map((promotion) =>
-        promotion.id === promotionId ? { ...promotion, enabled: !promotion.enabled } : promotion
-      )
-    );
+  const togglePromotion = async (promotionId) => {
+    const target = promotions.find((promotion) => promotion.id === promotionId);
+    if (!target) return;
+    const saved = await savePromotion({ ...target, enabled: !target.enabled, status: !target.enabled ? 'active' : 'ended' });
+    setPromotions((current) => current.map((promotion) => (promotion.id === promotionId ? saved : promotion)));
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
 
     if (form.promotionType === 'buy_x_get_y' && (!form.buyProductId || !form.giftProductId)) {
@@ -386,13 +385,10 @@ export default function Promotions() {
       status: form.enabled ? 'active' : 'ended'
     };
 
-    if (editingPromotion) {
-      setPromotions((current) =>
-        current.map((promotion) => (promotion.id === editingPromotion.id ? { ...promotion, ...payload } : promotion))
-      );
-    } else {
-      setPromotions((current) => [{ id: Date.now(), ...payload }, ...current]);
-    }
+    const saved = await savePromotion(editingPromotion ? { ...editingPromotion, ...payload } : payload);
+    setPromotions((current) => editingPromotion
+      ? current.map((promotion) => (promotion.id === editingPromotion.id ? saved : promotion))
+      : [saved, ...current]);
 
     closeDrawer();
   };

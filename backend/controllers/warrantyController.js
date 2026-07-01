@@ -5,20 +5,47 @@ import { randomUUID } from 'node:crypto';
 let warrantySnapshotReady = false;
 export async function ensureWarrantyData() {
   if (warrantySnapshotReady) return;
-  const columns = [
-    ['warranty_enabled_snapshot', 'BOOLEAN NULL'], ['warranty_period_days_snapshot', 'INT NULL'],
-    ['warranty_type_snapshot', 'VARCHAR(30) NULL'], ['warranty_conditions_snapshot', 'TEXT NULL'],
-    ['warranty_exclusions_snapshot', 'TEXT NULL'], ['warranty_note_snapshot', 'TEXT NULL'],
-    ['public_token', 'CHAR(36) NULL UNIQUE']
-  ];
-  for (const [name, definition] of columns) {
-    const found = await query("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'order_items' AND COLUMN_NAME = ?", [name]);
-    if (!found.length) await query(`ALTER TABLE order_items ADD COLUMN ${name} ${definition}`);
-  }
   await query(`UPDATE order_items oi JOIN products p ON p.id = oi.product_id SET oi.warranty_enabled_snapshot = p.warranty_enabled, oi.warranty_period_days_snapshot = p.warranty_period_days, oi.warranty_type_snapshot = p.warranty_type, oi.warranty_conditions_snapshot = p.warranty_conditions, oi.warranty_exclusions_snapshot = p.warranty_exclusions, oi.warranty_note_snapshot = p.warranty_note WHERE oi.warranty_enabled_snapshot IS NULL`);
   const missingTokens = await query('SELECT id FROM order_items WHERE public_token IS NULL');
   for (const row of missingTokens) await query('UPDATE order_items SET public_token = ? WHERE id = ?', [randomUUID(), row.id]);
+  await query(`INSERT IGNORE INTO warranties
+    (warranty_code,order_item_id,customer_id,product_id,warranty_start,warranty_end,status,note)
+    SELECT CONCAT('BH-',LPAD(o.id,5,'0'),'-',LPAD(oi.id,3,'0')),oi.id,o.customer_id,oi.product_id,
+      DATE(o.created_at),DATE_ADD(DATE(o.created_at),INTERVAL oi.warranty_period_days_snapshot DAY),'active',oi.warranty_note_snapshot
+    FROM order_items oi JOIN orders o ON o.id=oi.order_id
+    WHERE oi.warranty_enabled_snapshot=1 AND oi.warranty_period_days_snapshot>0`);
   warrantySnapshotReady = true;
+}
+
+export async function getClaims(req, res) {
+  await ensureWarrantyData();
+  const rows = await query(`SELECT wc.* FROM warranty_claims wc JOIN warranties w ON w.id=wc.warranty_id
+    WHERE w.order_item_id=? ORDER BY wc.created_at DESC`, [req.params.orderItemId]);
+  res.json(rows);
+}
+
+export async function createClaim(req, res) {
+  try {
+    await ensureWarrantyData();
+    const warranties = await query('SELECT id,status FROM warranties WHERE order_item_id=?', [req.params.orderItemId]);
+    if (!warranties[0]) return res.status(404).json({ message: 'Sản phẩm không có phiếu bảo hành' });
+    const result = await query(`INSERT INTO warranty_claims (warranty_id,issue_description,resolution,status)
+      VALUES (?,?,?,?)`, [warranties[0].id, req.body.issue_description, req.body.resolution || null, req.body.status || 'received']);
+    await query("UPDATE warranties SET status='claimed' WHERE id=?", [warranties[0].id]);
+    const rows = await query('SELECT * FROM warranty_claims WHERE id=?', [result.insertId]);
+    res.status(201).json(rows[0]);
+  } catch (error) {
+    res.status(500).json({ message: 'Không thể tiếp nhận bảo hành' });
+  }
+}
+
+export async function updateClaim(req, res) {
+  const allowed = ['received','inspecting','repairing','resolved','rejected','cancelled'];
+  if (!allowed.includes(req.body.status)) return res.status(400).json({ message: 'Trạng thái không hợp lệ' });
+  const result = await query('UPDATE warranty_claims SET status=?,resolution=? WHERE id=?', [req.body.status, req.body.resolution || null, req.params.claimId]);
+  if (!result.affectedRows) return res.status(404).json({ message: 'Không tìm thấy yêu cầu bảo hành' });
+  const rows = await query('SELECT * FROM warranty_claims WHERE id=?', [req.params.claimId]);
+  res.json(rows[0]);
 }
 
 function addMonths(date, months) {

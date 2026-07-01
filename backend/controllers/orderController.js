@@ -2,27 +2,8 @@ import { query, withTransaction } from '../config/db.js';
 import { randomUUID } from 'node:crypto';
 import { hasFullAccess } from '../middleware/auth.js';
 
-let warrantySnapshotReady = false;
-let orderSettingsColumnsReady = false;
-
 function settingEnabled(value) {
   return ['1', 'true', 'yes', 'on'].includes(String(value || '').toLowerCase());
-}
-
-async function ensureOrderSettingsColumns() {
-  if (orderSettingsColumnsReady) return;
-
-  const columns = [
-    ['vat_rate', 'DECIMAL(5,2) NOT NULL DEFAULT 0'],
-    ['vat_amount', 'DECIMAL(15,0) NOT NULL DEFAULT 0']
-  ];
-
-  for (const [name, definition] of columns) {
-    const found = await query("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'orders' AND COLUMN_NAME = ?", [name]);
-    if (!found.length) await query(`ALTER TABLE orders ADD COLUMN ${name} ${definition}`);
-  }
-
-  orderSettingsColumnsReady = true;
 }
 
 async function getVatSettings(db = query) {
@@ -64,22 +45,6 @@ async function getPaymentSettings(db = query) {
   };
 }
 
-async function ensureWarrantySnapshotColumns() {
-  if (warrantySnapshotReady) return;
-  const columns = [
-    ['warranty_enabled_snapshot', 'BOOLEAN NULL'], ['warranty_period_days_snapshot', 'INT NULL'],
-    ['warranty_type_snapshot', "VARCHAR(30) NULL"], ['warranty_conditions_snapshot', 'TEXT NULL'],
-    ['warranty_exclusions_snapshot', 'TEXT NULL'], ['warranty_note_snapshot', 'TEXT NULL'],
-    ['public_token', 'CHAR(36) NULL UNIQUE']
-  ];
-  for (const [name, definition] of columns) {
-    const found = await query("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'order_items' AND COLUMN_NAME = ?", [name]);
-    if (!found.length) await query(`ALTER TABLE order_items ADD COLUMN ${name} ${definition}`);
-  }
-  await query(`UPDATE order_items oi JOIN products p ON p.id = oi.product_id SET oi.warranty_enabled_snapshot = p.warranty_enabled, oi.warranty_period_days_snapshot = p.warranty_period_days, oi.warranty_type_snapshot = p.warranty_type, oi.warranty_conditions_snapshot = p.warranty_conditions, oi.warranty_exclusions_snapshot = p.warranty_exclusions, oi.warranty_note_snapshot = p.warranty_note WHERE oi.warranty_enabled_snapshot IS NULL`);
-  warrantySnapshotReady = true;
-}
-
 async function buildOrderNumber(db = query) {
   const rows = await db(`
     SELECT
@@ -96,14 +61,13 @@ async function buildOrderNumber(db = query) {
 
 export async function create(req, res) {
   try {
-    await ensureWarrantySnapshotColumns();
-    await ensureOrderSettingsColumns();
     const {
       customer_id = null,
       items = [],
       promotion_discount = 0,
       points_used = 0,
       payment_method = 'cash',
+      paid_amount = null,
       note = ''
     } = req.body;
 
@@ -197,12 +161,36 @@ export async function create(req, res) {
       );
 
       for (const item of orderItems) {
-        await db(
+        const orderItemResult = await db(
           `INSERT INTO order_items (order_id, product_id, quantity, unit_price, subtotal, warranty_enabled_snapshot, warranty_period_days_snapshot, warranty_type_snapshot, warranty_conditions_snapshot, warranty_exclusions_snapshot, warranty_note_snapshot, public_token) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [orderResult.insertId, item.product_id, item.quantity, item.unit_price, item.subtotal, item.warranty_enabled, item.warranty_period_days, item.warranty_type, item.warranty_conditions, item.warranty_exclusions, item.warranty_note, randomUUID()]
         );
-        await db('UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ?', [item.quantity, item.product_id]);
+        const beforeQuantity = Number(item.stock_quantity);
+        const afterQuantity = beforeQuantity - item.quantity;
+        await db('UPDATE products SET stock_quantity = ? WHERE id = ?', [afterQuantity, item.product_id]);
+        await db(
+          `INSERT INTO inventory_logs
+           (product_id,user_id,type,quantity,before_quantity,after_quantity,reference_type,reference_id,note)
+           VALUES (?,?,'SALE',?,?,?,'ORDER',?,?)`,
+          [item.product_id, req.user.id, item.quantity, beforeQuantity, afterQuantity, orderResult.insertId, `Bán hàng ${orderNumber}`]
+        );
+        if (Number(item.warranty_enabled) && Number(item.warranty_period_days) > 0) {
+          const warrantyCode = `BH-${String(orderResult.insertId).padStart(5, '0')}-${String(orderItemResult.insertId).padStart(3, '0')}`;
+          await db(
+            `INSERT INTO warranties
+             (warranty_code,order_item_id,customer_id,product_id,warranty_start,warranty_end,status,note)
+             VALUES (?,?,?,?,CURDATE(),DATE_ADD(CURDATE(), INTERVAL ? DAY),'active',?)`,
+            [warrantyCode, orderItemResult.insertId, customer_id || null, item.product_id, item.warranty_period_days, item.warranty_note || null]
+          );
+        }
       }
+
+      const normalizedPaid = payment_method === 'cash' ? Math.max(Number(paid_amount) || total, total) : total;
+      await db(
+        `INSERT INTO payments (order_id,payment_method,amount,paid_amount,change_amount,status,paid_at)
+         VALUES (?,?,?,?,?,'completed',NOW())`,
+        [orderResult.insertId, payment_method, total, normalizedPaid, Math.max(normalizedPaid - total, 0)]
+      );
 
       if (customer_id) {
         await db(
@@ -288,8 +276,9 @@ export async function getById(req, res) {
        WHERE oi.order_id = ?`,
       [req.params.id]
     );
+    const payments = await query('SELECT * FROM payments WHERE order_id=? ORDER BY created_at', [req.params.id]);
 
-    res.json({ ...orders[0], items });
+    res.json({ ...orders[0], items, payments });
   } catch (error) {
     res.status(500).json({ message: 'Không thể lấy chi tiết đơn hàng', error: error.message });
   }
@@ -313,8 +302,17 @@ export async function update(req, res) {
         if (order.status === 'completed') {
           const items = await db('SELECT product_id, quantity FROM order_items WHERE order_id = ?', [order.id]);
           for (const item of items) {
-            await db('UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?', [item.quantity, item.product_id]);
+            const products = await db('SELECT stock_quantity FROM products WHERE id=? FOR UPDATE', [item.product_id]);
+            const before = Number(products[0]?.stock_quantity || 0);
+            const after = before + Number(item.quantity);
+            await db('UPDATE products SET stock_quantity = ? WHERE id = ?', [after, item.product_id]);
+            await db(`INSERT INTO inventory_logs
+              (product_id,user_id,type,quantity,before_quantity,after_quantity,reference_type,reference_id,note)
+              VALUES (?,?,'CANCEL_ORDER',?,?,?,'ORDER',?,?)`,
+              [item.product_id, req.user.id, item.quantity, before, after, order.id, `Hủy đơn ${order.order_number}`]);
           }
+          await db("UPDATE payments SET status='refunded' WHERE order_id=? AND status='completed'", [order.id]);
+          await db("UPDATE warranties SET status='void' WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id=?)", [order.id]);
           if (order.customer_id) {
             await db(
               'UPDATE customers SET loyalty_points = GREATEST(loyalty_points + ? - ?, 0) WHERE id = ?',
@@ -362,8 +360,17 @@ export async function remove(req, res) {
 
       const items = await db('SELECT product_id, quantity FROM order_items WHERE order_id = ?', [order.id]);
       for (const item of items) {
-        await db('UPDATE products SET stock_quantity = stock_quantity + ? WHERE id = ?', [item.quantity, item.product_id]);
+        const products = await db('SELECT stock_quantity FROM products WHERE id=? FOR UPDATE', [item.product_id]);
+        const before = Number(products[0]?.stock_quantity || 0);
+        const after = before + Number(item.quantity);
+        await db('UPDATE products SET stock_quantity = ? WHERE id = ?', [after, item.product_id]);
+        await db(`INSERT INTO inventory_logs
+          (product_id,user_id,type,quantity,before_quantity,after_quantity,reference_type,reference_id,note)
+          VALUES (?,?,'CANCEL_ORDER',?,?,?,'ORDER',?,?)`,
+          [item.product_id, req.user.id, item.quantity, before, after, order.id, `Hủy đơn ${order.order_number}`]);
       }
+      await db("UPDATE payments SET status='refunded' WHERE order_id=? AND status='completed'", [order.id]);
+      await db("UPDATE warranties SET status='void' WHERE order_item_id IN (SELECT id FROM order_items WHERE order_id=?)", [order.id]);
       if (order.customer_id) {
         await db(
           'UPDATE customers SET loyalty_points = GREATEST(loyalty_points + ? - ?, 0) WHERE id = ?',

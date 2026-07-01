@@ -3,7 +3,7 @@ import { Gift, PackagePlus, RefreshCw, ShoppingBasket } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../../api/axios';
 import { buildSalesOpportunities } from '../../../utils/salesOpportunityRules';
-import { getPromotions, savePromotions } from '../../../services/promotionService';
+import { savePromotion } from '../../../services/promotionService';
 
 const typeMeta = {
   buy_get: ['Mua X tặng Y', Gift],
@@ -88,7 +88,7 @@ export default function SalesOpportunityPanel() {
     }).filter(Boolean);
   }, [ruleIdeas, aiStrategies]);
 
-  const create = (idea) => {
+  const create = async (idea) => {
     const now = Date.now();
     const common = {
       id: now,
@@ -149,7 +149,7 @@ export default function SalesOpportunityPanel() {
             condition: `Mua kèm ${idea.base.name}`
           };
 
-    savePromotions([promotion, ...getPromotions([])]);
+    await savePromotion(promotion);
     toast.success('Đã tạo chương trình từ gợi ý AI');
   };
 
@@ -170,12 +170,11 @@ export default function SalesOpportunityPanel() {
         </div>
       </div>
 
-      {data && <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-semibold text-gray-500">
-        <p>Phân tích từ {data.orderCount} hóa đơn hoàn thành · Chỉ hiển thị mối liên quan có ý nghĩa</p>
-        <span className={`px-2 py-1 ${aiStatus === 'ai' ? 'bg-violet-50 text-violet-700' : 'bg-amber-50 text-amber-700'}`}>
-          {aiStatus === 'loading' ? 'Hugging Face đang suy luận…' : aiStatus === 'ai' ? `Hugging Face · ${aiModel}` : 'Chế độ dự phòng rule-based'}
-        </span>
-      </div>}
+      {data && (
+        <div className="text-xs font-semibold text-gray-500">
+          <p>Phân tích từ {data.orderCount} hóa đơn hoàn thành · Chỉ hiển thị mối liên quan có ý nghĩa</p>
+        </div>
+      )}
 
       {loading ? <div className="p-12 text-center text-sm text-gray-500">Đang tổng hợp dữ liệu và yêu cầu Hugging Face phân tích...</div>
         : error ? <div className="border border-red-200 bg-red-50 p-6 text-red-700">{error}</div>
@@ -189,7 +188,6 @@ export default function SalesOpportunityPanel() {
                         <span className="inline-flex items-center gap-1.5 bg-sky-50 px-2 py-1 text-xs font-bold text-sky-700"><Icon size={14} />{label}</span>
                         <h4 className="mt-2 font-extrabold text-gray-950">{idea.title}</h4>
                       </div>
-                      {idea.confidence && <span className="text-xs font-bold text-emerald-700">Tin cậy {(idea.confidence * 100).toFixed(0)}%</span>}
                     </div>
                     {idea.customerInsight && <p className="mt-3 border-l-2 border-violet-300 pl-3 text-sm font-semibold text-violet-800">Góc nhìn khách hàng: {idea.customerInsight}</p>}
                     <p className="mt-3 text-sm leading-6 text-gray-600">{idea.reason}</p>

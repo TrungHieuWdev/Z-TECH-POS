@@ -1,6 +1,8 @@
 import { readLocalJson } from '../utils/storage';
+import api from '../api/axios';
 
 const KEY = 'ztech_promotions';
+let cachedPromotions = [];
 const addDaysISO = (dateValue, days) => {
   const date = dateValue ? new Date(dateValue) : new Date();
   date.setDate(date.getDate() + days);
@@ -47,13 +49,45 @@ function normalizeStoredPromotion(promotion) {
   };
 }
 
-export function getPromotions(fallback = []) {
-  return readLocalJson(KEY, fallback, Array.isArray).map(normalizeStoredPromotion);
+export async function getPromotions(fallback = []) {
+  try {
+    const response = await api.get('/promotions', { cache: false });
+    cachedPromotions = Array.isArray(response.data) ? response.data.map(normalizeStoredPromotion) : [];
+    return cachedPromotions;
+  } catch {
+    cachedPromotions = readLocalJson(KEY, fallback, Array.isArray).map(normalizeStoredPromotion);
+    return cachedPromotions;
+  }
 }
-export function savePromotions(promotions) {
-  localStorage.setItem(KEY, JSON.stringify(promotions));
+
+export async function savePromotion(promotion) {
+  const payload = normalizeStoredPromotion(promotion);
+  const response = payload.id
+    ? await api.put(`/promotions/${payload.id}`, payload)
+    : await api.post('/promotions', payload);
+
+  const saved = normalizeStoredPromotion(response.data);
+  cachedPromotions = [saved, ...cachedPromotions.filter((item) => Number(item.id) !== Number(saved.id))];
   window.dispatchEvent(new Event('ztech-promotions-changed'));
-  return promotions;
+  return saved;
+}
+
+export async function savePromotions(promotions) {
+  const saved = [];
+  for (const promotion of promotions) {
+    saved.push(await savePromotion(promotion));
+  }
+  return saved;
+}
+
+export async function deletePromotion(id) {
+  await api.delete(`/promotions/${id}`);
+  cachedPromotions = cachedPromotions.filter((promotion) => Number(promotion.id) !== Number(id));
+  window.dispatchEvent(new Event('ztech-promotions-changed'));
+}
+
+export function getCachedPromotions(fallback = []) {
+  return cachedPromotions.length ? cachedPromotions : fallback;
 }
 
 export function normalizePromotionText(value) {
