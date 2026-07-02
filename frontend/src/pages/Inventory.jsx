@@ -20,9 +20,8 @@ import Modal from '../components/Modal';
 import { formatCurrency, formatDate } from '../utils/format';
 import { getUser, isFullAccessRole } from '../utils/auth';
 import InventoryTabs from '../components/inventory/InventoryTabs';
-import ProductAIAnalysisTab from '../components/inventory/ai-analysis/ProductAIAnalysisTab';
-import ProductAIStats from '../components/inventory/ai-analysis/ProductAIStats';
-import useProductAIAnalysis from '../hooks/useProductAIAnalysis';
+import RestockSuggestionTab from '../components/inventory/restock/RestockSuggestionTab';
+import useRestockSuggestions from '../hooks/useRestockSuggestions';
 
 const initialForm = { product_id: '', quantity: '', note: '' };
 const initialCurrentFilters = { category: '', model: '', stock: '', barcode: '' };
@@ -103,7 +102,7 @@ function Pagination({ page, totalItems, onChange }) {
 }
 
 export default function Inventory() {
-  const productAIAnalysis = useProductAIAnalysis();
+  const restockSuggestions = useRestockSuggestions();
   const hasFullAccess = isFullAccessRole(getUser()?.role);
   const [logs, setLogs] = useState([]);
   const [products, setProducts] = useState([]);
@@ -273,8 +272,8 @@ export default function Inventory() {
         )}
       </header>
 
-      {activeTab === 'ai' ? (
-        <ProductAIStats products={productAIAnalysis.analyzedProducts} totalAnalyzed={productAIAnalysis.totalAnalyzed} />
+      {activeTab === 'restock' ? (
+        null
       ) : (
         <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
           <SummaryCard icon={Boxes} label="Tổng sản phẩm" value={stats.products.toLocaleString('vi-VN')} note="Tất cả sản phẩm trong kho" />
@@ -287,16 +286,16 @@ export default function Inventory() {
 
       <section className="border border-gray-200 bg-white shadow-sm">
         <div
-          className={`items-center gap-5 border-b border-gray-200 px-4 ${activeTab === 'ai' ? 'flex min-h-12 justify-end py-0' : 'grid py-4'}`}
-          style={activeTab === 'ai' ? undefined : { gridTemplateColumns: 'minmax(420px, 1fr) auto' }}
+          className={`items-center gap-5 border-b border-gray-200 px-4 ${activeTab === 'restock' ? 'flex min-h-12 justify-end py-0' : 'grid py-4'}`}
+          style={activeTab === 'restock' ? undefined : { gridTemplateColumns: 'minmax(420px, 1fr) auto' }}
         >
-          {activeTab !== 'ai' && <div className="flex min-w-0 items-center gap-2 border border-gray-300 px-3 py-2.5 focus-within:border-[#69afd6]">
+          {activeTab !== 'restock' && <div className="flex min-w-0 items-center gap-2 border border-gray-300 px-3 py-2.5 focus-within:border-[#69afd6]">
             <Search size={18} className="shrink-0 text-[#499bc6]" />
             <input value={search} onChange={(event) => setSearch(event.target.value)} className="w-full min-w-0 text-sm outline-none" placeholder={searchPlaceholder} />
           </div>}
           <InventoryTabs value={activeTab} onChange={(tab) => { setActiveTab(tab); setSearch(''); }}/>
         </div>
-        {activeTab === 'ai' ? <ProductAIAnalysisTab analysis={productAIAnalysis}/> : <><div className="border-b border-gray-200 bg-gray-50/60 px-4 py-3">
+        {activeTab === 'restock' ? <RestockSuggestionTab analysis={restockSuggestions}/> : <><div className="border-b border-gray-200 bg-gray-50/60 px-4 py-3">
           {activeTab === 'current' ? (
             <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
               <select value={currentFilters.category} onChange={(event) => setCurrentFilters({ ...currentFilters, category: event.target.value })} className="h-10 border border-gray-300 bg-white px-3 text-sm text-gray-700 outline-none focus:border-[#69afd6]">
