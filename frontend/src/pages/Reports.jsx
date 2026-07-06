@@ -29,8 +29,7 @@ import { formatCurrency, formatDate, formatTime } from '../utils/format';
 const periodOptions = [
   { value: 'today', label: 'Hôm nay' },
   { value: '7days', label: '7 ngày qua' },
-  { value: 'month', label: 'Tháng này' },
-  { value: 'custom', label: 'Tùy chọn' }
+  { value: 'month', label: 'Tháng này' }
 ];
 
 const paymentLabels = {
@@ -538,7 +537,7 @@ export default function Reports() {
       <section className="grid gap-4 xl:grid-cols-2">
         <div className="overflow-hidden rounded-lg border border-[#d7eef3] bg-white shadow-sm">
           <div className="border-b border-[#edf7f9] px-4 py-3">
-            <h2 className="text-sm font-bold text-gray-950">Top sản phẩm</h2>
+            <h2 className="text-sm font-bold text-gray-950">Top sản phẩm bán chạy</h2>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[620px] text-left text-xs">
