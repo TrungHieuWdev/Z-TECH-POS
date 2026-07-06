@@ -1070,7 +1070,7 @@ export default function POS() {
               type="button"
               onClick={() => setScanMode((current) => !current)}
               aria-pressed={scanMode}
-              className={`h-11 border px-4 text-sm font-bold ${scanMode ? 'border-[#74B8E0] bg-red-50 text-[#ba1a1a]' : 'border-brand bg-brand text-brand-ink'}`}
+              className={`h-11 border px-4 text-sm font-bold ${scanMode ? 'border-[#74B8E0] bg-red-50 text-[#ba1a1a]' : 'border-brand bg-brand text-white'}`}
             >
               {scanMode ? 'Tắt quét' : 'Quét sản phẩm'}
             </button>
@@ -1210,7 +1210,7 @@ export default function POS() {
             <button
               type="button"
               onClick={selectWalkInCustomer}
-              className={`flex min-h-14 items-center gap-2 border px-2.5 text-left text-[#191c1e] transition ${customerMode === 'regular' ? 'border-[#69afd6] bg-[#69afd6]' : 'border-[#c3c6d7] bg-white hover:bg-[#f7f9fb]'}`}
+              className={`flex min-h-14 items-center gap-2 border px-2.5 text-left transition ${customerMode === 'regular' ? 'border-[#69afd6] bg-[#69afd6] text-white' : 'border-[#c3c6d7] bg-white text-[#191c1e] hover:bg-[#f7f9fb]'}`}
             >
               <UserRound className="h-5 w-5 shrink-0" />
               <span><span className="block text-sm font-bold">Khách thường</span><span className="block text-[11px] font-semibold opacity-75">Không tích điểm</span></span>
@@ -1221,7 +1221,7 @@ export default function POS() {
                 setCustomerMode('member');
                 setIsCustomerPickerOpen(true);
               }}
-              className={`flex min-h-14 items-center gap-2 border px-2.5 text-left text-[#191c1e] transition ${customerMode === 'member' ? 'border-[#69afd6] bg-[#69afd6]' : 'border-[#c3c6d7] bg-white hover:bg-[#f7f9fb]'}`}
+              className={`flex min-h-14 items-center gap-2 border px-2.5 text-left transition ${customerMode === 'member' ? 'border-[#69afd6] bg-[#69afd6] text-white' : 'border-[#c3c6d7] bg-white text-[#191c1e] hover:bg-[#f7f9fb]'}`}
             >
               <UserSearch className="h-5 w-5 shrink-0" />
               <span className="min-w-0 flex-1">
