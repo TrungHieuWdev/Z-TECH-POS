@@ -24,7 +24,7 @@ import Modal from '../components/Modal';
 import ProductImage from '../components/ProductImage';
 import { formatCurrency } from '../utils/format';
 import { getUser, isFullAccessRole } from '../utils/auth';
-import { getDefaultWarrantyPolicy, getWarrantyLabel, warrantyTypes } from '../utils/warrantyPolicy';
+import { getDefaultWarrantyPolicy, warrantyTypes } from '../utils/warrantyPolicy';
 
 const deviceFamilyOptions = [
   { value: 'generic', label: 'Dùng chung / Không theo hãng' },
@@ -48,8 +48,7 @@ const quickTabs = [
   { value: 'all', label: 'Tất cả' },
   { value: 'low', label: 'Sắp hết hàng' },
   { value: 'out', label: 'Hết hàng' },
-  { value: 'no-code', label: 'Chưa có mã vạch' },
-  { value: 'warranty', label: 'Có bảo hành' }
+  { value: 'no-code', label: 'Chưa có mã vạch' }
 ];
 
 function getStockState(product) {
@@ -212,12 +211,6 @@ function productMatchesCategory(product, category) {
   return String(product.category_id) === String(category.id);
 }
 
-function getWarrantyBadgeClass(product) {
-  if (product.warranty_type === 'initial_exchange') return 'bg-amber-100 text-amber-800';
-  if (!Boolean(Number(product.warranty_enabled))) return 'bg-gray-100 text-gray-700';
-  return 'bg-emerald-100 text-emerald-700';
-}
-
 export default function Products({ tabNavigation = null }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const hasFullAccess = isFullAccessRole(getUser()?.role);
@@ -233,8 +226,6 @@ export default function Products({ tabNavigation = null }) {
   const [search, setSearch] = useState('');
   const [categoryId, setCategoryId] = useState(selectedCategoryId);
   const [deviceFamily, setDeviceFamily] = useState('');
-  const [stockFilter, setStockFilter] = useState('');
-  const [warrantyFilter, setWarrantyFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [activeTab, setActiveTab] = useState(lowStockOnly ? 'low' : 'all');
   const [currentPage, setCurrentPage] = useState(1);
@@ -261,8 +252,6 @@ export default function Products({ tabNavigation = null }) {
 
     return products.filter((product) => {
       const stockState = getStockState(product);
-      const warrantyEnabled = Boolean(Number(product.warranty_enabled));
-      const warrantyType = product.warranty_type || 'none';
       const searchable = [
         product.name,
         product.sku,
@@ -275,25 +264,20 @@ export default function Products({ tabNavigation = null }) {
       if (keyword && !searchable.includes(keyword)) return false;
       if (deviceFamily && product.device_family !== deviceFamily) return false;
       if (categoryId && !productMatchesCategory(product, selectedCategory)) return false;
-      if (stockFilter && stockState !== stockFilter) return false;
-      if (warrantyFilter === 'yes' && (!warrantyEnabled || warrantyType === 'initial_exchange')) return false;
-      if (warrantyFilter === 'none' && warrantyEnabled) return false;
-      if (warrantyFilter === 'exchange' && warrantyType !== 'initial_exchange') return false;
       if (statusFilter && getProductStatus(product) !== statusFilter) return false;
       if (activeTab === 'low' && stockState !== 'low') return false;
       if (activeTab === 'out' && stockState !== 'out') return false;
       if (activeTab === 'no-code' && (product.sku || product.barcode)) return false;
-      if (activeTab === 'warranty' && !warrantyEnabled) return false;
       return true;
     });
-  }, [products, categories, search, deviceFamily, categoryId, stockFilter, warrantyFilter, statusFilter, activeTab]);
+  }, [products, categories, search, deviceFamily, categoryId, statusFilter, activeTab]);
 
   const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE));
   const paginatedProducts = filteredProducts.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, deviceFamily, categoryId, stockFilter, warrantyFilter, statusFilter, activeTab]);
+  }, [search, deviceFamily, categoryId, statusFilter, activeTab]);
 
   useEffect(() => {
     if (currentPage > totalPages) setCurrentPage(totalPages);
@@ -713,8 +697,8 @@ export default function Products({ tabNavigation = null }) {
       )}
 
       <section className="border border-gray-200 bg-white shadow-sm">
-        <div className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-5">
-          <div className="relative xl:col-span-2">
+        <div className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-[minmax(380px,1.55fr)_repeat(3,minmax(180px,1fr))]">
+          <div className="relative md:col-span-2 xl:col-span-1">
             <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input value={search} onChange={(event) => setSearch(event.target.value)} className="h-10 w-full border border-gray-300 pl-10 pr-3 text-sm outline-none focus:border-brand" placeholder="Tìm tên, SKU, mã vạch, model" />
           </div>
@@ -725,12 +709,6 @@ export default function Products({ tabNavigation = null }) {
           <select value={categoryId} onChange={(event) => setCategoryId(event.target.value)} className="h-10 border border-gray-300 px-3 text-sm outline-none focus:border-brand">
             <option value="">Tất cả danh mục</option>
             {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
-          </select>
-          <select value={stockFilter} onChange={(event) => setStockFilter(event.target.value)} className="h-10 border border-gray-300 px-3 text-sm outline-none focus:border-brand">
-            <option value="">Tất cả tồn kho</option><option value="available">Còn hàng</option><option value="low">Sắp hết</option><option value="out">Hết hàng</option>
-          </select>
-          <select value={warrantyFilter} onChange={(event) => setWarrantyFilter(event.target.value)} className="h-10 border border-gray-300 px-3 text-sm outline-none focus:border-brand">
-            <option value="">Tất cả bảo hành</option><option value="yes">Có bảo hành</option><option value="none">Không bảo hành</option><option value="exchange">Chỉ đổi lỗi ban đầu</option>
           </select>
           <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="h-10 border border-gray-300 px-3 text-sm outline-none focus:border-brand">
             <option value="">Tất cả trạng thái</option><option value="active">Đang bán</option><option value="hidden">Tạm ẩn</option><option value="stopped">Ngừng bán</option>
@@ -745,10 +723,10 @@ export default function Products({ tabNavigation = null }) {
 
       <section className="border border-gray-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1320px] text-left text-sm">
+          <table className="w-full min-w-[1180px] text-left text-sm">
             <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
               <tr>
-                <th className="px-4 py-3 font-bold">Sản phẩm</th><th className="px-4 py-3 font-bold">SKU / Mã vạch</th><th className="px-4 py-3 font-bold">Dòng máy</th><th className="px-4 py-3 font-bold">Danh mục</th><th className="px-4 py-3 font-bold">Giá bán</th><th className="px-4 py-3 font-bold">Tồn kho</th><th className="px-4 py-3 font-bold">Bảo hành</th><th className="px-4 py-3 font-bold">Trạng thái</th><th className="px-4 py-3 text-right font-bold">Thao tác</th>
+                <th className="px-4 py-3 font-bold">Sản phẩm</th><th className="px-4 py-3 font-bold">SKU / Mã vạch</th><th className="px-4 py-3 font-bold">Dòng máy</th><th className="px-4 py-3 font-bold">Danh mục</th><th className="px-4 py-3 font-bold">Giá bán</th><th className="px-4 py-3 font-bold">Tồn kho</th><th className="px-4 py-3 font-bold">Trạng thái</th><th className="px-4 py-3 text-right font-bold">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -772,7 +750,6 @@ export default function Products({ tabNavigation = null }) {
                       <p className="font-bold text-gray-950">{Number(product.stock_quantity || 0)} <span className="font-medium text-gray-400">/ tối thiểu {Number(product.min_stock || 0)}</span></p>
                       <span className={`mt-1 inline-flex px-2 py-0.5 text-[11px] font-bold ${stockState === 'out' ? 'bg-red-100 text-red-700' : stockState === 'low' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-700'}`}>{stockState === 'out' ? 'Hết hàng' : stockState === 'low' ? 'Sắp hết' : 'Còn hàng'}</span>
                     </td>
-                    <td className="px-4 py-2.5"><span className={`inline-flex px-2 py-1 text-xs font-bold ${getWarrantyBadgeClass(product)}`}>{getWarrantyLabel(product)}</span><p className="mt-1 text-xs text-gray-500">{product.warranty_type === 'initial_exchange' ? `Chỉ đổi lỗi ban đầu ${Number(product.warranty_period_days || 1)} ngày` : Number(product.warranty_enabled) ? `Có bảo hành ${Number(product.warranty_period_days || 0)} ngày` : 'Không bảo hành'}</p></td>
                     <td className="px-4 py-2.5"><span className={`inline-flex px-2.5 py-1 text-xs font-bold ${status === 'active' ? 'bg-brand-surface text-brand-deep' : status === 'hidden' ? 'bg-gray-100 text-gray-600' : 'bg-red-50 text-red-700'}`}>{status === 'active' ? 'Đang bán' : status === 'hidden' ? 'Tạm ẩn' : 'Ngừng bán'}</span></td>
                     <td className="px-4 py-2.5">
                       <div className="flex justify-end gap-2">
@@ -801,7 +778,7 @@ export default function Products({ tabNavigation = null }) {
                   </tr>
                 );
               })}
-              {paginatedProducts.length === 0 && <tr><td colSpan="9" className="px-4 py-12 text-center text-gray-500">Không tìm thấy sản phẩm phù hợp.</td></tr>}
+              {paginatedProducts.length === 0 && <tr><td colSpan="8" className="px-4 py-12 text-center text-gray-500">Không tìm thấy sản phẩm phù hợp.</td></tr>}
             </tbody>
           </table>
         </div>

@@ -224,6 +224,15 @@ export default function Inventory() {
   const activeRows = activeTab === 'current' ? filteredProducts : activeTab === 'history' ? filteredLogs : [];
   const totalPages = Math.max(1, Math.ceil(activeRows.length / PAGE_SIZE));
   const paginatedRows = activeRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const selectedProduct = useMemo(
+    () => products.find((product) => String(product.id) === String(form.product_id)),
+    [products, form.product_id]
+  );
+  const selectedStock = Number(selectedProduct?.stock_quantity || 0);
+  const countedQuantity = form.quantity === '' ? null : Number(form.quantity);
+  const countDifference = countedQuantity === null || Number.isNaN(countedQuantity)
+    ? null
+    : countedQuantity - selectedStock;
 
   useEffect(() => {
     setPage(1);
@@ -459,21 +468,35 @@ export default function Inventory() {
           <label className="block">
             <span className="mb-1 block text-sm font-medium text-gray-700">Sản phẩm</span>
             <select value={form.product_id} onChange={(event) => setForm({ ...form, product_id: event.target.value })} className="w-full border border-gray-300 px-3 py-2 outline-none focus:border-sky-500" required>
-              <option value="">Chọn sản phẩm</option>
+              <option value="">{mode === 'count' ? 'Tìm hoặc chọn sản phẩm' : 'Chọn sản phẩm'}</option>
               {products.map((product) => <option key={product.id} value={product.id}>{product.name} - tồn {product.stock_quantity}</option>)}
             </select>
           </label>
+          {mode === 'count' && (
+            <div>
+              <span className="mb-1 block text-sm font-medium text-gray-700">Tồn kho hiện tại</span>
+              <p className="text-lg font-bold text-gray-950">{selectedProduct ? selectedStock.toLocaleString('vi-VN') : '—'}</p>
+            </div>
+          )}
           <label className="block">
             <span className="mb-1 block text-sm font-medium text-gray-700">{mode === 'in' ? 'Số lượng nhập' : mode === 'count' ? 'Số lượng thực tế kiểm kê' : 'Tồn kho mới'}</span>
             <input type="number" min={mode === 'in' ? 1 : 0} value={form.quantity} onChange={(event) => setForm({ ...form, quantity: event.target.value })} className="w-full border border-gray-300 px-3 py-2 outline-none focus:border-sky-500" required />
           </label>
+          {mode === 'count' && (
+            <div>
+              <span className="mb-1 block text-sm font-medium text-gray-700">Chênh lệch</span>
+              <p className={`text-sm font-bold ${countDifference === null ? 'text-gray-500' : countDifference < 0 ? 'text-red-600' : countDifference > 0 ? 'text-emerald-700' : 'text-gray-700'}`}>
+                {countDifference === null ? '—' : `${countDifference > 0 ? '+' : ''}${countDifference.toLocaleString('vi-VN')} sản phẩm`}
+              </p>
+            </div>
+          )}
           <label className="block">
             <span className="mb-1 block text-sm font-medium text-gray-700">Ghi chú</span>
-            <textarea value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} placeholder={mode === 'count' ? 'Ví dụ: Kiểm kê cuối ngày' : ''} className="min-h-24 w-full border border-gray-300 px-3 py-2 outline-none focus:border-sky-500" />
+            <textarea value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} placeholder={mode === 'count' ? 'Ví dụ: Kiểm kê cuối ngày, lệch do bán thiếu bill...' : ''} className="min-h-24 w-full border border-gray-300 px-3 py-2 outline-none focus:border-sky-500" />
           </label>
           <div className="flex justify-end gap-3">
             <button type="button" onClick={closeModal} className="border border-gray-300 px-4 py-2 font-medium">Hủy</button>
-            <button type="submit" className="bg-[#69afd6] px-4 py-2 font-semibold text-white hover:bg-[#579fc8]">Lưu</button>
+            <button type="submit" className="bg-[#69afd6] px-4 py-2 font-semibold text-white hover:bg-[#579fc8]">{mode === 'count' ? 'Lưu kiểm kê' : 'Lưu'}</button>
           </div>
         </form>
       </Modal>

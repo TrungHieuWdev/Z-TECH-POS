@@ -9,6 +9,7 @@ import {
   Edit,
   Eye,
   Plus,
+  RotateCcw,
   Search,
   TicketPercent,
   X
@@ -394,24 +395,24 @@ export default function Promotions({ tabNavigation = null }) {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-extrabold text-gray-950">Trang khuyến mãi</h1>
           <p className="mt-1 text-sm font-medium text-gray-500">Tạo và quản lý các chương trình giảm giá được áp dụng khi bán hàng.</p>
         </div>
-        <div className="flex flex-wrap gap-3" style={{ display: hasFullAccess ? undefined : 'none' }}>
+        <div className="flex flex-wrap items-center justify-end gap-2" style={{ display: hasFullAccess ? undefined : 'none' }}>
           <button
             type="button"
-            className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#d5dbe3] bg-white px-4 text-sm font-semibold text-[#26313d] transition hover:bg-[#f5f9fc]"
+            className="flex items-center gap-2 rounded-lg border border-[#74B8E0] bg-white px-4 py-2.5 font-semibold text-[#3386b8] transition hover:bg-[#eef8fd]"
           >
-            <Download size={17} />
+            <Download size={18} />
             Xuất báo cáo
           </button>
           <button
             type="button"
             onClick={openCreateDrawer}
-            className="inline-flex h-10 items-center gap-2 rounded-lg bg-brand-deep px-4 text-sm font-semibold text-white transition hover:bg-brand-strong"
+            className="flex items-center gap-2 rounded-lg bg-brand px-4 py-2.5 font-semibold text-white transition hover:bg-brand-strong"
           >
             <Plus size={18} />
             Thêm khuyến mãi
@@ -421,36 +422,35 @@ export default function Promotions({ tabNavigation = null }) {
 
       {tabNavigation}
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         {stats.map((item) => {
           const Icon = item.icon;
 
           return (
-            <article key={item.label} className="rounded-lg border border-[#e1e5ea] bg-white p-5">
-              <div className="flex items-center gap-4">
-                <div className={`grid h-11 w-11 shrink-0 place-items-center rounded-lg ${item.tone}`}>
-                  <Icon size={20} />
-                </div>
-                <div className="flex flex-1 items-center justify-between gap-3">
-                  <p className="text-xs font-bold uppercase tracking-wide text-[#68707a]">{item.label}</p>
-                  <p className="text-2xl font-bold text-brand-deep">{item.value}</p>
-                </div>
+            <article key={item.label} className="flex min-w-0 items-center gap-3 border border-gray-200 bg-white p-4 shadow-sm">
+              <div className={`grid h-11 w-11 shrink-0 place-items-center ${item.tone}`}>
+                <Icon size={21} />
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-xs font-bold uppercase tracking-wide text-gray-500">{item.label}</p>
+                <p className="mt-1 text-2xl font-extrabold text-gray-950">{item.value}</p>
+                <p className="mt-0.5 truncate text-xs text-gray-500">Chương trình khuyến mãi</p>
               </div>
             </article>
           );
         })}
       </section>
 
-      <section className="rounded-lg border border-[#e1e5ea] bg-white p-5">
-        <div className="grid gap-4 lg:grid-cols-5">
-          <label className="lg:col-span-2">
+      <section className="border border-gray-200 bg-white p-4 shadow-sm [&_label>span:first-child]:sr-only">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(320px,1.45fr)_repeat(2,minmax(150px,0.9fr))_minmax(320px,1.15fr)_40px]">
+          <label className="md:col-span-2 xl:col-span-1">
             <span className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#68707a]">Tìm kiếm</span>
             <span className="relative block">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7a828c]" />
               <input
                 value={filters.search}
                 onChange={(event) => setFilters({ ...filters, search: event.target.value })}
-                className="h-10 w-full rounded-lg border border-[#d5dbe3] bg-white pl-10 pr-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft"
+                className="h-10 w-full border border-gray-300 bg-white pl-10 pr-3 text-sm outline-none focus:border-brand"
                 placeholder="Tìm theo mã hoặc tên khuyến mãi"
               />
             </span>
@@ -460,7 +460,7 @@ export default function Promotions({ tabNavigation = null }) {
             <select
               value={filters.status}
               onChange={(event) => setFilters({ ...filters, status: event.target.value })}
-              className="h-10 w-full rounded-lg border border-[#d5dbe3] bg-white px-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft"
+              className="h-10 w-full border border-gray-300 bg-white px-3 text-sm outline-none focus:border-brand"
             >
               {statusOptions.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -474,7 +474,7 @@ export default function Promotions({ tabNavigation = null }) {
             <select
               value={filters.discountType}
               onChange={(event) => setFilters({ ...filters, discountType: event.target.value })}
-              className="h-10 w-full rounded-lg border border-[#d5dbe3] bg-white px-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft"
+              className="h-10 w-full border border-gray-300 bg-white px-3 text-sm outline-none focus:border-brand"
             >
               {discountTypeOptions.map((option) => (
                 <option key={option.value} value={option.value}>
@@ -483,48 +483,40 @@ export default function Promotions({ tabNavigation = null }) {
               ))}
             </select>
           </label>
-          <div className="flex items-end gap-2">
-            <button
-              type="button"
-              className="h-10 flex-1 rounded-lg bg-brand px-3 text-sm font-semibold text-white transition hover:bg-brand-strong"
-            >
-              Lọc
-            </button>
-            <button
-              type="button"
-              onClick={resetFilters}
-              className="h-10 flex-1 rounded-lg border border-[#d5dbe3] bg-white px-3 text-sm font-semibold text-[#26313d] transition hover:bg-[#f5f9fc]"
-            >
-              Đặt lại
-            </button>
-          </div>
-        </div>
-        <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-          <label>
+          <label className="min-w-0">
             <span className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#68707a]">Khoảng thời gian</span>
             <span className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
               <input
                 type="date"
                 value={filters.startDate}
                 onChange={(event) => setFilters({ ...filters, startDate: event.target.value })}
-                className="h-10 rounded-lg border border-[#d5dbe3] px-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft"
+                className="h-10 min-w-0 border border-gray-300 px-3 text-sm outline-none focus:border-brand"
               />
               <span className="text-sm font-medium text-[#68707a]">đến</span>
               <input
                 type="date"
                 value={filters.endDate}
                 onChange={(event) => setFilters({ ...filters, endDate: event.target.value })}
-                className="h-10 rounded-lg border border-[#d5dbe3] px-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft"
+                className="h-10 min-w-0 border border-gray-300 px-3 text-sm outline-none focus:border-brand"
               />
             </span>
           </label>
+          <button
+            type="button"
+            onClick={resetFilters}
+            className="grid h-10 w-10 place-items-center border border-gray-300 bg-white text-gray-600 transition hover:bg-gray-50 hover:text-brand-strong"
+            title="Đặt lại bộ lọc"
+            aria-label="Đặt lại bộ lọc"
+          >
+            <RotateCcw size={18} />
+          </button>
         </div>
       </section>
 
-      <section className="overflow-hidden rounded-lg border border-[#e1e5ea] bg-white">
+      <section className="overflow-hidden border border-gray-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1120px] text-left text-sm">
-            <thead className="border-b border-[#e1e5ea] bg-[#f3f6f8] text-xs uppercase tracking-wide text-[#68707a]">
+            <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
               <tr>
                 <th className="px-5 py-3 font-bold">Mã KM</th>
                 <th className="px-5 py-3 font-bold">Tên khuyến mãi</th>
