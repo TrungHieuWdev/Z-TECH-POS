@@ -771,6 +771,16 @@ export default function POS() {
     setIsCustomerPickerOpen(false);
   };
 
+  const closeCustomerPicker = () => {
+    setIsCustomerPickerOpen(false);
+
+    if (!selectedCustomer) {
+      setUsedPoints(0);
+      setCustomerMode('regular');
+      setCustomerName('Khách thường');
+    }
+  };
+
   const openCustomerForm = () => {
     setCustomerForm(initialCustomerForm);
     setIsCustomerPickerOpen(false);
@@ -816,6 +826,12 @@ export default function POS() {
       return;
     }
 
+    if (customerMode === 'member' && !selectedCustomer) {
+      toast.error('Vui lòng chọn thông tin thành viên trước khi thanh toán');
+      setIsCustomerPickerOpen(true);
+      return;
+    }
+
     const latestBankTransfer = bankTransfer;
     if ((paymentMethod === 'transfer' || paymentMethod === 'qr') && !isBankTransferConfigured(latestBankTransfer)) {
       toast.error('Chưa cấu hình thông tin ngân hàng chuyển khoản');
@@ -856,6 +872,13 @@ export default function POS() {
   };
 
   const confirmCheckout = async () => {
+    if (customerMode === 'member' && !selectedCustomer) {
+      setIsConfirmOpen(false);
+      setIsCustomerPickerOpen(true);
+      toast.error('Vui lòng chọn thông tin thành viên trước khi thanh toán');
+      return;
+    }
+
     const receiptItems = buildReceiptItems(cart);
 
     setLoading(true);
@@ -1500,9 +1523,10 @@ export default function POS() {
 
     <Modal
       isOpen={isCustomerPickerOpen}
-      onClose={() => setIsCustomerPickerOpen(false)}
+      onClose={closeCustomerPicker}
       title="Chọn khách hàng"
       maxWidth="max-w-2xl"
+      hideClose
     >
       <div className="space-y-4">
         <div className="relative">
@@ -1552,7 +1576,7 @@ export default function POS() {
           </button>
           <button
             type="button"
-            onClick={() => setIsCustomerPickerOpen(false)}
+            onClick={closeCustomerPicker}
             className="rounded-lg border border-[#c3c6d7] px-4 py-2 font-semibold text-[#434655]"
           >
             Đóng

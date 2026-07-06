@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   AlertTriangle,
@@ -9,7 +10,6 @@ import {
   History,
   MoreHorizontal,
   PackageCheck,
-  PackagePlus,
   RotateCcw,
   Search,
   WalletCards,
@@ -20,13 +20,23 @@ import Modal from '../components/Modal';
 import { formatCurrency, formatDate } from '../utils/format';
 import { getUser, isFullAccessRole } from '../utils/auth';
 import InventoryTabs from '../components/inventory/InventoryTabs';
-import RestockSuggestionTab from '../components/inventory/restock/RestockSuggestionTab';
+import PurchaseReceivingTab from '../components/inventory/PurchaseReceivingTab';
 import useRestockSuggestions from '../hooks/useRestockSuggestions';
 
 const initialForm = { product_id: '', quantity: '', note: '' };
 const initialCurrentFilters = { category: '', model: '', stock: '', barcode: '' };
 const initialHistoryFilters = { transaction: '', employee: '', from: '', to: '' };
 const PAGE_SIZE = 10;
+const inventoryTabPaths = {
+  current: '/inventory',
+  receiving: '/inventory/purchase-orders',
+  history: '/inventory/history',
+  adjustment: '/inventory/adjustment'
+};
+
+function getInventoryTab(pathname) {
+  return Object.entries(inventoryTabPaths).find(([, path]) => path !== '/inventory' && pathname === path)?.[0] || 'current';
+}
 
 const stockState = (product) => {
   if (Number(product.is_active) === 0) return 'inactive';
@@ -102,6 +112,8 @@ function Pagination({ page, totalItems, onChange }) {
 }
 
 export default function Inventory() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const restockSuggestions = useRestockSuggestions();
   const hasFullAccess = isFullAccessRole(getUser()?.role);
   const [logs, setLogs] = useState([]);
@@ -109,11 +121,14 @@ export default function Inventory() {
   const [search, setSearch] = useState('');
   const [currentFilters, setCurrentFilters] = useState(initialCurrentFilters);
   const [historyFilters, setHistoryFilters] = useState(initialHistoryFilters);
-  const [activeTab, setActiveTab] = useState('current');
+  const activeTab = getInventoryTab(location.pathname);
   const [page, setPage] = useState(1);
   const [mode, setMode] = useState('in');
   const [isOpen, setIsOpen] = useState(false);
   const [form, setForm] = useState(initialForm);
+  const [suggestedItems, setSuggestedItems] = useState(() => (
+    location.state?.source === 'restock-suggestions' ? location.state.suggestedItems : null
+  ));
 
   async function loadData() {
     const [logsRes, productsRes] = await Promise.all([
@@ -127,6 +142,13 @@ export default function Inventory() {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (location.state?.source === 'restock-suggestions') {
+      setSuggestedItems(location.state.suggestedItems || null);
+      navigate('/inventory/purchase-orders', { replace: true });
+    }
+  }, [location.state, navigate]);
 
   const stats = useMemo(() => {
     const activeProducts = products.filter((product) => Number(product.is_active) !== 0);
@@ -249,6 +271,7 @@ export default function Inventory() {
   const searchPlaceholder = activeTab === 'current'
     ? 'Tìm theo tên sản phẩm, SKU, barcode hoặc danh mục'
     : 'Tìm theo sản phẩm, nhân viên hoặc ghi chú';
+  const isTableTab = activeTab === 'current' || activeTab === 'history';
 
   return (
     <div className="space-y-5">
@@ -257,24 +280,9 @@ export default function Inventory() {
           <h1 className="text-2xl font-extrabold text-gray-950">Kho hàng</h1>
           <p className="mt-1 text-sm font-medium text-gray-500">Theo dõi tồn kho, nhập thêm hàng và điều chỉnh số lượng sản phẩm khi cần.</p>
         </div>
-        {hasFullAccess && (
-          <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={() => openModal('in')} className="flex items-center gap-2 bg-[#69afd6] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#579fc8]">
-              <PackagePlus size={17} /> Nhập kho
-            </button>
-            <button type="button" onClick={() => openModal('adjust')} className="flex items-center gap-2 border border-[#9fd4ed] bg-white px-4 py-2.5 text-sm font-semibold text-[#398fbd] hover:bg-sky-50">
-              <RotateCcw size={17} /> Điều chỉnh kho
-            </button>
-            <button type="button" onClick={() => openModal('count')} className="flex items-center gap-2 border border-[#9fd4ed] bg-white px-4 py-2.5 text-sm font-semibold text-[#398fbd] hover:bg-sky-50">
-              <ClipboardCheck size={17} /> Kiểm kê
-            </button>
-          </div>
-        )}
       </header>
 
-      {activeTab === 'restock' ? (
-        null
-      ) : (
+      {activeTab === 'current' && (
         <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
           <SummaryCard icon={Boxes} label="Tổng sản phẩm" value={stats.products.toLocaleString('vi-VN')} note="Tất cả sản phẩm trong kho" />
           <SummaryCard icon={PackageCheck} label="Tổng số lượng tồn" value={stats.quantity.toLocaleString('vi-VN')} note="Đơn vị sản phẩm" iconColor="#1687a7" iconBackground="#e9f8fb" />
@@ -286,16 +294,42 @@ export default function Inventory() {
 
       <section className="border border-gray-200 bg-white shadow-sm">
         <div
-          className={`items-center gap-5 border-b border-gray-200 px-4 ${activeTab === 'restock' ? 'flex min-h-12 justify-end py-0' : 'grid py-4'}`}
-          style={activeTab === 'restock' ? undefined : { gridTemplateColumns: 'minmax(420px, 1fr) auto' }}
+          className={`items-center gap-5 border-b border-gray-200 px-4 ${isTableTab ? 'grid py-4' : 'flex min-h-12 justify-end py-0'}`}
+          style={isTableTab ? { gridTemplateColumns: 'minmax(420px, 1fr) auto' } : undefined}
         >
-          {activeTab !== 'restock' && <div className="flex min-w-0 items-center gap-2 border border-gray-300 px-3 py-2.5 focus-within:border-[#69afd6]">
+          {isTableTab && <div className="flex min-w-0 items-center gap-2 border border-gray-300 px-3 py-2.5 focus-within:border-[#69afd6]">
             <Search size={18} className="shrink-0 text-[#499bc6]" />
             <input value={search} onChange={(event) => setSearch(event.target.value)} className="w-full min-w-0 text-sm outline-none" placeholder={searchPlaceholder} />
           </div>}
-          <InventoryTabs value={activeTab} onChange={(tab) => { setActiveTab(tab); setSearch(''); }}/>
+          <InventoryTabs value={activeTab} onChange={(tab) => { navigate(inventoryTabPaths[tab]); setSearch(''); }}/>
         </div>
-        {activeTab === 'restock' ? <RestockSuggestionTab analysis={restockSuggestions}/> : <><div className="border-b border-gray-200 bg-gray-50/60 px-4 py-3">
+        {activeTab === 'receiving' ? (
+          <div className="bg-gray-50/40 p-4">
+            <PurchaseReceivingTab restockSuggestions={restockSuggestions} suggestedItems={suggestedItems} canManage={hasFullAccess} onCreated={loadData} onSuggestedItemsConsumed={() => setSuggestedItems(null)} />
+          </div>
+        ) : activeTab === 'adjustment' ? (
+          hasFullAccess ? (
+            <div className="grid gap-4 bg-gray-50/40 p-4 lg:grid-cols-3">
+              <button type="button" onClick={() => openModal('count')} className="border border-gray-200 bg-white p-5 text-left shadow-sm hover:border-sky-300 hover:bg-sky-50">
+                <ClipboardCheck className="text-sky-700" size={24} />
+                <h2 className="mt-4 text-lg font-extrabold text-gray-950">Kiểm kê kho</h2>
+                <p className="mt-1 text-sm text-gray-500">Ghi nhận số lượng thực tế sau khi kiểm đếm sản phẩm.</p>
+              </button>
+              <button type="button" onClick={() => openModal('adjust')} className="border border-gray-200 bg-white p-5 text-left shadow-sm hover:border-sky-300 hover:bg-sky-50">
+                <RotateCcw className="text-sky-700" size={24} />
+                <h2 className="mt-4 text-lg font-extrabold text-gray-950">Điều chỉnh thủ công</h2>
+                <p className="mt-1 text-sm text-gray-500">Cập nhật tồn mới khi có chênh lệch, hư hỏng hoặc cần hiệu chỉnh số liệu.</p>
+              </button>
+              <button type="button" onClick={() => openModal('adjust')} className="border border-gray-200 bg-white p-5 text-left shadow-sm hover:border-sky-300 hover:bg-sky-50">
+                <PackageCheck className="text-sky-700" size={24} />
+                <h2 className="mt-4 text-lg font-extrabold text-gray-950">Xuất hàng / Trả hàng</h2>
+                <p className="mt-1 text-sm text-gray-500">Ghi giảm tồn bằng phiếu điều chỉnh kèm ghi chú rõ lý do xuất hoặc trả.</p>
+              </button>
+            </div>
+          ) : (
+            <div className="bg-gray-50/40 p-4 text-sm text-gray-500">Tài khoản hiện tại chỉ có quyền xem kho.</div>
+          )
+        ) : <><div className="border-b border-gray-200 bg-gray-50/60 px-4 py-3">
           {activeTab === 'current' ? (
             <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
               <select value={currentFilters.category} onChange={(event) => setCurrentFilters({ ...currentFilters, category: event.target.value })} className="h-10 border border-gray-300 bg-white px-3 text-sm text-gray-700 outline-none focus:border-[#69afd6]">

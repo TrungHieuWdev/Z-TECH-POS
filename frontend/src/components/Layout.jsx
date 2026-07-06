@@ -48,6 +48,10 @@ export default function Layout() {
     year: 'numeric',
   }).format(currentTime);
   const isPosPage = location.pathname === '/pos';
+  const roleKey = String(user?.role || '').toLowerCase();
+  const isStoreLeader = ['owner', 'admin', 'manager'].includes(roleKey);
+  const roleLabel = getRoleLabel(user?.role);
+  const accountLabel = isStoreLeader ? roleLabel : (user?.name || 'Admin');
 
   return (
     <div className="min-h-screen bg-[#f8f9fa] font-sans text-[#191c1d]">
@@ -92,11 +96,11 @@ export default function Layout() {
             </button>
             <div className="flex items-center gap-2">
               <div className="hidden text-right sm:block">
-                <p className="text-xs font-semibold leading-none text-[#191c1d]">{user?.name || 'Admin'}</p>
-                <p className="mt-1 text-[10px] font-medium text-[#73777d]">{getRoleLabel(user?.role)}</p>
+                <p className="text-xs font-semibold leading-none text-[#191c1d]">{accountLabel}</p>
+                {!isStoreLeader && <p className="mt-1 text-[10px] font-medium text-[#73777d]">{roleLabel}</p>}
               </div>
               <div className="grid h-9 w-9 place-items-center rounded-full bg-brand-soft text-sm font-bold text-brand-ink ring-2 ring-white">
-                {(user?.name || 'Admin').slice(0, 1).toUpperCase()}
+                {accountLabel.slice(0, 1).toUpperCase()}
               </div>
             </div>
           </div>

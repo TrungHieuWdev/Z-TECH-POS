@@ -218,7 +218,7 @@ function getWarrantyBadgeClass(product) {
   return 'bg-emerald-100 text-emerald-700';
 }
 
-export default function Products() {
+export default function Products({ tabNavigation = null }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const hasFullAccess = isFullAccessRole(getUser()?.role);
   const lowStockOnly = searchParams.get('lowStock') === '1';
@@ -624,6 +624,8 @@ export default function Products() {
           </button>
         </div>
       </div>
+
+      {tabNavigation}
 
       <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         {[

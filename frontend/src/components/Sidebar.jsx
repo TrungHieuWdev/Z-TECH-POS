@@ -5,7 +5,6 @@ import {
   ContactRound,
   Boxes,
   BrainCircuit,
-  CalendarClock,
   ChartNoAxesCombined,
   History,
   LayoutDashboard,
@@ -34,10 +33,7 @@ const primaryItems = [
 const extraItems = [
   { to: '/categories', label: 'Danh mục', icon: Tags },
   { to: '/suppliers', label: 'Nhà cung cấp', icon: Truck },
-  { to: '/purchase-orders', label: 'Nhập hàng', icon: Boxes },
   { to: '/employees', label: 'Nhân viên', icon: ContactRound },
-  { to: '/shifts', label: 'Ca làm', icon: CalendarClock },
-  { to: '/promotions', label: 'Khuyến mãi', icon: Tags },
   { to: '/warranties', label: 'Bảo hành', icon: BadgeCheck },
   { to: '/activity-logs', label: 'Nhật ký hoạt động', icon: History },
   { to: '/settings', label: 'Cài đặt', icon: Settings },

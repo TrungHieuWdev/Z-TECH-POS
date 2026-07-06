@@ -1,14 +1,15 @@
-import { Boxes, History, ShoppingCart } from 'lucide-react';
+import { Boxes, ClipboardCheck, History, PackagePlus } from 'lucide-react';
 
 const tabs = [
-  { value: 'current', label: 'Tồn kho hiện tại', icon: Boxes },
-  { value: 'restock', label: 'AI gợi ý nhập hàng', icon: ShoppingCart },
-  { value: 'history', label: 'Lịch sử kho', icon: History }
+  { value: 'current', label: 'Tồn kho', icon: Boxes },
+  { value: 'receiving', label: 'Nhập hàng', icon: PackagePlus },
+  { value: 'history', label: 'Biến động kho', icon: History },
+  { value: 'adjustment', label: 'Điều chỉnh & Kiểm kê', icon: ClipboardCheck }
 ];
 
 export default function InventoryTabs({ value, onChange }) {
   return (
-    <div className="flex shrink-0 justify-end whitespace-nowrap">
+    <div className="flex shrink-0 justify-end overflow-x-auto whitespace-nowrap">
       {tabs.map(({ value: tab, label, icon: Icon }) => (
         <button
           key={tab}

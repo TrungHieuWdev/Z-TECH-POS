@@ -6,7 +6,7 @@ import InventorySettings from './InventorySettings';
 import PaymentSettings from './PaymentSettings';
 import PrintSettings from './PrintSettings';
 import ShopInfoSettings from './ShopInfoSettings';
-import { useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 const tabIcons = {
   shop: Store,
@@ -17,7 +17,10 @@ const tabIcons = {
 };
 
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState(SETTINGS_TABS[0].id);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const pathTab = location.pathname.split('/')[2];
+  const activeTab = SETTINGS_TABS.some((tab) => tab.id === pathTab) ? pathTab : SETTINGS_TABS[0].id;
   const { settings, isLoading, savingKey, saveSection, saveLogo } = useSettings();
 
   const renderContent = () => {
@@ -58,7 +61,7 @@ export default function SettingsPage() {
                 <button
                   key={tab.id}
                   type="button"
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={() => navigate(tab.id === SETTINGS_TABS[0].id ? '/settings' : `/settings/${tab.id}`)}
                   className={`flex min-h-11 w-full items-center gap-3 px-3 text-left text-sm font-bold transition ${
                     isActive ? 'bg-brand text-white' : 'text-[#34424d] hover:bg-brand-surface hover:text-brand-strong'
                   }`}

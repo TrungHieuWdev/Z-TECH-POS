@@ -162,10 +162,20 @@ function getAttentionMeta(product, dateFrom, dateTo) {
   const days = Math.max(Math.round((end - start) / 86400000) + 1, 1);
   const dailySales = sold / days;
 
-  if (stock <= minimum) return { speed: dailySales >= 1 ? 'Cao' : 'Trung bình', label: 'Nên nhập thêm', tone: 'bg-emerald-50 text-emerald-700' };
-  if (stock <= minimum * 1.5) return { speed: dailySales >= 1 ? 'Cao' : 'Trung bình', label: 'Sắp hết', tone: 'bg-orange-50 text-orange-700' };
-  if (dailySales < 0.2) return { speed: 'Thấp', label: 'Tồn chậm', tone: 'bg-sky-50 text-sky-700' };
-  return { speed: dailySales >= 1 ? 'Cao' : 'Trung bình', label: 'Theo dõi', tone: 'bg-gray-100 text-gray-700' };
+  const daysRemaining = dailySales > 0 ? Math.ceil(stock / dailySales) : null;
+
+  if (stock <= minimum || (daysRemaining !== null && daysRemaining <= 7)) {
+    let reason = 'Tồn kho đã chạm mức tối thiểu';
+    if (dailySales >= 1 && stock <= minimum) reason = 'Bán chạy nhưng tồn kho thấp';
+    else if (daysRemaining !== null) reason = `Sắp hết hàng trong khoảng ${daysRemaining} ngày`;
+    return { key: 'urgent', group: 'Cần nhập gấp', reason, action: 'Nhập ngay', priority: 0, tone: 'bg-red-50 text-red-700 ring-red-200', rowTone: 'bg-red-50/30' };
+  }
+
+  if (stock > minimum * 2 && dailySales < 0.2) {
+    return { key: 'slow', group: 'Bán chậm cần theo dõi', reason: `Tồn kho cao nhưng chỉ bán ${sold} sản phẩm trong kỳ`, action: 'Giảm giá', priority: 1, tone: 'bg-orange-50 text-orange-700 ring-orange-200', rowTone: 'bg-orange-50/30' };
+  }
+
+  return { key: 'normal', group: 'Bình thường', reason: 'Tồn kho và tốc độ bán đang ổn định', action: 'Theo dõi', priority: 2, tone: 'bg-emerald-50 text-emerald-700 ring-emerald-200', rowTone: 'bg-emerald-50/20' };
 }
 
 function getPaginationItems(currentPage, totalPages) {
@@ -568,29 +578,39 @@ export default function Reports() {
             <h2 className="text-sm font-bold text-gray-950">Sản phẩm cần chú ý</h2>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[520px] text-left text-xs">
+            <table className="w-full min-w-[720px] table-fixed text-left text-xs">
+              <colgroup>
+                <col className="w-[25%]" />
+                <col className="w-[8%]" />
+                <col className="w-[9%]" />
+                <col className="w-[18%]" />
+                <col className="w-[25%]" />
+                <col className="w-[15%]" />
+              </colgroup>
               <thead className="bg-[#f8fdfe] text-gray-500">
                 <tr>
                   <th className="px-3 py-2.5 font-bold">Sản phẩm</th>
                   <th className="px-3 py-2.5 text-right font-bold">Đã bán</th>
                   <th className="px-3 py-2.5 text-right font-bold">Tồn kho</th>
-                  <th className="px-3 py-2.5 text-center font-bold">Bán chạy</th>
-                  <th className="px-3 py-2.5 text-center font-bold">Gợi ý</th>
+                  <th className="px-3 py-2.5 font-bold">Phân loại</th>
+                  <th className="px-3 py-2.5 font-bold">Lý do</th>
+                  <th className="px-3 py-2.5 text-center font-bold">Hành động đề xuất</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#edf7f9]">
-                {(report.attentionProducts || []).map((product) => {
-                  const meta = getAttentionMeta(product, dateFrom, dateTo);
-                  return (
+                {(report.attentionProducts || [])
+                  .map((product) => ({ product, meta: getAttentionMeta(product, dateFrom, dateTo) }))
+                  .sort((a, b) => a.meta.priority - b.meta.priority)
+                  .map(({ product, meta }) => (
                     <tr key={product.product_id} className="hover:bg-[#f8fdfe]">
-                      <td className="max-w-[210px] px-3 py-2 font-semibold text-gray-950"><p className="truncate">{product.name}</p></td>
-                      <td className="px-3 py-2 text-right font-semibold">{Number(product.sold_quantity || 0).toLocaleString('vi-VN')}</td>
-                      <td className={`px-3 py-2 text-right font-bold ${Number(product.stock_quantity) <= Number(product.min_stock) ? 'text-red-600' : 'text-emerald-600'}`}>{Number(product.stock_quantity || 0).toLocaleString('vi-VN')}</td>
-                      <td className="px-3 py-2 text-center text-gray-600">{meta.speed}</td>
-                      <td className="px-3 py-2 text-center"><span className={`inline-flex whitespace-nowrap rounded px-2 py-1 font-bold ${meta.tone}`}>{meta.label}</span></td>
+                      <td className="px-3 py-2.5 font-semibold text-gray-950"><p className="truncate" title={product.name}>{product.name}</p></td>
+                      <td className="px-2 py-2.5 text-right font-semibold">{Number(product.sold_quantity || 0).toLocaleString('vi-VN')}</td>
+                      <td className={`px-2 py-2.5 text-right font-bold ${meta.key === 'urgent' ? 'text-red-600' : 'text-emerald-600'}`}>{Number(product.stock_quantity || 0).toLocaleString('vi-VN')}</td>
+                      <td className="px-3 py-2.5"><span className={`inline-flex max-w-full rounded px-2 py-1 text-center font-bold leading-4 ring-1 ring-inset ${meta.tone}`}>{meta.group}</span></td>
+                      <td className="px-3 py-2.5 leading-5 text-gray-600">{meta.reason}</td>
+                      <td className="px-3 py-2.5 text-center"><span className={`inline-flex whitespace-nowrap rounded px-2 py-1 font-bold ring-1 ring-inset ${meta.tone}`}>{meta.action}</span></td>
                     </tr>
-                  );
-                })}
+                  ))}
               </tbody>
             </table>
           </div>

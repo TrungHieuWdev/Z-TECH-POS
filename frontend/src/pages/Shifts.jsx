@@ -208,7 +208,7 @@ function getShiftStats(shifts) {
   };
 }
 
-export default function Shifts() {
+export default function Shifts({ embedded = false }) {
   const user = getUser();
   const hasFullAccess = isFullAccessRole(user?.role);
   const currentEmployeeName = user?.name || 'Nhân viên';
@@ -405,14 +405,14 @@ export default function Shifts() {
 
   return (
     <div className="space-y-6">
-      <section>
+      {!embedded && <section>
         <div>
           <h1 className="text-2xl font-extrabold text-gray-950">Quản lý ca làm</h1>
           <p className="mt-1 text-sm font-medium text-gray-500">
             Sắp xếp lịch làm việc, phân công nhân viên và theo dõi trạng thái từng ca bán hàng.
           </p>
         </div>
-      </section>
+      </section>}
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <div className="flex items-center gap-4 rounded-lg border border-[#d7eef3] bg-white p-5 shadow-sm">

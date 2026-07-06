@@ -9,7 +9,7 @@ const Login = lazy(() => import('./pages/Login'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const StaffDashboard = lazy(() => import('./pages/StaffDashboard'));
 const POS = lazy(() => import('./pages/POS'));
-const Products = lazy(() => import('./pages/Products'));
+const ProductManagement = lazy(() => import('./pages/ProductManagement'));
 const Categories = lazy(() => import('./pages/Categories'));
 const Customers = lazy(() => import('./pages/Customers'));
 const Orders = lazy(() => import('./pages/Orders'));
@@ -18,7 +18,6 @@ const Suppliers = lazy(() => import('./pages/Suppliers'));
 const PurchaseOrders = lazy(() => import('./pages/PurchaseOrders'));
 const Employees = lazy(() => import('./pages/Employees'));
 const Shifts = lazy(() => import('./pages/Shifts'));
-const Promotions = lazy(() => import('./pages/Promotions'));
 const Reports = lazy(() => import('./pages/Reports'));
 const ActivityLogs = lazy(() => import('./pages/ActivityLogs'));
 const Warranty = lazy(() => import('./pages/Warranty'));
@@ -64,20 +63,20 @@ export default function App() {
             <Route element={<PermissionRoute />}>
             <Route path="/" element={<HomePage />} />
             <Route path="/pos" element={<POS />} />
-            <Route path="/products" element={<Products />} />
+            <Route path="/products/*" element={<ProductManagement />} />
             <Route path="/categories" element={<Categories />} />
             <Route path="/customers" element={<Customers />} />
             <Route path="/suppliers" element={<Suppliers />} />
             <Route path="/purchase-orders" element={<PurchaseOrders />} />
-            <Route path="/employees" element={<Employees />} />
-            <Route path="/shifts" element={<Shifts />} />
-            <Route path="/promotions" element={<Promotions />} />
+            <Route path="/employees/*" element={<Employees />} />
+            <Route path="/shifts" element={<Navigate to="/employees/shifts" replace />} />
+            <Route path="/promotions" element={<Navigate to="/products/promotions" replace />} />
             <Route path="/orders" element={<Orders />} />
             <Route path="/warranties" element={<Warranty />} />
-            <Route path="/inventory" element={<Inventory />} />
+            <Route path="/inventory/*" element={<Inventory />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/activity-logs" element={<ActivityLogs />} />
-            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/settings/*" element={<SettingsPage />} />
             </Route>
           </Route>
         </Route>

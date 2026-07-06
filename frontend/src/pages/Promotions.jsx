@@ -209,7 +209,7 @@ function SearchableProductSelect({ products, value, onChange, placeholder }) {
   </div>;
 }
 
-export default function Promotions() {
+export default function Promotions({ tabNavigation = null }) {
   const hasFullAccess = isFullAccessRole(getUser()?.role);
   const [promotions, setPromotions] = useState(initialPromotions);
   const [filters, setFilters] = useState({
@@ -418,6 +418,8 @@ export default function Promotions() {
           </button>
         </div>
       </div>
+
+      {tabNavigation}
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {stats.map((item) => {

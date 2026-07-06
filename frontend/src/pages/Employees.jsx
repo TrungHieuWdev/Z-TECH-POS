@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   AlertTriangle,
@@ -28,6 +29,7 @@ import {
 } from 'lucide-react';
 import api from '../api/axios';
 import Modal from '../components/Modal';
+import Shifts from './Shifts';
 
 const roleOptions = [
   { value: 'all', label: 'Tất cả vai trò' },
@@ -154,9 +156,12 @@ function maskPassword() {
 }
 
 export default function Employees() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const employeeTab = location.pathname.endsWith('/revenue') ? 'revenue' : location.pathname.endsWith('/shifts') ? 'shifts' : 'accounts';
   const [employees, setEmployees] = useState([]);
   const [loadingPage, setLoadingPage] = useState(true);
-  const [activeTab, setActiveTab] = useState('accounts');
+  const activeTab = employeeTab;
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -437,12 +442,13 @@ export default function Employees() {
         <div className="flex gap-7">
           {[
             ['accounts', 'Tài khoản nhân viên'],
-            ['revenue', 'Doanh thu nhân viên']
+            ['revenue', 'Doanh thu nhân viên'],
+            ['shifts', 'Ca làm']
           ].map(([key, label]) => (
             <button
               key={key}
               type="button"
-              onClick={() => setActiveTab(key)}
+              onClick={() => navigate(key === 'accounts' ? '/employees' : `/employees/${key}`)}
               className={`border-b-2 px-0 py-3 text-sm font-bold transition ${activeTab === key ? 'border-sky-600 text-sky-700' : 'border-transparent text-gray-400 hover:text-gray-700'}`}
             >
               {label}
@@ -823,6 +829,8 @@ export default function Employees() {
           </div>
         </div>
       )}
+
+      {activeTab === 'shifts' && <Shifts embedded />}
 
       <Modal isOpen={isFormOpen} onClose={closeForm} title={editingEmployee ? 'Sửa nhân viên' : 'Thêm nhân viên'}>
         <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2">
