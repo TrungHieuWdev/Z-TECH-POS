@@ -9,7 +9,7 @@ const tabs = [
 
 export default function InventoryTabs({ value, onChange }) {
   return (
-    <div className="flex shrink-0 justify-end overflow-x-auto whitespace-nowrap">
+    <div className="flex shrink-0 justify-start overflow-x-auto whitespace-nowrap">
       {tabs.map(({ value: tab, label, icon: Icon }) => (
         <button
           key={tab}

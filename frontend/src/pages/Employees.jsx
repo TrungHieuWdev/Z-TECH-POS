@@ -438,7 +438,7 @@ export default function Employees() {
         </button>}
       </div>
 
-      <div className="border-b border-slate-200">
+      <div>
         <div className="flex gap-7">
           {[
             ['accounts', 'Tài khoản nhân viên'],

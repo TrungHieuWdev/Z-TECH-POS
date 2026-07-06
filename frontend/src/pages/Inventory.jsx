@@ -271,7 +271,6 @@ export default function Inventory() {
   const searchPlaceholder = activeTab === 'current'
     ? 'Tìm theo tên sản phẩm, SKU, barcode hoặc danh mục'
     : 'Tìm theo sản phẩm, nhân viên hoặc ghi chú';
-  const isTableTab = activeTab === 'current' || activeTab === 'history';
 
   return (
     <div className="space-y-5">
@@ -281,6 +280,8 @@ export default function Inventory() {
           <p className="mt-1 text-sm font-medium text-gray-500">Theo dõi tồn kho, nhập thêm hàng và điều chỉnh số lượng sản phẩm khi cần.</p>
         </div>
       </header>
+
+      <InventoryTabs value={activeTab} onChange={(tab) => { navigate(inventoryTabPaths[tab]); setSearch(''); }}/>
 
       {activeTab === 'current' && (
         <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
@@ -293,16 +294,30 @@ export default function Inventory() {
       )}
 
       <section className="border border-gray-200 bg-white shadow-sm">
-        <div
-          className={`items-center gap-5 border-b border-gray-200 px-4 ${isTableTab ? 'grid py-4' : 'flex min-h-12 justify-end py-0'}`}
-          style={isTableTab ? { gridTemplateColumns: 'minmax(420px, 1fr) auto' } : undefined}
-        >
-          {isTableTab && <div className="flex min-w-0 items-center gap-2 border border-gray-300 px-3 py-2.5 focus-within:border-[#69afd6]">
+        {activeTab === 'current' && <div className="grid gap-2 border-b border-gray-200 bg-gray-50/60 p-4 md:grid-cols-2 xl:grid-cols-[minmax(300px,1.6fr)_repeat(4,minmax(150px,1fr))]">
+          <div className="flex min-w-0 items-center gap-2 border border-gray-300 bg-white px-3 focus-within:border-[#69afd6]">
             <Search size={18} className="shrink-0 text-[#499bc6]" />
             <input value={search} onChange={(event) => setSearch(event.target.value)} className="w-full min-w-0 text-sm outline-none" placeholder={searchPlaceholder} />
-          </div>}
-          <InventoryTabs value={activeTab} onChange={(tab) => { navigate(inventoryTabPaths[tab]); setSearch(''); }}/>
-        </div>
+          </div>
+          <select value={currentFilters.category} onChange={(event) => setCurrentFilters({ ...currentFilters, category: event.target.value })} className="h-10 min-w-0 border border-gray-300 bg-white px-3 text-sm text-gray-700 outline-none focus:border-[#69afd6]">
+            <option value="">Tất cả danh mục</option>
+            {filterOptions.categories.map((category) => <option key={category} value={category}>{category}</option>)}
+          </select>
+          <select value={currentFilters.model} onChange={(event) => setCurrentFilters({ ...currentFilters, model: event.target.value })} className="h-10 min-w-0 border border-gray-300 bg-white px-3 text-sm text-gray-700 outline-none focus:border-[#69afd6]">
+            <option value="">Tất cả dòng máy / Model</option>
+            {filterOptions.models.map((model) => <option key={model} value={model}>{model}</option>)}
+          </select>
+          <select value={currentFilters.stock} onChange={(event) => setCurrentFilters({ ...currentFilters, stock: event.target.value })} className="h-10 min-w-0 border border-gray-300 bg-white px-3 text-sm text-gray-700 outline-none focus:border-[#69afd6]">
+            <option value="">Tất cả trạng thái tồn</option><option value="available">Còn hàng</option><option value="low">Sắp hết hàng</option><option value="out">Hết hàng</option><option value="inactive">Ngừng kinh doanh</option>
+          </select>
+          <select value={currentFilters.barcode} onChange={(event) => setCurrentFilters({ ...currentFilters, barcode: event.target.value })} className="h-10 min-w-0 border border-gray-300 bg-white px-3 text-sm text-gray-700 outline-none focus:border-[#69afd6]">
+            <option value="">Tất cả mã vạch</option><option value="yes">Có mã vạch</option><option value="no">Chưa có mã vạch</option>
+          </select>
+        </div>}
+        {activeTab === 'history' && <div className="border-b border-gray-200 p-4"><div className="flex min-w-0 items-center gap-2 border border-gray-300 px-3 py-2.5 focus-within:border-[#69afd6]">
+          <Search size={18} className="shrink-0 text-[#499bc6]" />
+          <input value={search} onChange={(event) => setSearch(event.target.value)} className="w-full min-w-0 text-sm outline-none" placeholder={searchPlaceholder} />
+        </div></div>}
         {activeTab === 'receiving' ? (
           <div className="bg-gray-50/40 p-4">
             <PurchaseReceivingTab restockSuggestions={restockSuggestions} suggestedItems={suggestedItems} canManage={hasFullAccess} onCreated={loadData} onSuggestedItemsConsumed={() => setSuggestedItems(null)} />
@@ -329,31 +344,7 @@ export default function Inventory() {
           ) : (
             <div className="bg-gray-50/40 p-4 text-sm text-gray-500">Tài khoản hiện tại chỉ có quyền xem kho.</div>
           )
-        ) : <><div className="border-b border-gray-200 bg-gray-50/60 px-4 py-3">
-          {activeTab === 'current' ? (
-            <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
-              <select value={currentFilters.category} onChange={(event) => setCurrentFilters({ ...currentFilters, category: event.target.value })} className="h-10 border border-gray-300 bg-white px-3 text-sm text-gray-700 outline-none focus:border-[#69afd6]">
-                <option value="">Tất cả danh mục</option>
-                {filterOptions.categories.map((category) => <option key={category} value={category}>{category}</option>)}
-              </select>
-              <select value={currentFilters.model} onChange={(event) => setCurrentFilters({ ...currentFilters, model: event.target.value })} className="h-10 border border-gray-300 bg-white px-3 text-sm text-gray-700 outline-none focus:border-[#69afd6]">
-                <option value="">Tất cả dòng máy / Model</option>
-                {filterOptions.models.map((model) => <option key={model} value={model}>{model}</option>)}
-              </select>
-              <select value={currentFilters.stock} onChange={(event) => setCurrentFilters({ ...currentFilters, stock: event.target.value })} className="h-10 border border-gray-300 bg-white px-3 text-sm text-gray-700 outline-none focus:border-[#69afd6]">
-                <option value="">Tất cả trạng thái tồn</option>
-                <option value="available">Còn hàng</option>
-                <option value="low">Sắp hết hàng</option>
-                <option value="out">Hết hàng</option>
-                <option value="inactive">Ngừng kinh doanh</option>
-              </select>
-              <select value={currentFilters.barcode} onChange={(event) => setCurrentFilters({ ...currentFilters, barcode: event.target.value })} className="h-10 border border-gray-300 bg-white px-3 text-sm text-gray-700 outline-none focus:border-[#69afd6]">
-                <option value="">Tất cả mã vạch</option>
-                <option value="yes">Có mã vạch</option>
-                <option value="no">Chưa có mã vạch</option>
-              </select>
-            </div>
-          ) : (
+        ) : <>{activeTab === 'history' && <div className="border-b border-gray-200 bg-gray-50/60 px-4 py-3">
             <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
               <select value={historyFilters.transaction} onChange={(event) => setHistoryFilters({ ...historyFilters, transaction: event.target.value })} className="h-10 border border-gray-300 bg-white px-3 text-sm text-gray-700 outline-none focus:border-[#69afd6]">
                 <option value="">Tất cả hoạt động</option>
@@ -375,8 +366,7 @@ export default function Inventory() {
                 <input type="date" value={historyFilters.to} min={historyFilters.from || undefined} onChange={(event) => setHistoryFilters({ ...historyFilters, to: event.target.value })} className="min-w-0 flex-1 bg-transparent text-sm text-gray-700 outline-none" />
               </label>
             </div>
-          )}
-        </div>
+        </div>}
 
         <div className="overflow-x-auto">
           {activeTab === 'current' ? (
