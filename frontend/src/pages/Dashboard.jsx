@@ -649,7 +649,7 @@ export default function Dashboard() {
         </article>
 
         <article className="min-h-[220px] rounded-lg border border-[#e1e3e4] bg-white p-3 shadow-[0_1px_3px_rgba(25,28,29,0.08)]">
-          <div className="mb-2 flex items-center justify-between gap-4 border-b border-[#e1e3e4] pb-2">
+          <div className="mb-2 flex items-center justify-between gap-4">
             <h2 className="text-sm font-bold leading-5 text-[#191c1d]">Đơn hàng gần đây</h2>
             <Link
               to="/orders"
