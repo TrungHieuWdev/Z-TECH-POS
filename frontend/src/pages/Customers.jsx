@@ -224,13 +224,12 @@ export default function Customers() {
         <Pagination page={page} totalItems={filteredCustomers.length} onChange={setPage} />
       </section>
 
-      <Modal isOpen={isOpen} onClose={closeModal} title={editingCustomer ? 'Chỉnh sửa khách hàng' : 'Thêm khách hàng'}>
-        <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2">
+      <Modal isOpen={isOpen} onClose={closeModal} title={editingCustomer ? 'Chỉnh sửa khách hàng' : 'Thêm khách hàng'} headerActions={<><button type="button" onClick={closeModal} className="h-11 border border-[#69afd6] bg-white px-5 text-base font-bold text-[#398fbd] hover:bg-sky-50">Hủy</button><button type="submit" form="customer-form" className="h-11 bg-[#69afd6] px-5 text-base font-bold text-white hover:bg-[#579fc8]">Lưu</button></>}>
+        <form id="customer-form" onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2">
           <label className="md:col-span-2"><span className="mb-1 block text-sm font-medium text-gray-700">Tên khách hàng</span><input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} className="w-full border border-gray-300 px-3 py-2 outline-none focus:border-[#69afd6]" maxLength={100} required /></label>
           <label><span className="mb-1 block text-sm font-medium text-gray-700">Số điện thoại</span><input value={form.phone} onChange={(event) => setForm({ ...form, phone: normalizePhone(event.target.value) })} className="w-full border border-gray-300 px-3 py-2 outline-none focus:border-[#69afd6]" inputMode="numeric" maxLength={10} required /></label>
           <label><span className="mb-1 block text-sm font-medium text-gray-700">Email</span><input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} className="w-full border border-gray-300 px-3 py-2 outline-none focus:border-[#69afd6]" /></label>
           <label className="md:col-span-2"><span className="mb-1 block text-sm font-medium text-gray-700">Địa chỉ</span><textarea value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })} className="min-h-24 w-full border border-gray-300 px-3 py-2 outline-none focus:border-[#69afd6]" /></label>
-          <div className="flex justify-end gap-3 md:col-span-2"><button type="button" onClick={closeModal} className="border border-gray-300 px-4 py-2 font-medium">Hủy</button><button type="submit" className="bg-[#69afd6] px-4 py-2 font-semibold text-white">Lưu</button></div>
         </form>
       </Modal>
 

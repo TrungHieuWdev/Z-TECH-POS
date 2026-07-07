@@ -12,10 +12,11 @@ import {
   RotateCcw,
   Search,
   TicketPercent,
+  Trash2,
   X
 } from 'lucide-react';
 import { formatCurrency } from '../utils/format';
-import { getPromotions, savePromotion } from '../services/promotionService';
+import { deletePromotion, getPromotions, savePromotion } from '../services/promotionService';
 import api from '../api/axios';
 import { getUser, isFullAccessRole } from '../utils/auth';
 import Modal from '../components/Modal';
@@ -171,7 +172,15 @@ function getPromotionTypeLabel(promotion) {
 
 function getPromotionStatus(promotion) {
   if (!promotion.enabled) return 'ended';
-  return promotion.status;
+  const today = new Date().toISOString().slice(0, 10);
+  if (promotion.endDate && promotion.endDate < today) return 'ended';
+  if (promotion.startDate && promotion.startDate > today) return 'active';
+  const endDate = promotion.endDate ? new Date(promotion.endDate) : null;
+  if (endDate) {
+    const daysLeft = Math.ceil((endDate - new Date(today)) / 86400000);
+    if (daysLeft >= 0 && daysLeft <= 3) return 'ending';
+  }
+  return 'active';
 }
 
 function SearchableProductSelect({ products, value, onChange, placeholder }) {
@@ -328,6 +337,12 @@ export default function Promotions({ tabNavigation = null }) {
     if (!target) return;
     const saved = await savePromotion({ ...target, enabled: !target.enabled, status: !target.enabled ? 'active' : 'ended' });
     setPromotions((current) => current.map((promotion) => (promotion.id === promotionId ? saved : promotion)));
+  };
+
+  const handleDeletePromotion = async (promotion) => {
+    if (!window.confirm(`Xóa khuyến mãi ${promotion.code}?`)) return;
+    await deletePromotion(promotion.id);
+    setPromotions((current) => current.filter((item) => Number(item.id) !== Number(promotion.id)));
   };
 
   const handleSubmit = async (event) => {
@@ -562,6 +577,16 @@ export default function Promotions({ tabNavigation = null }) {
                           title="Sửa"
                         >
                           <Edit size={18} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeletePromotion(promotion)}
+                          style={{ display: hasFullAccess ? undefined : 'none' }}
+                          className="text-[#68707a] transition hover:text-red-600"
+                          title="Xóa"
+                          aria-label={`Xóa ${promotion.code}`}
+                        >
+                          <Trash2 size={18} />
                         </button>
                         <button
                           type="button"

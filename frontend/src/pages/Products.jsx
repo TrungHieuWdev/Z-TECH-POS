@@ -962,8 +962,25 @@ export default function Products({ tabNavigation = null }) {
         </div>
       </Modal>
 
-      <Modal isOpen={isOpen} onClose={closeModal} title={editingProduct ? 'Sửa sản phẩm' : 'Thêm sản phẩm'} maxWidth="max-w-4xl">
-        <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2">
+      <Modal
+        isOpen={isOpen}
+        onClose={closeModal}
+        title={editingProduct ? 'Sửa sản phẩm' : 'Thêm sản phẩm'}
+        maxWidth="max-w-4xl"
+        hideClose
+        headerClassName="sm:sticky sm:-top-6 sm:-mx-6 sm:border-b sm:px-6 sm:py-4"
+        headerActions={(
+          <>
+            <button type="button" onClick={closeModal} className="h-11 border border-[#69afd6] bg-white px-5 text-base font-bold text-[#398fbd] hover:bg-sky-50">
+              Hủy
+            </button>
+            <button type="submit" form="product-form" className="h-11 bg-[#69afd6] px-5 text-base font-bold text-white hover:bg-[#579fc8]">
+              Lưu
+            </button>
+          </>
+        )}
+      >
+        <form id="product-form" onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2">
           <label className="md:col-span-2">
             <span className="mb-1 block text-sm font-medium text-gray-700">Tên sản phẩm</span>
             <input
@@ -1179,14 +1196,6 @@ export default function Products({ tabNavigation = null }) {
               />
             </label>
           </section>
-          <div className="flex justify-end gap-3 md:col-span-2">
-            <button type="button" onClick={closeModal} className="rounded-lg border border-gray-300 px-4 py-2 font-medium">
-              Hủy
-            </button>
-            <button type="submit" className="rounded-lg bg-brand px-4 py-2 font-semibold text-brand-ink hover:bg-brand-muted">
-              Lưu
-            </button>
-          </div>
         </form>
       </Modal>
     </div>

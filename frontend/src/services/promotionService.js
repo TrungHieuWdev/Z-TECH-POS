@@ -116,7 +116,7 @@ export function getPromotionDiscount(promotion, subtotal, cart = []) {
 }
 
 export function isPromotionEligible(promotion, { cart, subtotal, isMember }) {
-  if (!promotion?.enabled || !['active', 'ending'].includes(promotion.status)) return false;
+  if (!promotion?.enabled) return false;
   const today = new Date().toISOString().slice(0, 10);
   if (promotion.startDate && promotion.startDate > today) return false;
   if (promotion.endDate && promotion.endDate < today) return false;

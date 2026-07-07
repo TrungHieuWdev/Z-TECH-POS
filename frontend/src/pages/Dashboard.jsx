@@ -3,11 +3,14 @@ import { Link } from 'react-router-dom';
 import {
   CalendarCheck,
   CalendarDays,
+  ArrowDownRight,
+  ArrowUpRight,
   ChevronDown,
   CreditCard,
   PackageCheck,
   PackageOpen,
   ReceiptText,
+  RotateCcw,
   TrendingUp,
   UsersRound,
   WalletCards
@@ -133,26 +136,26 @@ function getConnectorLabelPoint(centerX, centerY, radius, angle, side = 'right')
   };
 }
 
-function getRevenueCaption(currentRevenue, previousRevenue) {
+function getRevenueCaption(currentRevenue, previousRevenue, comparisonLabel) {
   const current = safeNumber(currentRevenue);
   const previous = safeNumber(previousRevenue);
 
-  if (previous <= 0) return current > 0 ? 'Phát sinh mới trong kỳ' : 'Kỳ trước chưa có dữ liệu';
+  if (previous <= 0) return current > 0 ? `Không có dữ liệu trong ${comparisonLabel}` : `${comparisonLabel} chưa có dữ liệu`;
 
   const delta = current - previous;
-  if (delta === 0) return 'Bằng kỳ trước';
-  return `${delta > 0 ? 'Tăng' : 'Giảm'} ${formatCurrency(Math.abs(delta))} so với kỳ trước`;
+  if (delta === 0) return `Không đổi so với ${comparisonLabel}`;
+  return `${formatCurrency(Math.abs(delta))} so với ${comparisonLabel}`;
 }
 
-function getCountCaption(currentValue, previousValue, noun) {
+function getCountCaption(currentValue, previousValue, noun, comparisonLabel) {
   const current = Math.round(safeNumber(currentValue));
   const previous = Math.round(safeNumber(previousValue));
 
-  if (previous === 0) return current > 0 ? 'Kỳ trước chưa có dữ liệu' : 'Bằng kỳ trước';
+  if (previous === 0) return current > 0 ? `${comparisonLabel} chưa có dữ liệu` : `Không đổi so với ${comparisonLabel}`;
 
   const delta = current - previous;
-  if (delta === 0) return 'Bằng kỳ trước';
-  return `${delta > 0 ? '+' : '-'}${Math.abs(delta).toLocaleString('vi-VN')} ${noun} so với kỳ trước`;
+  if (delta === 0) return `Không đổi so với ${comparisonLabel}`;
+  return `${Math.abs(delta).toLocaleString('vi-VN')} ${noun} so với ${comparisonLabel}`;
 }
 
 export default function Dashboard() {
@@ -178,10 +181,11 @@ export default function Dashboard() {
   const [recentOrders, setRecentOrders] = useState([]);
   const [staffPerformance, setStaffPerformance] = useState([]);
   const [revenueChart, setRevenueChart] = useState([]);
-  const [dashboardPeriod, setDashboardPeriod] = useState('today');
-  const [selectedDate, setSelectedDate] = useState('');
-  const [displayedPeriod, setDisplayedPeriod] = useState('today');
-  const [displayedDate, setDisplayedDate] = useState('');
+  const [dashboardPeriod, setDashboardPeriod] = useState('7days');
+  const [dateFrom, setDateFrom] = useState(() => getLocalDateValue(new Date(Date.now() - 6 * 86400000)));
+  const [dateTo, setDateTo] = useState(() => getLocalDateValue());
+  const [displayedPeriod, setDisplayedPeriod] = useState('7days');
+  const [displayedRange, setDisplayedRange] = useState({ from: '', to: '' });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const requestIdRef = useRef(0);
@@ -193,7 +197,7 @@ export default function Dashboard() {
       setIsLoading(true);
 
       try {
-        const params = { period: dashboardPeriod, ...(selectedDate ? { date: selectedDate } : {}) };
+        const params = { period: dashboardPeriod, date_from: dateFrom, date_to: dateTo };
         const [summaryRes, topRes, recentRes, chartRes, staffRes] = await Promise.all([
           api.get('/dashboard/summary', { params }),
           api.get('/dashboard/top-products', { params }),
@@ -210,7 +214,7 @@ export default function Dashboard() {
         setRevenueChart(Array.isArray(chartRes.data) ? chartRes.data : []);
         setStaffPerformance(Array.isArray(staffRes.data) ? staffRes.data : []);
         setDisplayedPeriod(dashboardPeriod);
-        setDisplayedDate(selectedDate);
+        setDisplayedRange({ from: dateFrom, to: dateTo });
         setError('');
       } catch (requestError) {
         if (requestId !== requestIdRef.current) return;
@@ -221,26 +225,32 @@ export default function Dashboard() {
     }
 
     fetchDashboard();
-  }, [dashboardPeriod, selectedDate]);
+  }, [dashboardPeriod, dateFrom, dateTo]);
 
   const dashboardPeriodLabel = useMemo(() => {
-    if (displayedDate) {
-      return new Intl.DateTimeFormat('vi-VN').format(new Date(`${displayedDate}T00:00:00`));
+    if (displayedRange.from && displayedRange.to) {
+      return `${new Intl.DateTimeFormat('vi-VN').format(new Date(`${displayedRange.from}T00:00:00`))} - ${new Intl.DateTimeFormat('vi-VN').format(new Date(`${displayedRange.to}T00:00:00`))}`;
     }
     return dashboardPeriodOptions.find((option) => option.value === displayedPeriod)?.label || dashboardPeriodOptions[0].label;
-  }, [displayedDate, displayedPeriod]);
+  }, [displayedRange, displayedPeriod]);
 
   const revenueComparisonAmount = safeNumber(summary.todayRevenue) - safeNumber(summary.yesterdayRevenue);
-  const dailyComparisonLabel = displayedPeriod === 'today' && !displayedDate ? 'hôm qua' : 'ngày trước';
+  const comparisonDays = displayedRange.from && displayedRange.to
+    ? Math.round((new Date(`${displayedRange.to}T00:00:00`) - new Date(`${displayedRange.from}T00:00:00`)) / 86400000) + 1
+    : Number.parseInt(displayedPeriod, 10) || 1;
+  const comparisonLabel = displayedPeriod === 'today' && !displayedRange.from
+    ? 'hôm qua'
+    : displayedPeriod === 'yesterday' && !displayedRange.from
+      ? 'ngày trước'
+      : `${comparisonDays} ngày trước`;
 
   const cards = [
     {
       id: 'revenue',
       label: 'Doanh thu',
       value: formatCurrency(summary.todayRevenue),
-      caption: ['today', 'yesterday'].includes(displayedPeriod) || displayedDate
-        ? getTodayGrowthCaption(summary.revenueGrowth, dailyComparisonLabel)
-        : getRevenueCaption(summary.todayRevenue, summary.yesterdayRevenue),
+      caption: getRevenueCaption(summary.todayRevenue, summary.yesterdayRevenue, comparisonLabel),
+      trend: safeNumber(summary.todayRevenue) - safeNumber(summary.yesterdayRevenue),
       icon: WalletCards,
       tone: 'blue'
     },
@@ -248,9 +258,8 @@ export default function Dashboard() {
       id: 'orders',
       label: 'Đơn hàng',
       value: safeNumber(summary.todayOrders).toLocaleString('vi-VN'),
-      caption: ['today', 'yesterday'].includes(displayedPeriod) || displayedDate
-        ? getTodayGrowthCaption(summary.orderGrowth, dailyComparisonLabel)
-        : getCountCaption(summary.todayOrders, summary.yesterdayOrders, 'đơn'),
+      caption: getCountCaption(summary.todayOrders, summary.yesterdayOrders, 'đơn', comparisonLabel),
+      trend: safeNumber(summary.todayOrders) - safeNumber(summary.yesterdayOrders),
       icon: ReceiptText,
       tone: 'gray'
     },
@@ -267,9 +276,8 @@ export default function Dashboard() {
       id: 'products-sold',
       label: 'Sản phẩm đã bán',
       value: safeNumber(summary.productsSold).toLocaleString('vi-VN'),
-      caption: ['today', 'yesterday'].includes(displayedPeriod) || displayedDate
-        ? getTodayGrowthCaption(summary.productsSoldGrowth, dailyComparisonLabel)
-        : getCountCaption(summary.productsSold, summary.previousProductsSold, 'sản phẩm'),
+      caption: getCountCaption(summary.productsSold, summary.previousProductsSold, 'sản phẩm', comparisonLabel),
+      trend: safeNumber(summary.productsSold) - safeNumber(summary.previousProductsSold),
       icon: PackageOpen,
       tone: 'slate'
     },
@@ -277,9 +285,8 @@ export default function Dashboard() {
       id: 'profit',
       label: 'Lợi nhuận tạm tính',
       value: formatCurrency(summary.estimatedProfit),
-      caption: ['today', 'yesterday'].includes(displayedPeriod) || displayedDate
-        ? getTodayGrowthCaption(summary.estimatedProfitGrowth, dailyComparisonLabel)
-        : getRevenueCaption(summary.estimatedProfit, summary.previousEstimatedProfit),
+      caption: getRevenueCaption(summary.estimatedProfit, summary.previousEstimatedProfit, comparisonLabel),
+      trend: safeNumber(summary.estimatedProfit) - safeNumber(summary.previousEstimatedProfit),
       icon: TrendingUp,
       tone: 'gray'
     }
@@ -389,8 +396,16 @@ export default function Dashboard() {
             <select
               value={dashboardPeriod}
               onChange={(event) => {
-                setDashboardPeriod(event.target.value);
-                setSelectedDate('');
+                const period = event.target.value;
+                const days = Number.parseInt(period, 10);
+                setDashboardPeriod(period);
+                if (Number.isFinite(days)) {
+                  setDateTo(getLocalDateValue());
+                  setDateFrom(getLocalDateValue(new Date(Date.now() - (days - 1) * 86400000)));
+                } else {
+                  setDateFrom('');
+                  setDateTo('');
+                }
               }}
               className="h-9 w-full appearance-none border border-[#b9d5e7] bg-white pl-3 pr-8 text-sm font-bold text-brand-ink outline-none transition hover:border-brand-strong focus:border-brand-strong focus:ring-2 focus:ring-brand-soft"
             >
@@ -402,17 +417,43 @@ export default function Dashboard() {
           </label>
 
           <label className="relative min-w-[172px] flex-1 sm:flex-none">
-            <span className="sr-only">Lọc theo ngày cụ thể</span>
+            <span className="sr-only">Từ ngày</span>
             <CalendarDays className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-brand-strong" size={16} />
             <input
               type="date"
-              value={selectedDate}
-              max={getLocalDateValue()}
-              onChange={(event) => setSelectedDate(event.target.value)}
+              value={dateFrom}
+              max={dateTo || getLocalDateValue()}
+              onChange={(event) => setDateFrom(event.target.value)}
               className="h-9 w-full border border-[#b9d5e7] bg-white pl-9 pr-2 text-sm font-semibold text-brand-ink outline-none transition hover:border-brand-strong focus:border-brand-strong focus:ring-2 focus:ring-brand-soft"
-              title="Chọn ngày cụ thể"
+              title="Từ ngày"
             />
           </label>
+          <label className="relative min-w-[172px] flex-1 sm:flex-none">
+            <span className="sr-only">Đến ngày</span>
+            <CalendarDays className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-brand-strong" size={16} />
+            <input
+              type="date"
+              value={dateTo}
+              min={dateFrom || undefined}
+              max={getLocalDateValue()}
+              onChange={(event) => setDateTo(event.target.value)}
+              className="h-9 w-full border border-[#b9d5e7] bg-white pl-9 pr-2 text-sm font-semibold text-brand-ink outline-none transition hover:border-brand-strong focus:border-brand-strong focus:ring-2 focus:ring-brand-soft"
+              title="Đến ngày"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => {
+              setDashboardPeriod('today');
+              setDateFrom('');
+              setDateTo('');
+            }}
+            className="grid h-9 w-9 shrink-0 place-items-center border border-[#b9d5e7] bg-white text-brand-strong transition hover:border-brand-strong hover:bg-brand-soft"
+            title="Xóa khoảng ngày đã chọn"
+            aria-label="Đặt lại bộ lọc thời gian"
+          >
+            <RotateCcw size={17} />
+          </button>
         </div>
       </div>
 
@@ -443,7 +484,11 @@ export default function Dashboard() {
                 <div className="min-w-0">
                   <p className={`truncate text-[13px] font-bold leading-4 ${card.tone === 'amber' && summary.lowStockCount > 0 ? 'text-red-700' : 'text-[#4f5459]'}`}>{card.label}</p>
                   <p className="mt-2 min-h-6 text-lg font-bold leading-6 text-[#191c1d]">{card.value}</p>
-                  <p className="mt-1 line-clamp-1 text-xs font-medium leading-4 text-[#43474d]">{card.caption}</p>
+                  <div className={`mt-1 flex min-w-0 items-center gap-1 text-xs font-medium leading-4 ${card.trend > 0 ? 'text-emerald-700' : card.trend < 0 ? 'text-red-600' : 'text-[#43474d]'}`}>
+                    {card.trend > 0 && <ArrowUpRight size={14} className="shrink-0" aria-label="Tăng" />}
+                    {card.trend < 0 && <ArrowDownRight size={14} className="shrink-0" aria-label="Giảm" />}
+                    <span className="truncate" title={card.caption}>{card.caption}</span>
+                  </div>
                 </div>
                 <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${cardTones[card.tone]}`}>
                   <Icon size={18} />
@@ -459,7 +504,7 @@ export default function Dashboard() {
           totalRevenue={summary.todayRevenue}
           comparisonAmount={revenueComparisonAmount}
           chartRows={revenueChart}
-          period={displayedDate || displayedPeriod === 'yesterday' ? 'today' : displayedPeriod}
+          period={displayedPeriod}
           periodLabel={dashboardPeriodLabel}
         />
 
@@ -471,12 +516,12 @@ export default function Dashboard() {
             </Link>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-1">
             {topProducts.length === 0 && (
               <p className="text-sm font-medium text-[#73777d]">Chưa có sản phẩm bán chạy trong kỳ này.</p>
             )}
             {topProducts.slice(0, 5).map((product, index) => (
-              <div key={product.product_id} className="flex items-start justify-between gap-4 rounded-md px-1 py-1.5">
+              <div key={product.product_id} className="flex items-start justify-between gap-4 rounded-md px-1 py-1">
                 <div className="flex min-w-0 items-start gap-2.5">
                   <div className={`grid h-8 w-8 shrink-0 place-items-center rounded-full border text-xs font-extrabold ${topProductRankStyles[index] || topProductRankStyles[4]}`}>
                     {index + 1}
@@ -499,14 +544,14 @@ export default function Dashboard() {
       </section>
 
       <section className="grid gap-3 xl:grid-cols-3">
-        <article className="min-h-[260px] rounded-lg border border-[#e1e3e4] bg-white p-3 shadow-[0_1px_3px_rgba(25,28,29,0.08)]">
+        <article className="min-h-[220px] rounded-lg border border-[#e1e3e4] bg-white p-3 shadow-[0_1px_3px_rgba(25,28,29,0.08)]">
           <div className="mb-2 flex items-center justify-between gap-3">
             <h2 className="text-sm font-bold leading-5 text-[#191c1d]">Phương thức thanh toán</h2>
             <CreditCard size={18} className="text-brand-strong" />
           </div>
 
-          <div className="min-h-[216px] overflow-hidden">
-            <svg viewBox="0 0 320 220" className="h-[220px] w-full" role="img" aria-label="Biểu đồ phương thức thanh toán">
+          <div className="min-h-[176px] overflow-hidden">
+            <svg viewBox="0 0 320 220" className="h-[180px] w-full" role="img" aria-label="Biểu đồ phương thức thanh toán">
               {paymentStats.total > 0 ? (
                 <>
                   <defs>
@@ -582,13 +627,13 @@ export default function Dashboard() {
           </div>
         </article>
 
-        <article className="min-h-[260px] rounded-lg border border-[#e1e3e4] bg-white p-3 shadow-[0_1px_3px_rgba(25,28,29,0.08)]">
+        <article className="min-h-[220px] rounded-lg border border-[#e1e3e4] bg-white p-3 shadow-[0_1px_3px_rgba(25,28,29,0.08)]">
           <div className="mb-2 flex items-center justify-between gap-3">
             <h2 className="text-sm font-bold leading-5 text-[#191c1d]">Hiệu suất bán hàng của nhân viên</h2>
             <UsersRound size={18} className="text-brand-strong" />
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-2">
             {staffStats.length === 0 && (
               <p className="py-3 text-sm font-medium text-[#73777d]">Chưa có dữ liệu nhân viên.</p>
             )}
@@ -603,7 +648,7 @@ export default function Dashboard() {
           </div>
         </article>
 
-        <article className="min-h-[260px] rounded-lg border border-[#e1e3e4] bg-white p-3 shadow-[0_1px_3px_rgba(25,28,29,0.08)]">
+        <article className="min-h-[220px] rounded-lg border border-[#e1e3e4] bg-white p-3 shadow-[0_1px_3px_rgba(25,28,29,0.08)]">
           <div className="mb-2 flex items-center justify-between gap-4 border-b border-[#e1e3e4] pb-2">
             <h2 className="text-sm font-bold leading-5 text-[#191c1d]">Đơn hàng gần đây</h2>
             <Link

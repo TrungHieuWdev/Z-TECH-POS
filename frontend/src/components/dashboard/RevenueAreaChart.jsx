@@ -157,7 +157,7 @@ export default function RevenueAreaChart({
     : buildPeriodYAxisConfig(period);
 
   return (
-    <article className="rounded-lg border border-[#e1e3e4] bg-white p-3 shadow-[0_1px_3px_rgba(25,28,29,0.08)]">
+    <article className="flex h-full min-h-[340px] flex-col rounded-lg border border-[#e1e3e4] bg-white p-3 shadow-[0_1px_3px_rgba(25,28,29,0.08)]">
       <div className="mb-2 flex items-start justify-between gap-4">
         <div>
           <h2 className="text-base font-semibold leading-6 text-[#191c1d]">Cơ cấu doanh thu</h2>
@@ -167,7 +167,7 @@ export default function RevenueAreaChart({
         </span>
       </div>
 
-      <div className="h-[190px] w-full">
+      <div className="min-h-[220px] w-full flex-1 xl:min-h-[235px]">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
             <defs>
@@ -222,7 +222,7 @@ export default function RevenueAreaChart({
         </ResponsiveContainer>
       </div>
 
-      <div className="mt-2 flex items-end justify-between border-t border-[#e1e3e4] pt-2">
+      <div className="mt-3 flex shrink-0 items-end justify-between border-t border-[#e1e3e4] pt-3">
         <div>
           <div className="flex items-center gap-2 text-xs font-semibold text-[#73777d]">
             <span className="h-2.5 w-2.5 rounded-full bg-[#1f86f2]" />
@@ -231,7 +231,9 @@ export default function RevenueAreaChart({
           <p className="mt-0.5 text-base font-bold text-[#191c1d]">{formatCurrency(safeTotal)}</p>
         </div>
         <div className="text-right">
-          <p className="text-xs font-bold text-emerald-600">↑ {formatCurrency(Math.abs(safeComparison))}</p>
+          <p className={`text-xs font-bold ${safeComparison < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+            {safeComparison < 0 ? '↓' : '↑'} {formatCurrency(Math.abs(safeComparison))}
+          </p>
           <p className="mt-0.5 text-[11px] font-semibold text-[#73777d]">so với kỳ trước</p>
         </div>
       </div>

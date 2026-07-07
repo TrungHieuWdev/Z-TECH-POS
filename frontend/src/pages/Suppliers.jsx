@@ -488,8 +488,8 @@ export default function Suppliers() {
         </div>
       </section>
 
-      <Modal isOpen={isFormOpen} onClose={closeForm} title={editingSupplier ? 'Sửa nhà cung cấp' : 'Thêm nhà cung cấp'}>
-        <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2">
+      <Modal isOpen={isFormOpen} onClose={closeForm} title={editingSupplier ? 'Sửa nhà cung cấp' : 'Thêm nhà cung cấp'} headerActions={<><button type="button" onClick={closeForm} className="h-11 border border-[#69afd6] bg-white px-5 text-base font-bold text-[#398fbd] hover:bg-sky-50">Hủy</button><button type="submit" form="supplier-form" className="h-11 bg-[#69afd6] px-5 text-base font-bold text-white hover:bg-[#579fc8]">Lưu</button></>}>
+        <form id="supplier-form" onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2">
           <label className="md:col-span-2">
             <span className="mb-1 block text-sm font-medium text-gray-700">Tên nhà cung cấp</span>
             <input
@@ -564,14 +564,6 @@ export default function Suppliers() {
               className="min-h-24 w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-[#7ed5e6] focus:ring-2 focus:ring-[#c0edf7]"
             />
           </label>
-          <div className="flex justify-end gap-3 md:col-span-2">
-            <button type="button" onClick={closeForm} className="rounded-lg border border-gray-300 px-4 py-2 font-medium">
-              Hủy
-            </button>
-            <button type="submit" className="rounded-lg bg-[#c0edf7] px-4 py-2 font-semibold text-[#0f3b46] hover:bg-[#a9e3ef]">
-              Lưu
-            </button>
-          </div>
         </form>
       </Modal>
 

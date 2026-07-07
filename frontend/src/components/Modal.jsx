@@ -1,8 +1,7 @@
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X } from 'lucide-react';
 
-export default function Modal({ isOpen, onClose, title, children, maxWidth = 'max-w-2xl', panelClassName = '', headerClassName = '', headerActions = null, hideClose = false }) {
+export default function Modal({ isOpen, onClose, title, children, maxWidth = 'max-w-2xl', panelClassName = '', headerClassName = '', headerActions = null }) {
   useEffect(() => {
     if (!isOpen) return undefined;
     const scrollY = window.scrollY;
@@ -41,21 +40,10 @@ export default function Modal({ isOpen, onClose, title, children, maxWidth = 'ma
   return createPortal(
     <div className="fixed inset-0 z-[9999] flex h-[100dvh] w-screen touch-none items-end justify-center overflow-hidden overscroll-none bg-black/60 sm:items-center sm:px-4 sm:py-6" role="presentation">
       <div className={`relative max-h-[94dvh] w-full ${maxWidth} touch-pan-y overscroll-contain overflow-y-auto bg-white p-4 shadow-xl sm:max-h-[90vh] sm:p-6 ${panelClassName}`} role="dialog" aria-modal="true" aria-label={typeof title === 'string' ? title : 'Hộp thoại'} onClick={(event) => event.stopPropagation()}>
-        <div className={`sticky -top-4 z-30 -mx-4 mb-5 flex items-center justify-between gap-4 border-b bg-white px-4 py-3 sm:static sm:mx-0 sm:border-0 sm:p-0 ${headerClassName}`}>
+        <div className={`sticky -top-4 z-30 -mx-4 mb-5 flex items-center justify-between gap-4 border-b bg-white px-4 py-3 sm:-top-6 sm:-mx-6 sm:px-6 sm:py-4 ${headerClassName}`}>
           <h2 className="min-w-0 truncate text-lg font-semibold text-gray-900 sm:text-xl">{title}</h2>
           <div className="flex shrink-0 items-center gap-2">
             {headerActions}
-            {!hideClose && (
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-lg p-2 text-gray-500 transition hover:bg-brand-surface hover:text-brand-strong"
-                aria-label="Đóng"
-                title="Đóng"
-              >
-                <X size={20} />
-              </button>
-            )}
           </div>
         </div>
         {children}

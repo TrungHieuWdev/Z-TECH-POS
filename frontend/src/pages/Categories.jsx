@@ -425,8 +425,8 @@ export default function Categories() {
         )}
       </section>
 
-      <Modal isOpen={isOpen} onClose={closeModal} title={editingCategory ? 'Sửa danh mục' : 'Thêm danh mục'}>
-        <form onSubmit={handleSubmit} className="space-y-4">
+      <Modal isOpen={isOpen} onClose={closeModal} title={editingCategory ? 'Sửa danh mục' : 'Thêm danh mục'} headerActions={<><button type="button" onClick={closeModal} className="h-11 border border-[#69afd6] bg-white px-5 text-base font-bold text-[#398fbd] hover:bg-sky-50">Hủy</button><button type="submit" form="category-form" className="h-11 bg-[#69afd6] px-5 text-base font-bold text-white hover:bg-[#579fc8]">Lưu</button></>}>
+        <form id="category-form" onSubmit={handleSubmit} className="space-y-4">
           <label className="block">
             <span className="mb-1 block text-sm font-medium text-gray-700">Tên danh mục</span>
             <input
@@ -444,14 +444,6 @@ export default function Categories() {
               className="min-h-28 w-full border border-gray-300 px-3 py-2 outline-none focus:border-brand"
             />
           </label>
-          <div className="flex justify-end gap-3">
-            <button type="button" onClick={closeModal} className="border border-gray-300 px-4 py-2 font-medium">
-              Hủy
-            </button>
-            <button type="submit" className="bg-brand px-4 py-2 font-semibold text-white hover:bg-brand-strong">
-              Lưu
-            </button>
-          </div>
         </form>
       </Modal>
     </div>

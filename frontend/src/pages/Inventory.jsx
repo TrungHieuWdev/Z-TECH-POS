@@ -10,7 +10,6 @@ import {
   History,
   MoreHorizontal,
   PackageCheck,
-  RotateCcw,
   Search,
   WalletCards,
   XCircle
@@ -30,8 +29,7 @@ const PAGE_SIZE = 10;
 const inventoryTabPaths = {
   current: '/inventory',
   receiving: '/inventory/purchase-orders',
-  history: '/inventory/history',
-  adjustment: '/inventory/adjustment'
+  history: '/inventory/history'
 };
 
 function getInventoryTab(pathname) {
@@ -288,6 +286,18 @@ export default function Inventory() {
           <h1 className="text-2xl font-extrabold text-gray-950">Kho hàng</h1>
           <p className="mt-1 text-sm font-medium text-gray-500">Theo dõi tồn kho, nhập thêm hàng và điều chỉnh số lượng sản phẩm khi cần.</p>
         </div>
+        {activeTab === 'current' && hasFullAccess && (
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <button type="button" onClick={() => openModal('count')} className="inline-flex h-10 items-center gap-2 border border-[#69afd6] bg-white px-4 text-sm font-bold text-[#398fbd] hover:bg-sky-50">
+              <ClipboardCheck size={18} />
+              Kiểm kê kho
+            </button>
+            <button type="button" onClick={() => openModal('adjust')} className="inline-flex h-10 items-center gap-2 bg-[#69afd6] px-4 text-sm font-bold text-white hover:bg-[#579fc8]">
+              <PackageCheck size={18} />
+              Điều chỉnh tồn kho
+            </button>
+          </div>
+        )}
       </header>
 
       <InventoryTabs value={activeTab} onChange={(tab) => { navigate(inventoryTabPaths[tab]); setSearch(''); }}/>
@@ -463,8 +473,8 @@ export default function Inventory() {
         </>}
       </section>
 
-      <Modal isOpen={isOpen} onClose={closeModal} title={mode === 'in' ? 'Nhập kho' : mode === 'count' ? 'Kiểm kê kho' : 'Điều chỉnh tồn kho'}>
-        <form onSubmit={handleSubmit} className="space-y-4">
+      <Modal isOpen={isOpen} onClose={closeModal} title={mode === 'in' ? 'Nhập kho' : mode === 'count' ? 'Kiểm kê kho' : 'Điều chỉnh tồn kho'} headerActions={<><button type="button" onClick={closeModal} className="h-11 border border-[#69afd6] bg-white px-5 text-base font-bold text-[#398fbd] hover:bg-sky-50">Hủy</button><button type="submit" form="inventory-form" className="h-11 bg-[#69afd6] px-5 text-base font-bold text-white hover:bg-[#579fc8]">{mode === 'count' ? 'Lưu kiểm kê' : 'Lưu'}</button></>}>
+        <form id="inventory-form" onSubmit={handleSubmit} className="space-y-4">
           <label className="block">
             <span className="mb-1 block text-sm font-medium text-gray-700">Sản phẩm</span>
             <select value={form.product_id} onChange={(event) => setForm({ ...form, product_id: event.target.value })} className="w-full border border-gray-300 px-3 py-2 outline-none focus:border-sky-500" required>
@@ -494,10 +504,6 @@ export default function Inventory() {
             <span className="mb-1 block text-sm font-medium text-gray-700">Ghi chú</span>
             <textarea value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} placeholder={mode === 'count' ? 'Ví dụ: Kiểm kê cuối ngày, lệch do bán thiếu bill...' : ''} className="min-h-24 w-full border border-gray-300 px-3 py-2 outline-none focus:border-sky-500" />
           </label>
-          <div className="flex justify-end gap-3">
-            <button type="button" onClick={closeModal} className="border border-gray-300 px-4 py-2 font-medium">Hủy</button>
-            <button type="submit" className="bg-[#69afd6] px-4 py-2 font-semibold text-white hover:bg-[#579fc8]">{mode === 'count' ? 'Lưu kiểm kê' : 'Lưu'}</button>
-          </div>
         </form>
       </Modal>
     </div>

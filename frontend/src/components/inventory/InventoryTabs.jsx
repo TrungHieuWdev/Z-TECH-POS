@@ -1,10 +1,9 @@
-import { Boxes, ClipboardCheck, History, PackagePlus } from 'lucide-react';
+import { Boxes, History, PackagePlus } from 'lucide-react';
 
 const tabs = [
   { value: 'current', label: 'Tồn kho', icon: Boxes },
   { value: 'receiving', label: 'Nhập hàng', icon: PackagePlus },
-  { value: 'history', label: 'Biến động kho', icon: History },
-  { value: 'adjustment', label: 'Điều chỉnh & Kiểm kê', icon: ClipboardCheck }
+  { value: 'history', label: 'Biến động kho', icon: History }
 ];
 
 export default function InventoryTabs({ value, onChange }) {

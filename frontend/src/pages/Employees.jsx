@@ -832,8 +832,8 @@ export default function Employees() {
 
       {activeTab === 'shifts' && <Shifts embedded />}
 
-      <Modal isOpen={isFormOpen} onClose={closeForm} title={editingEmployee ? 'Sửa nhân viên' : 'Thêm nhân viên'}>
-        <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2">
+      <Modal isOpen={isFormOpen} onClose={closeForm} title={editingEmployee ? 'Sửa nhân viên' : 'Thêm nhân viên'} headerActions={<><button type="button" onClick={closeForm} className="h-11 border border-[#69afd6] bg-white px-5 text-base font-bold text-[#398fbd] hover:bg-sky-50">Hủy</button><button type="submit" form="employee-form" className="h-11 bg-[#69afd6] px-5 text-base font-bold text-white hover:bg-[#579fc8]">Lưu</button></>}>
+        <form id="employee-form" onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2">
           <label className="md:col-span-2">
             <span className="mb-1 block text-sm font-medium text-gray-700">Họ tên</span>
             <input
@@ -930,14 +930,6 @@ export default function Employees() {
           <div className="md:col-span-2 rounded-lg bg-[#f4fcfe] p-3 text-sm text-[#0f3b46]">
             Mã đăng nhập sẽ tạo thật trong hệ thống. Khi sửa nhân viên, để trống mật khẩu nếu bạn không muốn đổi mật khẩu hiện tại.
           </div>
-          <div className="flex justify-end gap-3 md:col-span-2">
-            <button type="button" onClick={closeForm} className="rounded-lg border border-gray-300 px-4 py-2 font-medium">
-              Hủy
-            </button>
-            <button type="submit" className="rounded-lg bg-[#c0edf7] px-4 py-2 font-semibold text-[#0f3b46] hover:bg-[#a9e3ef]">
-              Lưu
-            </button>
-          </div>
         </form>
       </Modal>
 
@@ -946,9 +938,10 @@ export default function Employees() {
         onClose={closePasswordModal}
         title="Đổi mật khẩu nhân viên"
         maxWidth="max-w-md"
+        headerActions={<><button type="button" onClick={closePasswordModal} disabled={isPasswordSaving} className="h-11 border border-[#69afd6] bg-white px-5 text-base font-bold text-[#398fbd] hover:bg-sky-50 disabled:opacity-60">Hủy</button><button type="submit" form="employee-password-form" disabled={isPasswordSaving} className="h-11 bg-[#69afd6] px-5 text-base font-bold text-white hover:bg-[#579fc8] disabled:opacity-60">{isPasswordSaving ? 'Đang lưu...' : 'Lưu mật khẩu'}</button></>}
       >
         {passwordEmployee && (
-          <form onSubmit={changePassword} className="space-y-5">
+          <form id="employee-password-form" onSubmit={changePassword} className="space-y-5">
             <div className="bg-[#f4fcfe] p-4">
               <p className="font-bold text-gray-950">
                 {passwordEmployee.code} - {passwordEmployee.name}
@@ -971,23 +964,6 @@ export default function Employees() {
               />
               <p className="mt-1 text-xs text-gray-500">Tối thiểu 6 ký tự.</p>
             </label>
-            <div className="flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={closePasswordModal}
-                disabled={isPasswordSaving}
-                className="border border-gray-300 px-4 py-2 font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
-              >
-                Hủy
-              </button>
-              <button
-                type="submit"
-                disabled={isPasswordSaving}
-                className="bg-[#0f3b46] px-4 py-2 font-semibold text-white hover:bg-[#174f5d] disabled:opacity-60"
-              >
-                {isPasswordSaving ? 'Đang lưu...' : 'Lưu mật khẩu'}
-              </button>
-            </div>
           </form>
         )}
       </Modal>

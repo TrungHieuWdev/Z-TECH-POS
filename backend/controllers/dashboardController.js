@@ -43,10 +43,18 @@ function getCategoryShareDateFilter(period = 'today') {
   }
 }
 
-function getPeriodFilters(value = 'today', alias = '', selectedDate = '') {
+function getPeriodFilters(value = 'today', alias = '', selectedDate = '', dateFrom = '', dateTo = '') {
   const period = getCategorySharePeriod(value);
   const column = `${alias}created_at`;
   const date = getSelectedDate(selectedDate);
+  const from = getSelectedDate(dateFrom);
+  const to = getSelectedDate(dateTo);
+  if (from && to && from <= to) {
+    return {
+      current: `${column} >= '${from}' AND ${column} < DATE_ADD('${to}', INTERVAL 1 DAY)`,
+      previous: `${column} >= DATE_SUB('${from}', INTERVAL (DATEDIFF('${to}', '${from}') + 1) DAY) AND ${column} < '${from}'`
+    };
+  }
   if (date) {
     return {
       current: `DATE(${column}) = '${date}'`,
@@ -63,8 +71,8 @@ function getPeriodFilters(value = 'today', alias = '', selectedDate = '') {
 
 export async function getSummary(req, res) {
   try {
-    const filters = getPeriodFilters(req.query.period || 'today', '', req.query.date);
-    const orderItemFilters = getPeriodFilters(req.query.period || 'today', 'o.', req.query.date);
+    const filters = getPeriodFilters(req.query.period || 'today', '', req.query.date, req.query.date_from, req.query.date_to);
+    const orderItemFilters = getPeriodFilters(req.query.period || 'today', 'o.', req.query.date, req.query.date_from, req.query.date_to);
     const [
       todayRevenue,
       yesterdayRevenue,
@@ -167,8 +175,9 @@ export async function getRevenueChart(req, res) {
   try {
     const period = getCategorySharePeriod(req.query.period || 'today');
     const selectedDate = getSelectedDate(req.query.date);
-    const filters = getPeriodFilters(period, '', selectedDate);
-    const bucketExpression = period === 'today' || period === 'yesterday' || selectedDate
+    const filters = getPeriodFilters(period, '', selectedDate, req.query.date_from, req.query.date_to);
+    const hasRange = getSelectedDate(req.query.date_from) && getSelectedDate(req.query.date_to);
+    const bucketExpression = (period === 'today' || period === 'yesterday' || selectedDate) && !hasRange
       ? 'HOUR(created_at)'
       : "DATE_FORMAT(created_at, '%Y-%m-%d')";
 
@@ -192,7 +201,7 @@ export async function getRevenueChart(req, res) {
 
 export async function getTopProducts(req, res) {
   try {
-    const filters = getPeriodFilters(req.query.period || 'today', 'o.', req.query.date);
+    const filters = getPeriodFilters(req.query.period || 'today', 'o.', req.query.date, req.query.date_from, req.query.date_to);
     const rows = await query(
       `SELECT
          p.id AS product_id,
@@ -275,7 +284,7 @@ export async function getCategoryShare(req, res) {
 
 export async function getRecentOrders(req, res) {
   try {
-    const filters = getPeriodFilters(req.query.period || 'today', 'o.', req.query.date);
+    const filters = getPeriodFilters(req.query.period || 'today', 'o.', req.query.date, req.query.date_from, req.query.date_to);
     const rows = await query(
       `SELECT
          o.id,
@@ -305,7 +314,7 @@ export async function getRecentOrders(req, res) {
 
 export async function getStaffPerformance(req, res) {
   try {
-    const filters = getPeriodFilters(req.query.period || 'today', 'o.', req.query.date);
+    const filters = getPeriodFilters(req.query.period || 'today', 'o.', req.query.date, req.query.date_from, req.query.date_to);
     const rows = await query(
       `SELECT
          o.user_id,
