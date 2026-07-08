@@ -27,7 +27,7 @@ import { getUser, isFullAccessRole } from '../utils/auth';
 import { getDefaultWarrantyPolicy, warrantyTypes } from '../utils/warrantyPolicy';
 
 const deviceFamilyOptions = [
-  { value: 'generic', label: 'Dùng chung / Không theo hãng' },
+  { value: 'generic', label: 'Phụ kiện tiện ích' },
   { value: 'apple', label: 'Apple' },
   { value: 'samsung', label: 'Samsung' },
   { value: 'vivo', label: 'Vivo' },
@@ -36,6 +36,22 @@ const deviceFamilyOptions = [
 ];
 
 const PAGE_SIZE = 8;
+const EAN_LEFT_ODD = {
+  0: '0001101', 1: '0011001', 2: '0010011', 3: '0111101', 4: '0100011',
+  5: '0110001', 6: '0101111', 7: '0111011', 8: '0110111', 9: '0001011'
+};
+const EAN_LEFT_EVEN = {
+  0: '0100111', 1: '0110011', 2: '0011011', 3: '0100001', 4: '0011101',
+  5: '0111001', 6: '0000101', 7: '0010001', 8: '0001001', 9: '0010111'
+};
+const EAN_RIGHT = {
+  0: '1110010', 1: '1100110', 2: '1101100', 3: '1000010', 4: '1011100',
+  5: '1001110', 6: '1010000', 7: '1000100', 8: '1001000', 9: '1110100'
+};
+const EAN_PARITY = {
+  0: 'OOOOOO', 1: 'OOEOEE', 2: 'OOEEOE', 3: 'OOEEEO', 4: 'OEOOEE',
+  5: 'OEEOOE', 6: 'OEEEOO', 7: 'OEOEOE', 8: 'OEOEEO', 9: 'OEEOEO'
+};
 const topPeriodLabels = {
   today: 'hôm nay',
   '7days': '7 ngày',
@@ -50,6 +66,47 @@ const quickTabs = [
   { value: 'out', label: 'Hết hàng' },
   { value: 'no-code', label: 'Chưa có mã vạch' }
 ];
+
+function getEanCheckDigit(first12Digits) {
+  const sum = [...first12Digits].reduce((total, digit, index) => total + Number(digit) * (index % 2 === 0 ? 1 : 3), 0);
+  return String((10 - (sum % 10)) % 10);
+}
+
+function encodeBarcodeBits(value) {
+  const rawDigits = String(value || '').replace(/\D/g, '');
+  const digits = rawDigits.length === 12 ? `0${rawDigits}` : rawDigits;
+  if (!/^\d{13}$/.test(digits) || getEanCheckDigit(digits.slice(0, 12)) !== digits[12]) return '';
+
+  const parity = EAN_PARITY[digits[0]];
+  let bits = '101';
+  for (let index = 1; index <= 6; index += 1) {
+    bits += parity[index - 1] === 'O' ? EAN_LEFT_ODD[digits[index]] : EAN_LEFT_EVEN[digits[index]];
+  }
+  bits += '01010';
+  for (let index = 7; index <= 12; index += 1) bits += EAN_RIGHT[digits[index]];
+  bits += '101';
+  return bits;
+}
+
+function BarcodePreview({ value }) {
+  const bits = encodeBarcodeBits(value);
+  if (!bits) return null;
+
+  const moduleWidth = 1.5;
+  const quiet = 8;
+  const width = bits.length * moduleWidth + quiet * 2;
+  const height = 34;
+
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} className="mt-1 h-8 w-32 bg-white" aria-label={`Mã vạch ${value}`} role="img">
+      <rect width={width} height={height} fill="#fff" />
+      <g fill="#111">
+        {[...bits].map((bit, index) => (bit === '1' ? <rect key={index} x={quiet + index * moduleWidth} y="0" width={moduleWidth} height="24" /> : null))}
+      </g>
+      <text x={width / 2} y="33" textAnchor="middle" fontFamily="Arial, sans-serif" fontSize="8" letterSpacing="1.4">{value}</text>
+    </svg>
+  );
+}
 
 function getStockState(product) {
   const stock = Number(product.stock_quantity || 0);
@@ -309,7 +366,7 @@ export default function Products({ tabNavigation = null }) {
     const rows = [
       {
         ten_san_pham: 'Tai nghe Bluetooth Z-Tech Air',
-        dong_may: 'Phụ kiện chung',
+        dong_may: 'Phụ kiện tiện ích',
         danh_muc: 'Tai nghe',
         gia: 349000,
         ton_kho: 12,
@@ -349,7 +406,7 @@ export default function Products({ tabNavigation = null }) {
         }
 
         const name = String(getImportCell(normalized, 'ten_san_pham')).trim();
-        const deviceText = String(getImportCell(normalized, 'dong_may')).trim() || 'Phụ kiện chung';
+        const deviceText = String(getImportCell(normalized, 'dong_may')).trim() || 'Phụ kiện tiện ích';
         const categoryText = normalizeCategoryName(getImportCell(normalized, 'danh_muc')) || 'Phụ kiện khác';
         const price = readImportNumber(getImportCell(normalized, 'gia'));
         const stockQuantity = readImportNumber(getImportCell(normalized, 'ton_kho'));
@@ -739,10 +796,17 @@ export default function Products({ tabNavigation = null }) {
                     <td className="px-4 py-2.5">
                       <div className="flex items-center gap-3">
                         <div className="h-16 w-12 shrink-0 overflow-hidden border border-[#d7eef3]"><ProductImage product={product} iconSize={28} compact /></div>
-                        <div className="max-w-[260px] min-w-0"><p className="truncate font-bold text-gray-950">{product.name}</p><p className="mt-0.5 truncate text-xs text-gray-500">{product.device_model || 'Phụ kiện dùng chung'}</p></div>
+                        <div className="max-w-[260px] min-w-0"><p className="truncate font-bold text-gray-950">{product.name}</p><p className="mt-0.5 truncate text-xs text-gray-500">{product.device_model || 'Phụ kiện tiện ích'}</p></div>
                       </div>
                     </td>
-                    <td className="px-4 py-2.5"><p className="font-semibold text-gray-800">{product.sku || 'Chưa có SKU'}</p><p className={`mt-0.5 text-xs ${product.barcode ? 'text-gray-500' : 'font-semibold text-amber-700'}`}>{product.barcode || 'Chưa có mã vạch'}</p></td>
+                    <td className="px-4 py-2.5">
+                      <p className="font-semibold text-gray-800">{product.sku || 'Chưa có SKU'}</p>
+                      {product.barcode ? (
+                        <BarcodePreview value={product.barcode} />
+                      ) : (
+                        <p className="mt-1 text-xs font-semibold text-amber-700">Chưa có mã vạch</p>
+                      )}
+                    </td>
                     <td className="px-4 py-2.5"><p className="font-semibold text-gray-800">{getDeviceFamilyLabel(product.device_family)}</p><p className="text-xs text-gray-500">{product.device_model || '-'}</p></td>
                     <td className="px-4 py-2.5 text-gray-600">{product.category_name || '-'}</td>
                     <td className="whitespace-nowrap px-4 py-2.5 font-bold text-gray-950">{formatCurrency(product.price)}</td>

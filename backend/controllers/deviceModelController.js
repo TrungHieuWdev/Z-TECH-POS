@@ -6,13 +6,30 @@ let genericModelReady;
 export function ensureGenericDeviceModel() {
   if (!genericModelReady) {
     genericModelReady = (async () => {
-      await query(
-        `INSERT INTO device_models (family, name, series, notes)
-         VALUES ('generic', 'Phụ kiện chung', 'Dùng chung', 'Không thuộc hãng hoặc model máy cụ thể')
-         ON DUPLICATE KEY UPDATE family = 'generic', series = 'Dùng chung'`
+      const [existingModel] = await query(
+        `SELECT id
+         FROM device_models
+         WHERE family = 'generic'
+         ORDER BY CASE WHEN name = 'Phụ kiện tiện ích' THEN 0 ELSE 1 END, id
+         LIMIT 1`
       );
-      const [model] = await query("SELECT id FROM device_models WHERE family = 'generic' AND name = 'Phụ kiện chung' LIMIT 1");
-      return model.id;
+
+      if (existingModel) {
+        await query(
+          `UPDATE device_models
+           SET name = 'Phụ kiện tiện ích', series = 'Dùng chung',
+               notes = 'Không thuộc hãng hoặc model máy cụ thể'
+           WHERE id = ?`,
+          [existingModel.id]
+        );
+        return existingModel.id;
+      }
+
+      const result = await query(
+        `INSERT INTO device_models (family, name, series, notes)
+         VALUES ('generic', 'Phụ kiện tiện ích', 'Dùng chung', 'Không thuộc hãng hoặc model máy cụ thể')`
+      );
+      return result.insertId;
     })().catch((error) => {
       genericModelReady = null;
       throw error;

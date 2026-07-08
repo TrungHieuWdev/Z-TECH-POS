@@ -126,25 +126,29 @@ export function imageUploadFilter(req, file, callback) {
 }
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const phonePattern = /^0\d{9,10}$/;
+const phonePattern = /^(03|05|07|08|09)\d{8}$/;
 const validText = (value, max) => typeof value === 'string' && value.trim().length <= max;
+const validOptionalText = (value, max) => value == null || validText(value, max);
 
 export function validateCustomer(req, res, next) {
   const { name, phone = '', email = '', address = '' } = req.body;
   if (!validText(name, 100) || name.trim().length < 2) return badRequest(res, 'Tên khách hàng không hợp lệ');
-  if (phone && !phonePattern.test(String(phone))) return badRequest(res, 'Số điện thoại không hợp lệ');
+  if (!phone || !phonePattern.test(String(phone))) return badRequest(res, 'Số điện thoại là bắt buộc và phải hợp lệ');
   if (email && (!validText(email, 100) || !emailPattern.test(email))) return badRequest(res, 'Email không hợp lệ');
   if (!validText(address, 500)) return badRequest(res, 'Địa chỉ quá dài');
   next();
 }
 
 export function validateSupplier(req, res, next) {
-  const { supplier_code, supplier_name, phone = '', email = '', status = 'active' } = req.body;
+  const { supplier_code, supplier_name, supplier_group = '', contact_name = '', phone = '', email = '', address = '', status = 'active' } = req.body;
   if (!/^[A-Z0-9_-]{2,30}$/i.test(String(supplier_code || ''))) return badRequest(res, 'Mã nhà cung cấp không hợp lệ');
   if (!validText(supplier_name, 150) || supplier_name.trim().length < 2) return badRequest(res, 'Tên nhà cung cấp không hợp lệ');
-  if (phone && !phonePattern.test(String(phone))) return badRequest(res, 'Số điện thoại không hợp lệ');
-  if (email && !emailPattern.test(email)) return badRequest(res, 'Email không hợp lệ');
-  if (!['active', 'inactive'].includes(status)) return badRequest(res, 'Trạng thái không hợp lệ');
+  if (!validOptionalText(supplier_group, 100)) return badRequest(res, 'Nhóm cung cấp quá dài');
+  if (!validText(contact_name, 100) || contact_name.trim().length < 2) return badRequest(res, 'Tên người liên hệ là bắt buộc và phải từ 2 đến 100 ký tự');
+  if (!phonePattern.test(String(phone || '').trim())) return badRequest(res, 'Số điện thoại Việt Nam phải gồm 10 chữ số và bắt đầu bằng 03, 05, 07, 08 hoặc 09');
+  if (!validText(email, 100) || !emailPattern.test(email.trim())) return badRequest(res, 'Email là bắt buộc và phải hợp lệ');
+  if (!validText(address, 500) || address.trim().length < 2) return badRequest(res, 'Địa chỉ là bắt buộc và phải từ 2 đến 500 ký tự');
+  if (!['active', 'paused', 'inactive'].includes(status)) return badRequest(res, 'Trạng thái không hợp lệ');
   next();
 }
 

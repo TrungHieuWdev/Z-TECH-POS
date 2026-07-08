@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Boxes, Clock3, RefreshCw } from 'lucide-react';
+import { AlertTriangle, Boxes, Clock3, RefreshCw, X } from 'lucide-react';
 import api from '../api/axios';
 import Modal from './Modal';
 import { formatDate, formatTime } from '../utils/format';
@@ -24,7 +24,22 @@ export default function NotificationCenter({ isOpen, onClose, onCountChange }) {
   const lowStock = useMemo(() => products.filter((product) => Number(product.stock_quantity || 0) <= Number(product.min_stock || 0)).sort((a, b) => Number(a.stock_quantity) - Number(b.stock_quantity)), [products]);
   useEffect(() => { onCountChange(lowStock.length); }, [lowStock.length, onCountChange]);
 
-  return <Modal isOpen={isOpen} onClose={onClose} title="Thông báo hệ thống" maxWidth="max-w-2xl">
+  return <Modal
+    isOpen={isOpen}
+    onClose={onClose}
+    title="Thông báo hệ thống"
+    maxWidth="max-w-2xl"
+    headerActions={(
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Đóng"
+        className="grid h-10 w-10 place-items-center border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+      >
+        <X size={20} />
+      </button>
+    )}
+  >
     <div className="flex items-center justify-between border-b pb-3">
       <p className="text-sm text-gray-600">Tự động cập nhật mỗi 60 giây</p>
       <button type="button" onClick={load} className="inline-flex h-9 items-center gap-2 border px-3 text-sm font-semibold"><RefreshCw size={16} className={loading ? 'animate-spin' : ''}/>Làm mới</button>

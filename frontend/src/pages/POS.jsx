@@ -23,7 +23,7 @@ import {
   X
 } from 'lucide-react';
 import api from '../api/axios';
-import Modal from '../components/Modal';``
+import Modal from '../components/Modal';
 import PrintBill from '../components/PrintBill';
 import ProductImage from '../components/ProductImage';
 import { DEFAULT_SETTINGS, mergeSettings } from '../constants/settingsDefaults';
@@ -66,14 +66,10 @@ const deviceFamilyOptions = [
   { value: 'vivo', label: 'Phụ kiện Vivo' },
   { value: 'oppo', label: 'Phụ kiện Oppo' },
   { value: 'xiaomi', label: 'Phụ kiện Xiaomi' },
-  { value: 'other', label: 'Phụ kiện chung' }
+  { value: 'generic', label: 'Phụ kiện tiện ích' }
 ];
 
 const initialCustomerForm = { name: '', phone: '', email: '', address: '' };
-
-function toMoneyAmount(value) {
-  return Math.max(Number(value || 0), 0);
-}
 
 function formatCountdown(totalSeconds) {
   const safeSeconds = Math.max(Number(totalSeconds || 0), 0);
@@ -321,8 +317,8 @@ export default function POS() {
   const [promotions, setPromotions] = useState(initialPromotions);
   const [selectedPromotion, setSelectedPromotion] = useState(null);
   const [isPromotionOpen, setIsPromotionOpen] = useState(false);
-  const [customerPaid, setCustomerPaid] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [customerPaid, setCustomerPaid] = useState('');
   const [customerName, setCustomerName] = useState('Khách thường');
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [customerMode, setCustomerMode] = useState('regular');
@@ -528,6 +524,7 @@ export default function POS() {
     : 0;
   const normalizedUsedPoints = Math.min(Math.max(Math.floor(Number(usedPoints) || 0), 0), maxRedeemPoints);
   const pointsDiscountAmount = normalizedUsedPoints * 1000;
+  const checkoutDiscount = promotionDiscount + pointsDiscountAmount;
   const amountAfterPoints = Math.max(amountAfterPromotion - pointsDiscountAmount, 0);
   const vatEnabled = Boolean(posSettings.payment?.vat?.enabled);
   const vatRate = vatEnabled ? Math.max(0, Math.min(100, Number(posSettings.payment?.vat?.rate) || 0)) : 0;
@@ -536,11 +533,15 @@ export default function POS() {
   const total = totalBeforeVat + vatAmount;
   const allowOutOfStockSale = Boolean(posSettings.inventory?.allowOutOfStockSale);
   const earnedPoints = selectedCustomer ? Math.floor(total / 10000) : 0;
-  const hasCustomerPaid = String(customerPaid).trim() !== '';
-  const customerPaidValue = toMoneyAmount(customerPaid);
-  const changeDue = paymentMethod === 'cash' ? Math.max(customerPaidValue - total, 0) : 0;
-  const amountMissing =
-    paymentMethod === 'cash' && hasCustomerPaid ? Math.max(total - customerPaidValue, 0) : 0;
+  const customerPaidValue = Math.max(Number(customerPaid || 0), 0);
+  const isCashPayment = paymentMethod === 'cash';
+  const isCashPaymentShort = isCashPayment && customerPaidValue < total;
+  const changeDue = isCashPayment ? Math.max(customerPaidValue - total, 0) : 0;
+  const cashQuickAmounts = useMemo(() => {
+    const roundedTo100k = Math.ceil(total / 100000) * 100000;
+    const baseAmounts = [total, roundedTo100k, 200000, 500000, 1000000, 2000000];
+    return [...new Set(baseAmounts.filter((amount) => amount > 0 && amount >= total).map((amount) => Math.ceil(amount / 1000) * 1000))].slice(0, 4);
+  }, [total]);
   const enabledPaymentOptions = useMemo(() => {
     const methods = posSettings.payment?.methods || {};
     const options = [];
@@ -569,7 +570,7 @@ export default function POS() {
 
   useEffect(() => {
     if (selectedPromotion && !isPromotionEligible(selectedPromotion, { cart, subtotal, isMember: Boolean(selectedCustomer) })) {
-      setSelectedPromotion(null);
+      clearSelectedPromotion();
       toast.error('Khuyến mãi đã được gỡ vì giỏ hàng không còn đủ điều kiện.');
     }
   }, [cart, subtotal, selectedCustomer, selectedPromotion]);
@@ -636,10 +637,9 @@ export default function POS() {
     });
   };
 
-  const handleScanSubmit = async (event) => {
-    event.preventDefault();
-    const code = scanCode.trim();
-    if (!scanMode || !code || isScanning) return;
+  const processScannedCode = async (rawCode) => {
+    const code = String(rawCode || '').trim();
+    if (!code || isScanning) return;
 
     setIsScanning(true);
     try {
@@ -673,6 +673,12 @@ export default function POS() {
         requestAnimationFrame(() => scanInputRef.current?.focus());
       }
     }
+  };
+
+  const handleScanSubmit = async (event) => {
+    event.preventDefault();
+    if (!scanMode) return;
+    await processScannedCode(scanCode);
   };
 
   const updateQuantity = (productId, nextQuantity) => {
@@ -771,6 +777,96 @@ export default function POS() {
     setIsCustomerPickerOpen(false);
   };
 
+  const clearSelectedPromotion = () => {
+    const promotionId = selectedPromotion?.id;
+    if (promotionId) {
+      setCart((current) => current
+        .map((item) => {
+          if (Number(item.promotionGiftId) !== Number(promotionId)) return item;
+          const giftQuantity = Number(item.promotionGiftQuantity || 0);
+          const nextQuantity = Number(item.quantity || 0) - giftQuantity;
+          if (nextQuantity <= 0) return null;
+          const { promotionGiftId, promotionGiftQuantity, ...rest } = item;
+          return { ...rest, quantity: nextQuantity };
+        })
+        .filter(Boolean));
+    }
+    setSelectedPromotion(null);
+  };
+
+  const applyPromotion = async (promotion) => {
+    if (Number(selectedPromotion?.id) === Number(promotion.id) && promotion.promotionType !== 'buy_x_get_y') {
+      setIsPromotionOpen(false);
+      toast('Khuyến mãi này đang được áp dụng');
+      return;
+    }
+    if (promotion.promotionType !== 'buy_x_get_y') {
+      setSelectedPromotion(promotion);
+      setIsPromotionOpen(false);
+      toast.success('Đã áp dụng khuyến mãi');
+      return;
+    }
+
+    const buyQuantity = cart
+      .filter((item) => Number(item.id) === Number(promotion.buyProductId))
+      .reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+    const sets = Math.floor(buyQuantity / Math.max(1, Number(promotion.buyQuantity || 1)));
+    const requiredGiftQuantity = sets * Math.max(1, Number(promotion.giftQuantity || 1));
+    const giftProductId = Number(promotion.giftProductId);
+    let giftProduct = products.find((product) => Number(product.id) === giftProductId);
+
+    if (!giftProduct && giftProductId) {
+      try {
+        const response = await api.get(`/products/${giftProductId}`);
+        giftProduct = response.data;
+      } catch {
+        giftProduct = null;
+      }
+    }
+
+    if (!giftProduct || requiredGiftQuantity <= 0) {
+      toast.error('Không tìm thấy sản phẩm tặng hoặc giỏ hàng chưa đủ điều kiện');
+      return;
+    }
+
+    const existingGift = cart.find((item) => Number(item.id) === Number(giftProduct.id));
+    const currentGiftQuantity = Number(existingGift?.promotionGiftId) === Number(promotion.id)
+      ? Number(existingGift?.promotionGiftQuantity || 0)
+      : 0;
+    const giftToAdd = Math.max(requiredGiftQuantity - currentGiftQuantity, 0);
+
+    if (giftToAdd <= 0) {
+      setSelectedPromotion(promotion);
+      setIsPromotionOpen(false);
+      toast.success('Khuyến mãi đã được áp dụng');
+      return;
+    }
+
+    const nextQuantity = currentGiftQuantity + giftToAdd;
+    if (!allowOutOfStockSale && nextQuantity > Number(giftProduct.stock_quantity || 0)) {
+      toast.error('Sản phẩm tặng không đủ tồn kho');
+      return;
+    }
+
+    setCart((current) => {
+      const found = current.find((item) => Number(item.id) === Number(giftProduct.id));
+      if (found) {
+        return current.map((item) => Number(item.id) === Number(giftProduct.id)
+          ? {
+              ...item,
+              quantity: Number(item.quantity) + giftToAdd,
+              promotionGiftId: promotion.id,
+              promotionGiftQuantity: currentGiftQuantity + giftToAdd
+            }
+          : item);
+      }
+      return [...current, { ...giftProduct, quantity: giftToAdd, promotionGiftId: promotion.id, promotionGiftQuantity: giftToAdd }];
+    });
+    setSelectedPromotion(promotion);
+    setIsPromotionOpen(false);
+    toast.success(`Đã thêm ${giftToAdd} sản phẩm tặng vào giỏ`);
+  };
+
   const closeCustomerPicker = () => {
     setIsCustomerPickerOpen(false);
 
@@ -841,6 +937,7 @@ export default function POS() {
     setBankTransfer(latestBankTransfer);
     setTransferMemo('');
     setVietQrDataUrl('');
+    setCustomerPaid('');
     setCheckoutStep('confirm');
     setIsConfirmOpen(true);
   };
@@ -879,6 +976,11 @@ export default function POS() {
       return;
     }
 
+    if (isCashPaymentShort) {
+      toast.error(`Tiền khách đưa chưa đủ. Còn thiếu ${formatCurrency(total - customerPaidValue)}`);
+      return;
+    }
+
     const receiptItems = buildReceiptItems(cart);
 
     setLoading(true);
@@ -890,7 +992,7 @@ export default function POS() {
         promotion_discount: promotionDiscount,
         points_used: normalizedUsedPoints,
         payment_method: paymentMethod === 'qr' ? 'transfer' : paymentMethod,
-        paid_amount: paymentMethod === 'cash' ? customerPaidValue : total
+        paid_amount: isCashPayment ? customerPaidValue : total
       });
 
       const remainingStockByProduct = new Map(
@@ -917,7 +1019,7 @@ export default function POS() {
         pointsDiscountAmount,
         pointsEarned: Number(response.data.points_earned || earnedPoints),
         total,
-        customerPaid: paymentMethod === 'cash' && hasCustomerPaid ? customerPaidValue : total,
+        customerPaid: isCashPayment ? customerPaidValue : total,
         changeDue,
         vatRate,
         vatAmount,
@@ -1039,6 +1141,39 @@ export default function POS() {
   };
 
   const isTransferQrStep = (paymentMethod === 'transfer' || paymentMethod === 'qr') && checkoutStep === 'transfer';
+  const checkoutActions = (
+    <div className="flex items-center justify-end gap-2">
+      <button
+        type="button"
+        onClick={isTransferQrStep ? () => setCheckoutStep('confirm') : closeCheckoutConfirm}
+        disabled={loading}
+        className="h-8 rounded border border-[#c3c6d7] bg-white px-4 text-sm font-bold text-[#434655] disabled:opacity-60"
+      >
+        {isTransferQrStep ? 'Quay lại' : 'Hủy'}
+      </button>
+      <button
+        type="button"
+        onClick={(paymentMethod === 'transfer' || paymentMethod === 'qr') && checkoutStep === 'confirm' ? continueToTransferPayment : confirmCheckout}
+        disabled={loading}
+        className={`inline-flex h-8 items-center gap-2 rounded px-4 text-sm font-bold text-white disabled:opacity-60 ${
+          isTransferQrStep ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-[#74B8E0]'
+        }`}
+      >
+        <CheckCircle2 size={18} />
+        <span>
+          {loading
+            ? (paymentMethod === 'transfer' || paymentMethod === 'qr') && checkoutStep === 'confirm'
+              ? 'Đang tạo QR...'
+              : 'Đang thanh toán...'
+            : (paymentMethod === 'transfer' || paymentMethod === 'qr') && checkoutStep === 'confirm'
+              ? 'Tiếp tục chuyển khoản'
+              : isTransferQrStep
+                ? 'Xác nhận đã nhận tiền'
+                : 'Xác nhận thanh toán'}
+        </span>
+      </button>
+    </div>
+  );
 
   return (
     <>
@@ -1263,7 +1398,14 @@ export default function POS() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
-                      <h4 className="line-clamp-2 text-sm font-bold leading-5 text-[#191c1e]">{item.name}</h4>
+                      <div className="min-w-0">
+                        <h4 className="line-clamp-2 text-sm font-bold leading-5 text-[#191c1e]">{item.name}</h4>
+                        {Number(item.promotionGiftQuantity || 0) > 0 && (
+                          <p className="mt-0.5 text-[11px] font-extrabold uppercase text-emerald-700">
+                            Quà tặng x{Number(item.promotionGiftQuantity || 0)}
+                          </p>
+                        )}
+                      </div>
                       <button
                         type="button"
                         onClick={() => removeItem(item.id)}
@@ -1333,10 +1475,6 @@ export default function POS() {
             Quay lại giỏ hàng
           </button>
           <div className="mb-2 space-y-1.5">
-            <div className="flex justify-between text-sm text-[#434655]">
-              <span>Tạm tính</span>
-              <span>{formatCurrency(subtotal)}</span>
-            </div>
             <div className="border-y border-[#d9dde2] py-1.5 text-sm">
               <div className="flex items-center justify-between gap-3">
                 <span className="font-semibold text-[#434655]">Khuyến mãi</span>
@@ -1344,33 +1482,34 @@ export default function POS() {
               </div>
               {!selectedPromotion ? <p className="mt-1 text-xs text-[#737686]">Chưa áp dụng</p> : <div className="mt-2 bg-white p-2">
                 <p className="text-xs font-bold text-[#191c1e]">{selectedPromotion.name}</p>
-                <div className="mt-1 flex items-center justify-between"><span className="font-bold text-emerald-700">-{formatCurrency(promotionDiscount)}</span><button type="button" onClick={() => setSelectedPromotion(null)} className="text-xs font-bold text-red-600">Bỏ áp dụng</button></div>
+                <div className="mt-1 flex items-center justify-between"><span className="font-bold text-emerald-700">-{formatCurrency(promotionDiscount)}</span><button type="button" onClick={clearSelectedPromotion} className="text-xs font-bold text-red-600">Bỏ áp dụng</button></div>
               </div>}
             </div>
-            <div className="border-b border-[#d9dde2] pb-1.5 text-sm">
+            {customerMode === 'member' && selectedCustomer && (
+            <div className="rounded-lg border border-[#cde7f4] bg-white p-2.5 text-sm shadow-sm">
               <div className="flex items-center justify-between gap-3">
                 <span className="font-semibold text-[#434655]">Điểm tích lũy</span>
                 <span className="text-xs font-bold text-[#737686]">
                   {selectedCustomer ? `Có ${availablePoints.toLocaleString('vi-VN')} điểm` : 'Chỉ áp dụng cho thành viên'}
                 </span>
               </div>
-              <div className="mt-1 flex items-center gap-1.5">
+              <div className="mt-2 flex items-center gap-1.5">
                 <input
                   type="text"
                   inputMode="numeric"
                   pattern="[0-9]*"
                   value={usedPoints}
                   onChange={(event) => handlePointsChange(event.target.value)}
-                  disabled={!selectedCustomer || cart.length === 0 || maxRedeemPoints === 0}
-                  className="h-8 min-w-0 flex-1 border border-[#c3c6d7] bg-white px-2 text-right text-sm font-semibold outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft disabled:bg-[#e7e9ec] disabled:text-[#8b8e98]"
+                  disabled={cart.length === 0 || maxRedeemPoints === 0}
+                  className="h-9 min-w-0 flex-1 rounded-md border border-[#c3c6d7] bg-[#f7f9fb] px-2 text-right text-sm font-bold text-[#191c1e] outline-none focus:border-brand focus:bg-white focus:ring-2 focus:ring-brand-soft disabled:bg-[#e7e9ec] disabled:text-[#8b8e98]"
                   placeholder="Số điểm muốn dùng"
                   aria-label="Số điểm muốn dùng"
                 />
                 <button
                   type="button"
                   onClick={() => setUsedPoints(maxRedeemPoints)}
-                  disabled={!selectedCustomer || maxRedeemPoints === 0}
-                  className="h-8 shrink-0 border border-brand bg-white px-2 text-xs font-bold text-brand-strong disabled:border-[#c3c6d7] disabled:text-[#8b8e98]"
+                  disabled={maxRedeemPoints === 0}
+                  className="h-9 shrink-0 rounded-md border border-brand bg-white px-2 text-xs font-bold text-brand-strong disabled:border-[#c3c6d7] disabled:text-[#8b8e98]"
                 >
                   Dùng tối đa
                 </button>
@@ -1381,42 +1520,30 @@ export default function POS() {
                 )}
               </div>
               {selectedCustomer && (
-                <div className="mt-1 flex justify-between text-xs">
+                <div className="mt-2 flex justify-between rounded-md bg-[#f7fbf8] px-2 py-1.5 text-xs">
                   <span className="text-[#737686]">Tối đa {maxRedeemPoints.toLocaleString('vi-VN')} điểm</span>
                   <span className="font-bold text-emerald-700">-{formatCurrency(pointsDiscountAmount)}</span>
                 </div>
               )}
             </div>
-            {paymentMethod === 'cash' && (
-              <>
-                <label className="flex items-center justify-between gap-3 text-sm text-[#434655]">
-                  <span>Tiền khách đưa</span>
-                  <input
-                    type="number"
-                    min="0"
-                    value={customerPaid}
-                    onChange={(event) => setCustomerPaid(event.target.value)}
-                    className="h-8 w-32 border border-[#c3c6d7] bg-white px-3 text-right text-sm font-semibold text-[#191c1e] outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft"
-                    placeholder="0"
-                  />
-                </label>
-                <div className="flex items-center justify-between text-sm text-[#434655]">
-                  <span>
-                    {amountMissing > 0 ? 'Còn thiếu' : 'Tiền thừa'}
-                  </span>
-                  <span className={`font-bold ${amountMissing > 0 ? 'text-[#ba1a1a]' : 'text-[#008a45]'}`}>
-                    {amountMissing > 0 ? formatCurrency(amountMissing) : formatCurrency(changeDue)}
-                  </span>
-                </div>
-              </>
             )}
+            <div className="flex justify-between text-sm text-[#434655]">
+              <span>Tạm tính</span>
+              <span>{formatCurrency(subtotal)}</span>
+            </div>
+            <div className="flex justify-between text-sm text-[#434655]">
+              <span>Giảm giá</span>
+              <span className={checkoutDiscount > 0 ? 'font-bold text-emerald-700' : 'font-semibold text-[#434655]'}>
+                {checkoutDiscount > 0 ? `-${formatCurrency(checkoutDiscount)}` : formatCurrency(0)}
+              </span>
+            </div>
             {vatAmount > 0 && (
               <div className="flex items-center justify-between text-sm text-[#434655]">
                 <span>VAT {vatRate.toLocaleString('vi-VN')}%</span>
                 <span className="font-bold">{formatCurrency(vatAmount)}</span>
               </div>
             )}
-            <div className="flex items-center justify-between border-t border-[#c3c6d7] pt-2">
+            <div className="flex items-center justify-between pt-2">
               <span className="text-base font-bold uppercase text-[#191c1e]">Tổng cộng</span>
               <span className="text-base font-extrabold text-brand-strong">{formatCurrency(total)}</span>
             </div>
@@ -1482,13 +1609,27 @@ export default function POS() {
     </div>
     <MobileCartLauncher itemCount={cart.length} onOpen={() => { setMobileCartView('cart'); setIsMobileCartOpen(true); }} />
     <div className="no-print">
-    <Modal isOpen={isPromotionOpen} onClose={() => setIsPromotionOpen(false)} title="Khuyến mãi khả dụng" maxWidth="max-w-2xl">
+    <Modal
+      isOpen={isPromotionOpen}
+      onClose={() => setIsPromotionOpen(false)}
+      title="Khuyến mãi khả dụng"
+      maxWidth="max-w-2xl"
+      headerActions={(
+        <button
+          type="button"
+          onClick={() => setIsPromotionOpen(false)}
+          className="h-10 border border-brand bg-white px-5 text-sm font-bold text-brand-strong transition hover:bg-brand-surface"
+        >
+          Hủy
+        </button>
+      )}
+    >
       <button type="button" onClick={() => { setSelectedPromotion(null); setIsPromotionOpen(false); }} className="mb-3 h-10 w-full border border-[#c3c6d7] bg-white text-sm font-bold text-[#434655]">Không áp dụng khuyến mãi</button>
       {eligiblePromotions.length === 0 ? <div className="border border-dashed border-[#c3c6d7] p-8 text-center text-sm font-semibold text-[#737686]">Hiện chưa có khuyến mãi phù hợp với giỏ hàng này.</div> : <div className="max-h-[60vh] space-y-3 overflow-y-auto">
         {eligiblePromotions.map((promotion) => <article key={promotion.id} className="border border-[#d8e4eb] bg-white p-4">
-          <div className="flex items-start justify-between gap-3"><div><h3 className="font-bold text-[#191c1e]">{promotion.name}</h3><p className="mt-1 text-sm text-[#5f6670]">{promotion.description || promotion.condition}</p></div><span className="shrink-0 bg-brand-soft px-2 py-1 text-sm font-bold text-brand-strong">-{formatCurrency(getPromotionDiscount(promotion, subtotal, cart))}</span></div>
-          <div className="mt-3 grid gap-1 text-xs text-[#5f6670] sm:grid-cols-2"><p>Điều kiện: {promotion.condition || 'Không có'}</p><p>Hình thức: {promotion.promotionType === 'buy_x_get_y' ? 'Mua X tặng Y' : promotion.promotionType === 'quantity_tier' ? 'Giảm theo bậc số lượng' : promotion.discountType === 'percent' ? `${promotion.discountValue}%` : formatCurrency(promotion.discountValue)}</p><p>Hiệu lực: {promotion.startDate || '-'} đến {promotion.endDate || '-'}</p></div>
-          <button type="button" onClick={() => { setSelectedPromotion(promotion); setIsPromotionOpen(false); toast.success('Đã áp dụng khuyến mãi'); }} className="mt-3 h-10 w-full bg-brand px-4 text-sm font-bold text-white">Áp dụng</button>
+          <div className="flex items-start justify-between gap-3"><div><h3 className="font-bold text-[#191c1e]">{promotion.name}</h3><p className="mt-1 text-sm text-[#5f6670]">{promotion.description || promotion.condition}</p></div><span className="shrink-0 bg-brand-soft px-2 py-1 text-sm font-bold text-brand-strong">{promotion.promotionType === 'buy_x_get_y' ? `Tặng ${promotion.giftQuantity || 1} SP` : `-${formatCurrency(getPromotionDiscount(promotion, subtotal, cart))}`}</span></div>
+          <div className="mt-3 grid gap-1 text-xs text-[#5f6670] sm:grid-cols-2"><p>Điều kiện: {promotion.condition || 'Không có'}</p><p>Hình thức: {promotion.promotionType === 'buy_x_get_y' ? 'Mua X tặng Y' : promotion.promotionType === 'combo' ? 'Combo sản phẩm' : promotion.promotionType === 'nth_item_discount' ? `Sản phẩm thứ ${promotion.nthQuantity || 2} giảm ${formatCurrency(promotion.nthDiscountAmount || 0)}` : promotion.promotionType === 'quantity_tier' ? 'Giảm theo bậc số lượng' : promotion.discountType === 'percent' ? `${promotion.discountValue}%` : formatCurrency(promotion.discountValue)}</p><p>Hiệu lực: {promotion.startDate || '-'} đến {promotion.endDate || '-'}</p></div>
+          <button type="button" onClick={() => applyPromotion(promotion)} className="mt-3 h-10 w-full bg-brand px-4 text-sm font-bold text-white">Áp dụng</button>
         </article>)}
       </div>}
     </Modal>
@@ -1653,10 +1794,17 @@ export default function POS() {
     <Modal
       isOpen={isConfirmOpen}
       onClose={closeCheckoutConfirm}
-      title={isTransferQrStep ? 'Thanh toán chuyển khoản VietQR' : 'Xác nhận thanh toán'}
+      title={isTransferQrStep ? 'Thanh toán chuyển khoản VietQR' : (
+        <span className="inline-flex items-center gap-2">
+          <CheckCircle2 size={22} className="text-emerald-600" />
+          Xác nhận thanh toán
+        </span>
+      )}
       maxWidth={isTransferQrStep ? 'max-w-6xl' : 'max-w-2xl'}
+      panelClassName="sm:max-h-[96vh] sm:p-3 [&_h2]:text-lg"
+      headerClassName="mb-2 sm:-top-3 sm:-mx-3 sm:px-3 sm:py-2.5"
     >
-      <div className={isTransferQrStep ? 'space-y-3' : 'space-y-5'}>
+      <div className={isTransferQrStep ? 'space-y-3' : 'space-y-4'}>
         {isTransferQrStep && (
           <div className="grid gap-4 lg:grid-cols-[minmax(220px,0.75fr)_minmax(0,1.25fr)]">
             <div className="rounded-lg border border-[#d7eef3] bg-[#f8fdfe] p-3">
@@ -1752,16 +1900,14 @@ export default function POS() {
         <div className={isTransferQrStep ? 'rounded-lg border border-[#d7eef3] bg-[#f8fdfe] p-3' : 'rounded-lg border border-[#d7eef3] bg-[#f8fdfe] p-4'}>
           <div className={isTransferQrStep ? 'mb-2 flex items-center gap-2 text-sm font-bold text-[#0f3b46]' : 'mb-3 flex items-center gap-2 text-sm font-bold text-[#0f3b46]'}>
             <ReceiptText size={18} />
-            <span>{isTransferQrStep ? 'Sản phẩm trong đơn chuyển khoản' : 'Kiểm tra lại đơn trước khi thanh toán'}</span>
+            <span>{isTransferQrStep ? 'Sản phẩm trong đơn chuyển khoản' : 'Sản phẩm'}</span>
           </div>
-          <div className={isTransferQrStep ? 'max-h-28 space-y-2 overflow-y-auto pr-1' : 'space-y-3'}>
+          <div className={isTransferQrStep ? 'max-h-28 space-y-2 overflow-y-auto pr-1' : 'max-h-40 space-y-3 overflow-y-auto pr-1'}>
             {cart.map((item) => (
               <div key={item.id} className={isTransferQrStep ? 'flex items-start justify-between gap-4 border-b border-dashed border-[#d7eef3] pb-2 last:border-0 last:pb-0' : 'flex items-start justify-between gap-4 border-b border-dashed border-[#d7eef3] pb-3 last:border-0 last:pb-0'}>
                 <div className="min-w-0">
                   <p className="font-bold text-[#191c1e]">{item.name}</p>
-                  <p className="mt-1 text-xs font-semibold text-[#737686]">
-                    Số lượng: {item.quantity} x {formatCurrency(item.price)}
-                  </p>
+                  <p className="mt-1 text-xs font-semibold text-[#737686]">x{item.quantity}</p>
                 </div>
                 <span className="shrink-0 font-extrabold text-[#0f3b46]">
                   {formatCurrency(Number(item.price) * item.quantity)}
@@ -1771,76 +1917,84 @@ export default function POS() {
           </div>
         </div>
 
-        <div className={isTransferQrStep ? 'grid gap-x-6 gap-y-1 rounded-lg border border-[#d7eef3] p-3 text-sm md:grid-cols-2' : 'space-y-2 rounded-lg border border-[#d7eef3] p-4 text-sm'}>
+        <div className={isTransferQrStep ? 'grid gap-x-6 gap-y-1 rounded-lg border border-[#d7eef3] p-3 text-sm md:grid-cols-2' : 'space-y-3 rounded-lg border border-[#d7eef3] p-4 text-sm'}>
           <div className="flex justify-between">
             <span>Tạm tính</span>
             <span>{formatCurrency(subtotal)}</span>
           </div>
-          {promotionDiscount > 0 && <div className="flex justify-between"><span>Khuyến mãi</span><span>-{formatCurrency(promotionDiscount)}</span></div>}
-          {normalizedUsedPoints > 0 && (
-            <div className="flex justify-between text-emerald-700">
-              <span>Dùng {normalizedUsedPoints.toLocaleString('vi-VN')} điểm</span>
-              <span>-{formatCurrency(pointsDiscountAmount)}</span>
-            </div>
-          )}
           <div className="flex justify-between">
-            <span>Phương thức</span>
-            <span className="font-bold">{getPaymentLabel(paymentMethod)}</span>
+            <span>Khuyến mãi</span>
+            <span className={checkoutDiscount > 0 ? 'font-semibold text-emerald-700' : ''}>{checkoutDiscount > 0 ? `-${formatCurrency(checkoutDiscount)}` : formatCurrency(0)}</span>
           </div>
-          {paymentMethod === 'cash' && (
-            <>
-              <div className="flex justify-between">
-                <span>Tiền khách đưa</span>
-                <span>{formatCurrency(customerPaidValue)}</span>
-              </div>
-              <div className="flex justify-between font-bold text-emerald-700">
-                <span>Tiền thừa</span>
-                <span>{formatCurrency(changeDue)}</span>
-              </div>
-            </>
-          )}
           {vatAmount > 0 && (
             <div className="flex justify-between">
               <span>VAT {vatRate.toLocaleString('vi-VN')}%</span>
               <span>{formatCurrency(vatAmount)}</span>
             </div>
           )}
-          <div className="flex justify-between text-lg font-extrabold text-[#191c1e]">
-            <span>Tổng cộng</span>
-            <span>{formatCurrency(total)}</span>
+          <div className="mt-2 flex items-center justify-between rounded-lg border border-[#74B8E0] bg-[#e8f5fb] px-3 py-3 text-xl font-extrabold text-[#0f3b46] shadow-sm">
+            <span>TỔNG CỘNG</span>
+            <span className="text-brand-strong">{formatCurrency(total)}</span>
           </div>
         </div>
 
-        <div className={isTransferQrStep ? 'sticky bottom-0 z-10 -mx-6 -mb-6 flex justify-end gap-3 border-t border-[#edf7f9] bg-white px-6 py-3' : 'flex justify-end gap-3'}>
-          <button
-            type="button"
-            onClick={isTransferQrStep ? () => setCheckoutStep('confirm') : closeCheckoutConfirm}
-            disabled={loading}
-            className="rounded-lg border border-[#c3c6d7] px-4 py-2 font-semibold text-[#434655] disabled:opacity-60"
-          >
-            {isTransferQrStep ? 'Quay lại xác nhận' : 'Kiểm tra lại'}
-          </button>
-          <button
-            type="button"
-            onClick={(paymentMethod === 'transfer' || paymentMethod === 'qr') && checkoutStep === 'confirm' ? continueToTransferPayment : confirmCheckout}
-            disabled={loading}
-            className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 font-bold text-white disabled:opacity-60 ${
-              isTransferQrStep ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-[#74B8E0]'
-            }`}
-          >
-            <CheckCircle2 size={18} />
-            <span>
-              {loading
-                ? (paymentMethod === 'transfer' || paymentMethod === 'qr') && checkoutStep === 'confirm'
-                  ? 'Đang tạo QR...'
-                  : 'Đang thanh toán...'
-                : (paymentMethod === 'transfer' || paymentMethod === 'qr') && checkoutStep === 'confirm'
-                  ? 'Tiếp tục chuyển khoản'
-                  : isTransferQrStep
-                    ? 'Xác nhận đã nhận tiền'
-                    : 'Xác nhận thanh toán'}
-            </span>
-          </button>
+        <div className="space-y-3 rounded-lg border border-[#d7eef3] p-4 text-sm">
+          <div className="flex items-center justify-between gap-3">
+            <span>Phương thức</span>
+            <span className="font-bold">{getPaymentLabel(paymentMethod)}</span>
+          </div>
+          {isCashPayment && (
+            <>
+              <label className="grid gap-1.5">
+                <span className="font-semibold text-[#434655]">Tiền khách đưa</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={customerPaid ? formatCurrency(customerPaidValue) : ''}
+                  onChange={(event) => setCustomerPaid(event.target.value.replace(/\D/g, ''))}
+                  onKeyDown={(event) => {
+                    if ((event.key !== 'Backspace' && event.key !== 'Delete') || !customerPaid) return;
+                    const valueLength = event.currentTarget.value.length;
+                    const selectionStart = event.currentTarget.selectionStart ?? valueLength;
+                    const selectionEnd = event.currentTarget.selectionEnd ?? valueLength;
+                    if (selectionStart !== selectionEnd) return;
+                    if (selectionStart >= valueLength - 2) {
+                      event.preventDefault();
+                      setCustomerPaid((current) => current.slice(0, -1));
+                    }
+                  }}
+                  className="h-11 rounded-md border border-[#c3c6d7] bg-white px-3 text-right text-base font-bold text-[#191c1e] outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft"
+                  placeholder="Nhập số tiền"
+                />
+              </label>
+              <div>
+                <p className="mb-2 text-xs font-bold uppercase text-[#737686]">Gợi ý nhanh</p>
+                <div className="flex flex-wrap gap-2">
+                  {cashQuickAmounts.map((amount, index) => (
+                    <button
+                      key={amount}
+                      type="button"
+                      onClick={() => setCustomerPaid(String(amount))}
+                      className="h-9 rounded-md border border-[#c3c6d7] bg-white px-3 text-sm font-bold text-[#434655] hover:border-brand hover:text-brand-strong"
+                    >
+                      {index === 0 ? `Đưa đủ ${formatCurrency(amount)}` : formatCurrency(amount)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center justify-between border-t border-[#edf2f5] pt-3">
+                <span className="font-semibold text-[#434655]">Tiền thừa</span>
+                <span className={`text-lg font-extrabold ${isCashPaymentShort ? 'text-[#ba1a1a]' : 'text-emerald-700'}`}>
+                  {isCashPaymentShort ? `Thiếu ${formatCurrency(total - customerPaidValue)}` : formatCurrency(changeDue)}
+                </span>
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="sticky bottom-0 z-20 -mx-3 -mb-3 flex justify-end border-t border-[#edf2f5] bg-white px-3 py-1.5">
+          {checkoutActions}
         </div>
       </div>
     </Modal>

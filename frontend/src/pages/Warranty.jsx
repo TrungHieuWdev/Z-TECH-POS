@@ -729,7 +729,17 @@ export default function Warranty() {
         <Pagination currentPage={currentPage} totalPages={totalPages} setCurrentPage={setCurrentPage} />
       </section>
 
-      <Modal isOpen={activeModal.type === 'detail'} onClose={closeModal} title="Chi tiết bảo hành" maxWidth="max-w-5xl">
+      <Modal
+        isOpen={activeModal.type === 'detail'}
+        onClose={closeModal}
+        title="Chi tiết bảo hành"
+        maxWidth="max-w-5xl"
+        headerActions={(
+          <button type="button" onClick={closeModal} className="h-10 rounded border border-gray-300 bg-white px-4 text-sm font-bold text-gray-700 transition hover:bg-gray-50">
+            Đóng
+          </button>
+        )}
+      >
         {selectedWarranty && (
           <div className="grid gap-5 text-sm xl:grid-cols-[1fr_280px]">
             <div className="space-y-4">

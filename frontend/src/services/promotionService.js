@@ -99,10 +99,38 @@ export function getPromotionDiscount(promotion, subtotal, cart = []) {
     const buyQuantity = cart.filter((item) => Number(item.id) === Number(promotion.buyProductId)).reduce((sum, item) => sum + Number(item.quantity || 0), 0);
     const giftItems = cart.filter((item) => Number(item.id) === Number(promotion.giftProductId));
     const giftQuantity = giftItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
-    const sets = Math.min(Math.floor(buyQuantity / Math.max(1, Number(promotion.buyQuantity || 1))), Math.floor(giftQuantity / Math.max(1, Number(promotion.giftQuantity || 1))));
+    const buyRequired = Math.max(1, Number(promotion.buyQuantity || 1));
+    const giftRequired = Math.max(1, Number(promotion.giftQuantity || 1));
+    const sameProduct = Number(promotion.buyProductId) === Number(promotion.giftProductId);
+    const sets = sameProduct
+      ? Math.floor(buyQuantity / (buyRequired + giftRequired))
+      : Math.min(Math.floor(buyQuantity / buyRequired), Math.floor(giftQuantity / giftRequired));
     if (sets <= 0) return 0;
     const giftUnitPrice = Number(giftItems[0]?.price || giftItems[0]?.selling_price || 0);
-    return Math.min(subtotal, giftUnitPrice * Number(promotion.giftQuantity || 1) * sets);
+    return Math.min(subtotal, giftUnitPrice * giftRequired * sets);
+  }
+  if (promotion.promotionType === 'combo') {
+    const comboItems = promotion.comboItems || [];
+    if (!comboItems.length) return 0;
+    const sets = Math.min(...comboItems.map((required) => {
+      const quantity = cart.filter((item) => Number(item.id) === Number(required.productId)).reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+      return Math.floor(quantity / Math.max(1, Number(required.quantity || 1)));
+    }));
+    if (sets <= 0) return 0;
+    const comboSubtotal = comboItems.reduce((sum, required) => {
+      const item = cart.find((cartItem) => Number(cartItem.id) === Number(required.productId));
+      return sum + Number(item?.price || item?.selling_price || 0) * Number(required.quantity || 1);
+    }, 0) * sets;
+    const raw = promotion.comboDiscountType === 'percent'
+      ? comboSubtotal * Number(promotion.comboDiscountValue || 0) / 100
+      : Number(promotion.comboDiscountValue || 0) * sets;
+    return Math.max(0, Math.min(subtotal, raw));
+  }
+  if (promotion.promotionType === 'nth_item_discount') {
+    const eligibleItems = cart.filter((item) => !promotion.productId || Number(item.id) === Number(promotion.productId));
+    const quantity = eligibleItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+    const times = Math.floor(quantity / Math.max(2, Number(promotion.nthQuantity || 2)));
+    return Math.min(subtotal, times * Math.max(0, Number(promotion.nthDiscountAmount || 0)));
   }
   if (promotion.promotionType === 'quantity_tier') {
     const targetQuantity = cart.filter((item) => !promotion.productId || Number(item.id) === Number(promotion.productId)).reduce((sum, item) => sum + Number(item.quantity || 0), 0);
@@ -125,7 +153,16 @@ export function isPromotionEligible(promotion, { cart, subtotal, isMember }) {
   if (promotion.memberOnly && !isMember) return false;
   if (promotion.promotionType === 'buy_x_get_y') {
     const quantityOf = (id) => cart.filter((item) => Number(item.id) === Number(id)).reduce((sum, item) => sum + Number(item.quantity || 0), 0);
-    return quantityOf(promotion.buyProductId) >= Number(promotion.buyQuantity || 1) && quantityOf(promotion.giftProductId) >= Number(promotion.giftQuantity || 1);
+    return quantityOf(promotion.buyProductId) >= Number(promotion.buyQuantity || 1);
+  }
+  if (promotion.promotionType === 'combo') {
+    return (promotion.comboItems || []).length >= 2 && promotion.comboItems.every((required) => (
+      cart.filter((item) => Number(item.id) === Number(required.productId)).reduce((sum, item) => sum + Number(item.quantity || 0), 0) >= Number(required.quantity || 1)
+    ));
+  }
+  if (promotion.promotionType === 'nth_item_discount') {
+    const quantity = cart.filter((item) => !promotion.productId || Number(item.id) === Number(promotion.productId)).reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+    return quantity >= Math.max(2, Number(promotion.nthQuantity || 2));
   }
   if (promotion.promotionType === 'quantity_tier') {
     const quantity = cart.filter((item) => !promotion.productId || Number(item.id) === Number(promotion.productId)).reduce((sum, item) => sum + Number(item.quantity || 0), 0);

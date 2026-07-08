@@ -109,6 +109,14 @@ const emptyForm = {
   buyQuantity: 1,
   giftProductId: '',
   giftQuantity: 1,
+  comboProduct1Id: '',
+  comboProduct1Quantity: 1,
+  comboProduct2Id: '',
+  comboProduct2Quantity: 1,
+  comboDiscountType: 'amount',
+  comboDiscountValue: '',
+  nthQuantity: 2,
+  nthDiscountAmount: '',
   tier2Percent: 5,
   tier3Percent: 10
 };
@@ -125,6 +133,8 @@ const discountTypeOptions = [
   { value: 'percent', label: 'Giảm %' },
   { value: 'amount', label: 'Giảm tiền' },
   { value: 'buy_x_get_y', label: 'Mua X tặng Y' },
+  { value: 'combo', label: 'Khuyến mãi combo' },
+  { value: 'nth_item_discount', label: 'Sản phẩm thứ N giảm tiền' },
   { value: 'quantity_tier', label: 'Giảm theo bậc số lượng' }
 ];
 
@@ -159,6 +169,8 @@ function formatDateText(value) {
 function formatDiscount(promotion) {
   if (promotion.promotionType === 'buy_x_get_y') return `${promotion.buyQuantity || 1} tặng ${promotion.giftQuantity || 1}`;
   if (promotion.promotionType === 'quantity_tier') return (promotion.quantityTiers || []).map((tier) => `${tier.quantity} SP: -${tier.percent}%`).join(', ');
+  if (promotion.promotionType === 'combo') return promotion.comboDiscountType === 'percent' ? `Combo giảm ${promotion.comboDiscountValue || 0}%` : `Combo giảm ${formatCurrency(promotion.comboDiscountValue || 0)}`;
+  if (promotion.promotionType === 'nth_item_discount') return `Mỗi SP thứ ${promotion.nthQuantity || 2}: -${formatCurrency(promotion.nthDiscountAmount || 0)}`;
   return promotion.discountType === 'percent'
     ? `${promotion.discountValue}%`
     : formatCurrency(promotion.discountValue);
@@ -167,6 +179,8 @@ function formatDiscount(promotion) {
 function getPromotionTypeLabel(promotion) {
   if (promotion.promotionType === 'buy_x_get_y') return 'Mua X tặng Y';
   if (promotion.promotionType === 'quantity_tier') return 'Giảm theo số lượng';
+  if (promotion.promotionType === 'combo') return 'Khuyến mãi combo';
+  if (promotion.promotionType === 'nth_item_discount') return 'Sản phẩm thứ N giảm tiền';
   return promotion.discountType === 'percent' ? 'Giảm %' : 'Giảm tiền';
 }
 
@@ -303,6 +317,10 @@ export default function Promotions({ tabNavigation = null }) {
       description: promotion.description,
       buyProductId: promotion.buyProductId || '', buyQuantity: promotion.buyQuantity || 1,
       giftProductId: promotion.giftProductId || '', giftQuantity: promotion.giftQuantity || 1,
+      comboProduct1Id: promotion.comboItems?.[0]?.productId || '', comboProduct1Quantity: promotion.comboItems?.[0]?.quantity || 1,
+      comboProduct2Id: promotion.comboItems?.[1]?.productId || '', comboProduct2Quantity: promotion.comboItems?.[1]?.quantity || 1,
+      comboDiscountType: promotion.comboDiscountType || 'amount', comboDiscountValue: promotion.comboDiscountValue || '',
+      nthQuantity: promotion.nthQuantity || 2, nthDiscountAmount: promotion.nthDiscountAmount || '',
       tier2Percent: promotion.quantityTiers?.[0]?.percent || 5,
       tier3Percent: promotion.quantityTiers?.[1]?.percent || 10
     });
@@ -352,6 +370,14 @@ export default function Promotions({ tabNavigation = null }) {
       setProductSearchError('Vui lòng chọn đủ sản phẩm mua và sản phẩm tặng');
       return;
     }
+    if (form.promotionType === 'combo' && (!form.comboProduct1Id || !form.comboProduct2Id || Number(form.comboProduct1Id) === Number(form.comboProduct2Id))) {
+      setProductSearchError('Vui lòng chọn hai sản phẩm khác nhau cho combo');
+      return;
+    }
+    if (form.promotionType === 'nth_item_discount' && Number(form.nthQuantity) < 2) {
+      setProductSearchError('Số thứ tự sản phẩm phải từ 2 trở lên');
+      return;
+    }
 
     if (form.scope === 'Theo sản phẩm cụ thể' && !form.productId) {
       setProductSearchError('Vui lòng chọn một sản phẩm trong danh sách gợi ý');
@@ -387,6 +413,14 @@ export default function Promotions({ tabNavigation = null }) {
       buyQuantity: Number(form.buyQuantity || 1),
       giftProductId: Number(form.giftProductId || 0) || '',
       giftQuantity: Number(form.giftQuantity || 1),
+      comboItems: form.promotionType === 'combo' ? [
+        { productId: Number(form.comboProduct1Id), quantity: Number(form.comboProduct1Quantity || 1) },
+        { productId: Number(form.comboProduct2Id), quantity: Number(form.comboProduct2Quantity || 1) }
+      ] : [],
+      comboDiscountType: form.comboDiscountType,
+      comboDiscountValue: Number(form.comboDiscountValue || 0),
+      nthQuantity: Number(form.nthQuantity || 2),
+      nthDiscountAmount: Number(form.nthDiscountAmount || 0),
       quantityTiers: form.promotionType === 'quantity_tier' ? [{ quantity: 2, percent: Number(form.tier2Percent || 0) }, { quantity: 3, percent: Number(form.tier3Percent || 0) }] : [],
       categoryId: form.scope === 'Theo danh mục sản phẩm' ? Number(form.categoryId || 0) || '' : '',
       productId: form.scope === 'Theo sản phẩm cụ thể' ? Number(form.productId || 0) || '' : '',
@@ -723,17 +757,43 @@ export default function Promotions({ tabNavigation = null }) {
                   <select value={form.promotionType} onChange={(event) => setForm({ ...form, promotionType: event.target.value })} className="h-10 w-full rounded-lg border border-[#d5dbe3] px-3 text-sm outline-none focus:border-brand">
                     <option value="standard">Mã giảm giá thông thường</option>
                     <option value="buy_x_get_y">Mua X tặng Y</option>
+                    <option value="combo">Khuyến mãi combo</option>
+                    <option value="nth_item_discount">Sản phẩm thứ N giảm thêm tiền</option>
                     <option value="quantity_tier">Giảm giá theo bậc số lượng</option>
                   </select>
                 </label>
 
                 {form.promotionType === 'buy_x_get_y' && <div className="rounded-lg border border-brand-soft bg-[#f8fbfd] p-4">
                   <p className="mb-3 text-sm font-bold text-brand-deep">Cấu hình sản phẩm mua và quà tặng</p>
+                  <p className="mb-3 text-xs text-[#68707a]">Có thể chọn cùng một sản phẩm để tạo mua 1 tặng 1. Khi đó khách phải có đủ cả số lượng mua và số lượng tặng trong giỏ.</p>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <label><span className="mb-1 block text-xs font-bold text-[#68707a]">SẢN PHẨM KHÁCH MUA</span><SearchableProductSelect products={products} value={form.buyProductId} onChange={(id) => { setForm({ ...form, buyProductId: id }); setProductSearchError(''); }} placeholder="Tìm theo tên hoặc SKU..." /></label>
                     <label><span className="mb-1 block text-xs font-bold text-[#68707a]">SỐ LƯỢNG MUA</span><input type="number" min="1" value={form.buyQuantity} onChange={(e) => setForm({ ...form, buyQuantity: e.target.value })} className="h-10 w-full border px-3 text-sm" /></label>
                     <label><span className="mb-1 block text-xs font-bold text-[#68707a]">SẢN PHẨM TẶNG</span><SearchableProductSelect products={products} value={form.giftProductId} onChange={(id) => { setForm({ ...form, giftProductId: id }); setProductSearchError(''); }} placeholder="Tìm quà theo tên hoặc SKU..." /></label>
                     <label><span className="mb-1 block text-xs font-bold text-[#68707a]">SỐ LƯỢNG TẶNG</span><input type="number" min="1" value={form.giftQuantity} onChange={(e) => setForm({ ...form, giftQuantity: e.target.value })} className="h-10 w-full border px-3 text-sm" /></label>
+                  </div>
+                  {productSearchError && <p className="mt-2 text-xs font-semibold text-red-600">{productSearchError}</p>}
+                </div>}
+
+                {form.promotionType === 'combo' && <div className="rounded-lg border border-brand-soft bg-[#f8fbfd] p-4">
+                  <p className="mb-3 text-sm font-bold text-brand-deep">Cấu hình combo sản phẩm</p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label><span className="mb-1 block text-xs font-bold text-[#68707a]">SẢN PHẨM 1</span><SearchableProductSelect products={products} value={form.comboProduct1Id} onChange={(id) => { setForm({ ...form, comboProduct1Id: id }); setProductSearchError(''); }} placeholder="Chọn sản phẩm thứ nhất..." /></label>
+                    <label><span className="mb-1 block text-xs font-bold text-[#68707a]">SỐ LƯỢNG</span><input type="number" min="1" value={form.comboProduct1Quantity} onChange={(e) => setForm({ ...form, comboProduct1Quantity: e.target.value })} className="h-10 w-full border px-3 text-sm" /></label>
+                    <label><span className="mb-1 block text-xs font-bold text-[#68707a]">SẢN PHẨM 2</span><SearchableProductSelect products={products} value={form.comboProduct2Id} onChange={(id) => { setForm({ ...form, comboProduct2Id: id }); setProductSearchError(''); }} placeholder="Chọn sản phẩm thứ hai..." /></label>
+                    <label><span className="mb-1 block text-xs font-bold text-[#68707a]">SỐ LƯỢNG</span><input type="number" min="1" value={form.comboProduct2Quantity} onChange={(e) => setForm({ ...form, comboProduct2Quantity: e.target.value })} className="h-10 w-full border px-3 text-sm" /></label>
+                    <label><span className="mb-1 block text-xs font-bold text-[#68707a]">LOẠI GIẢM</span><select value={form.comboDiscountType} onChange={(e) => setForm({ ...form, comboDiscountType: e.target.value })} className="h-10 w-full border px-3 text-sm"><option value="amount">Giảm tiền</option><option value="percent">Giảm phần trăm</option></select></label>
+                    <label><span className="mb-1 block text-xs font-bold text-[#68707a]">GIÁ TRỊ GIẢM</span><input type="number" min="0" max={form.comboDiscountType === 'percent' ? 100 : undefined} value={form.comboDiscountValue} onChange={(e) => setForm({ ...form, comboDiscountValue: e.target.value })} className="h-10 w-full border px-3 text-sm" placeholder="0" /></label>
+                  </div>
+                  {productSearchError && <p className="mt-2 text-xs font-semibold text-red-600">{productSearchError}</p>}
+                </div>}
+
+                {form.promotionType === 'nth_item_discount' && <div className="rounded-lg border border-brand-soft bg-[#f8fbfd] p-4">
+                  <p className="mb-1 text-sm font-bold text-brand-deep">Giảm tiền cho sản phẩm thứ N</p>
+                  <p className="mb-3 text-xs text-[#68707a]">Ví dụ: sản phẩm thứ 3 giảm 20.000đ; mua 6 sản phẩm sẽ được giảm hai lần.</p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="text-xs font-bold text-[#68707a]">SẢN PHẨM THỨ<input type="number" min="2" value={form.nthQuantity} onChange={(e) => setForm({ ...form, nthQuantity: e.target.value })} className="mt-1 h-10 w-full border px-3 text-sm" /></label>
+                    <label className="text-xs font-bold text-[#68707a]">SỐ TIỀN GIẢM<input type="number" min="0" value={form.nthDiscountAmount} onChange={(e) => setForm({ ...form, nthDiscountAmount: e.target.value })} className="mt-1 h-10 w-full border px-3 text-sm" placeholder="0" /></label>
                   </div>
                   {productSearchError && <p className="mt-2 text-xs font-semibold text-red-600">{productSearchError}</p>}
                 </div>}

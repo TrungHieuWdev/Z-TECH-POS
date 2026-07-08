@@ -58,7 +58,7 @@ export async function adjustStock(req, res) {
       await db('UPDATE products SET stock_quantity=? WHERE id=?', [newQuantity, product_id]);
       await db(`INSERT INTO inventory_logs
         (product_id,user_id,type,quantity,before_quantity,after_quantity,reference_type,note)
-        VALUES (?,?,'ADJUSTMENT',?,?,?,'MANUAL',?)`, [product_id, req.user.id, Math.abs(newQuantity - before), before, newQuantity, note]);
+        VALUES (?,?,'ADJUSTMENT',?,?,?,'MANUAL',?)`, [product_id, req.user.id, newQuantity - before, before, newQuantity, note]);
     });
 
     res.json({ message: 'Đã điều chỉnh tồn kho' });

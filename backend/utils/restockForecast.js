@@ -11,9 +11,9 @@ export function calculateRestockForecast(input) {
   const sold30Days = Math.max(0, Number(input.sold30Days || 0));
   const sold90Days = Math.max(0, Number(input.sold90Days || 0));
   const productAgeDays = Math.max(1, Number(input.productAgeDays || 1));
-  const actualDays7 = Math.max(1, Math.min(7, productAgeDays));
-  const actualDays30 = Math.max(1, Math.min(30, productAgeDays));
-  const actualDays90 = Math.max(1, Math.min(90, productAgeDays));
+  const actualDays7 = 7;
+  const actualDays30 = 30;
+  const actualDays90 = 90;
   const rate7 = divide(sold7Days, actualDays7);
   const rate30 = divide(sold30Days, actualDays30);
   const rate90 = divide(sold90Days, actualDays90);

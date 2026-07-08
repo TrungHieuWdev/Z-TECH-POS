@@ -71,17 +71,22 @@ CREATE TABLE IF NOT EXISTS suppliers (
   id INT AUTO_INCREMENT PRIMARY KEY,
   supplier_code VARCHAR(30) NULL,
   supplier_name VARCHAR(150) NOT NULL,
+  supplier_group VARCHAR(100) NULL,
+  contact_name VARCHAR(100) NULL,
   phone VARCHAR(20) NULL,
   email VARCHAR(150) NULL,
   address TEXT NULL,
   note TEXT NULL,
-  status ENUM('active','inactive') NOT NULL DEFAULT 'active',
+  status ENUM('active','paused','inactive') NOT NULL DEFAULT 'active',
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uk_suppliers_code (supplier_code),
   INDEX idx_suppliers_name (supplier_name),
   INDEX idx_suppliers_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+ALTER TABLE suppliers
+  MODIFY COLUMN status ENUM('active','paused','inactive') NOT NULL DEFAULT 'active';
 
 INSERT IGNORE INTO roles (role_name, description) VALUES
   ('Admin', 'Quản trị toàn bộ hệ thống'),

@@ -13,9 +13,9 @@ INSERT INTO brands (id, brand_name, description, status) VALUES
 (7, 'Apple', 'Thiết bị Apple', 'active'), (8, 'Xiaomi', 'Thiết bị Xiaomi', 'active');
 
 INSERT INTO suppliers (id, supplier_code, supplier_name, phone, email, address, note, status) VALUES
-(1, 'NCC001', 'Nhà phân phối phụ kiện miền Nam', '0909000001', 'sales1@example.com', 'TP.HCM', 'Nhà cung cấp tổng hợp', 'active'),
-(2, 'NCC002', 'Kho phụ kiện chính hãng', '0909000002', 'sales2@example.com', 'Hà Nội', 'Ưu tiên hàng chính hãng', 'active'),
-(3, 'NCC003', 'Đối tác thiết bị di động', '0909000003', 'sales3@example.com', 'Đà Nẵng', NULL, 'active');
+(1, 'NCC001', 'Nhà phân phối phụ kiện miền Nam', '0909000001', 'nppmiennam@gmail.com', 'TP.HCM', 'Nhà cung cấp tổng hợp', 'active'),
+(2, 'NCC002', 'Kho phụ kiện chính hãng', '0909000002', 'contact@khophukien.vn', 'Hà Nội', 'Ưu tiên hàng chính hãng', 'active'),
+(3, 'NCC003', 'Đối tác thiết bị di động', '0909000003', 'sales@doitacthididong.vn', 'Đà Nẵng', NULL, 'active');
 
 INSERT INTO users (id, name, employee_code, email, password, role) VALUES
 (1, 'Chủ cửa hàng', 'CH001', 'owner@pos.com', '$2a$10$zJ0vlNynsAv7pjIDZJnD2.wctQCc5BglAf3qlasqs1YWNuaWoV5ii', 'owner'),

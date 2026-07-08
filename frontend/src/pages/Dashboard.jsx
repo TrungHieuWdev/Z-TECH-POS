@@ -506,6 +506,7 @@ export default function Dashboard() {
           chartRows={revenueChart}
           period={displayedPeriod}
           periodLabel={dashboardPeriodLabel}
+          comparisonLabel={comparisonLabel}
         />
 
         <article className="rounded-lg border border-[#e1e3e4] bg-white p-3 shadow-[0_1px_3px_rgba(25,28,29,0.08)]">

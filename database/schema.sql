@@ -61,8 +61,9 @@ CREATE TABLE suppliers (
   id INT AUTO_INCREMENT PRIMARY KEY,
   supplier_code VARCHAR(30) UNIQUE,
   supplier_name VARCHAR(150) NOT NULL,
+  supplier_group VARCHAR(100), contact_name VARCHAR(100),
   phone VARCHAR(20), email VARCHAR(150), address TEXT, note TEXT,
-  status ENUM('active','inactive') NOT NULL DEFAULT 'active',
+  status ENUM('active','paused','inactive') NOT NULL DEFAULT 'active',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_suppliers_name (supplier_name), INDEX idx_suppliers_status (status)

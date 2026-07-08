@@ -23,7 +23,7 @@ export async function getById(req, res) {
 export async function create(req, res) {
   try {
     const created = await withTransaction(async (db) => {
-      const supplier = await db("SELECT id FROM suppliers WHERE id=? AND status='active' FOR UPDATE", [req.body.supplier_id]);
+      const supplier = await db("SELECT id FROM suppliers WHERE id=? AND status<>'inactive' FOR UPDATE", [req.body.supplier_id]);
       if (!supplier[0]) throw Object.assign(new Error('Nhà cung cấp không hợp lệ'), { status: 400 });
       const temporaryCode = `TMP-${Date.now()}-${req.user.id}`;
       const order = await db(`INSERT INTO purchase_orders (purchase_code,supplier_id,user_id,total_amount,note,status)

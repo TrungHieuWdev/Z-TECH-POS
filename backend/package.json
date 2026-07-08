@@ -14,7 +14,8 @@
     "check:pos-business-db": "node scripts/checkPosBusinessDatabase.js",
     "reset-db": "node scripts/resetDatabase.js",
     "normalize-images": "node scripts/normalizeProductImages.js",
-    "normalize-categories": "node scripts/normalizeCategoriesAndProducts.js"
+    "normalize-categories": "node scripts/normalizeCategoriesAndProducts.js",
+    "barcodes:generate": "node scripts/generateProductBarcodes.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

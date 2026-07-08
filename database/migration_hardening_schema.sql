@@ -26,7 +26,7 @@ ALTER TABLE device_models
   MODIFY family ENUM('apple','samsung','vivo','oppo','xiaomi','generic') NOT NULL;
 
 INSERT INTO device_models (family, name, series, notes)
-VALUES ('generic', 'Phụ kiện chung', 'Dùng chung', 'Không thuộc hãng hoặc model máy cụ thể')
+VALUES ('generic', 'Phụ kiện tiện ích', 'Dùng chung', 'Không thuộc hãng hoặc model máy cụ thể')
 ON DUPLICATE KEY UPDATE family = 'generic', series = 'Dùng chung';
 
 CREATE TABLE IF NOT EXISTS promotions (

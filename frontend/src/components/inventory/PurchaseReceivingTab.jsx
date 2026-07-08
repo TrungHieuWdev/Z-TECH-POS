@@ -16,7 +16,7 @@ function formatDateTime(value) {
   return value ? new Date(value).toLocaleString('vi-VN') : '-';
 }
 
-export default function PurchaseReceivingTab({ restockSuggestions, suggestedItems = null, canManage = false, onCreated, onSuggestedItemsConsumed }) {
+export default function PurchaseReceivingTab({ restockSuggestions, suggestedItems = null, preferredSupplierId = null, canManage = false, onCreated, onSuggestedItemsConsumed }) {
   const [orders, setOrders] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [products, setProducts] = useState([]);
@@ -36,7 +36,7 @@ export default function PurchaseReceivingTab({ restockSuggestions, suggestedItem
       api.get('/products')
     ]);
     setOrders(ordersResponse.data);
-    setSuppliers(suppliersResponse.data.filter((item) => item.status === 'active'));
+    setSuppliers(suppliersResponse.data.filter((item) => item.status !== 'inactive'));
     setProducts(productsResponse.data);
   }
 
@@ -52,6 +52,15 @@ export default function PurchaseReceivingTab({ restockSuggestions, suggestedItem
     setActiveSection('orders');
     onSuggestedItemsConsumed?.();
   }, [suggestedItems, onSuggestedItemsConsumed]);
+
+  useEffect(() => {
+    if (!preferredSupplierId) return;
+    setSupplierId(String(preferredSupplierId));
+    setIsFormOpen(true);
+    setActiveSection('orders');
+  }, [preferredSupplierId]);
+
+  const selectedSupplier = suppliers.find((item) => String(item.id) === String(supplierId));
 
   const total = useMemo(
     () => items.reduce((sum, item) => sum + Number(item.quantity || 0) * Number(item.import_price || 0), 0),
@@ -132,8 +141,9 @@ export default function PurchaseReceivingTab({ restockSuggestions, suggestedItem
           Nhà cung cấp
           <select required value={supplierId} onChange={(event) => setSupplierId(event.target.value)} className="mt-1 h-11 w-full border border-gray-300 bg-white px-3 outline-none focus:border-[#69afd6]">
             <option value="">Chọn nhà cung cấp</option>
-            {suppliers.map((item) => <option key={item.id} value={item.id}>{item.name || item.supplier_name}</option>)}
+            {suppliers.map((item) => <option key={item.id} value={item.id}>{item.name || item.supplier_name}{item.status === 'paused' ? ' (Tạm ngừng)' : ''}</option>)}
           </select>
+          {selectedSupplier?.status === 'paused' && <p className="mt-1 text-xs font-medium text-amber-700">Nhà cung cấp này đang tạm ngừng hợp tác. Hãy kiểm tra trước khi tạo phiếu nhập.</p>}
         </label>
         <label className="text-sm font-semibold text-gray-700">
           Ghi chú
@@ -172,6 +182,9 @@ export default function PurchaseReceivingTab({ restockSuggestions, suggestedItem
             <p className="text-xs font-bold uppercase text-gray-500">Tổng tiền</p>
             <strong className="text-xl text-gray-950">{formatCurrency(total)}</strong>
           </div>
+          <button type="button" onClick={closeForm} disabled={saving} className="inline-flex h-10 items-center border border-gray-300 bg-white px-5 text-sm font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+            Hủy
+          </button>
           <button disabled={saving} className="inline-flex h-10 items-center gap-2 bg-brand px-5 text-sm font-bold text-white disabled:opacity-50">
             <Save size={17} />{saving ? 'Đang lưu' : 'Tạo phiếu nhập'}
           </button>

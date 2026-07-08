@@ -140,7 +140,7 @@ function appendGenericAccessoryFilter(sql, params) {
   params.push(...genericAccessoryKeywords.map((keyword) => `%${keyword}%`));
   params.push(...modelSpecificProductNameKeywords.map((keyword) => `%${keyword}%`));
 
-  return `${sql} AND (dm.family = 'generic' OR ((${keywordConditions}) AND (${modelSpecificConditions})))`;
+  return `${sql} AND (dm.family = 'generic' OR (${keywordConditions})) AND (${modelSpecificConditions})`;
 }
 
 async function withResolvedDeviceModel(body) {
@@ -230,7 +230,7 @@ async function resolveImportCategory(item) {
 async function resolveImportDeviceModel(item) {
   if (item.device_model_id) return Number(item.device_model_id);
 
-  const modelName = String(item.device_model_name || item.device_model || item.dong_may || 'Phụ kiện chung').trim() || 'Phụ kiện chung';
+  const modelName = String(item.device_model_name || item.device_model || item.dong_may || 'Phụ kiện tiện ích').trim() || 'Phụ kiện tiện ích';
   const existing = await query('SELECT id FROM device_models WHERE LOWER(name) = LOWER(?) LIMIT 1', [modelName]);
 
   if (existing[0]) return existing[0].id;
@@ -241,7 +241,7 @@ async function resolveImportDeviceModel(item) {
     [
       inferDeviceFamily(modelName),
       modelName,
-      isGenericAccessory ? 'Phụ kiện chung' : 'Import Excel',
+      isGenericAccessory ? 'Phụ kiện tiện ích' : 'Import Excel',
       null,
       `Tự tạo khi import Excel: ${modelName}`
     ]
@@ -401,6 +401,8 @@ export async function getAll(req, res) {
 
     if (device_family === 'other') {
       sql = appendOtherCategoryFilter(sql, params);
+    } else if (device_family === 'generic') {
+      sql = appendGenericAccessoryFilter(sql, params);
     } else if (DEVICE_FAMILIES.has(device_family)) {
       sql += ' AND dm.family = ?';
       params.push(device_family);

@@ -136,7 +136,8 @@ export default function RevenueAreaChart({
   comparisonAmount = 0,
   chartRows = [],
   period = 'today',
-  periodLabel = 'Hôm nay'
+  periodLabel = 'Hôm nay',
+  comparisonLabel = 'hôm qua'
 }) {
   const safeTotal = safeNumber(totalRevenue);
   const safeComparison = safeNumber(comparisonAmount);
@@ -222,19 +223,19 @@ export default function RevenueAreaChart({
         </ResponsiveContainer>
       </div>
 
-      <div className="mt-3 flex shrink-0 items-end justify-between border-t border-[#e1e3e4] pt-3">
-        <div>
+      <div className="mt-3 flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-[#e1e3e4] pt-3">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <div className="flex items-center gap-2 text-xs font-semibold text-[#73777d]">
             <span className="h-2.5 w-2.5 rounded-full bg-[#1f86f2]" />
             Tổng doanh thu
           </div>
-          <p className="mt-0.5 text-base font-bold text-[#191c1d]">{formatCurrency(safeTotal)}</p>
+          <p className="text-base font-bold text-[#191c1d]">{formatCurrency(safeTotal)}</p>
         </div>
-        <div className="text-right">
-          <p className={`text-xs font-bold ${safeComparison < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+        <div className={`flex flex-wrap items-center justify-end gap-x-2 gap-y-1 text-right ${safeComparison < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+          <p className="text-xs font-bold">
             {safeComparison < 0 ? '↓' : '↑'} {formatCurrency(Math.abs(safeComparison))}
           </p>
-          <p className="mt-0.5 text-[11px] font-semibold text-[#73777d]">so với kỳ trước</p>
+          <p className="text-[11px] font-semibold">so với {comparisonLabel}</p>
         </div>
       </div>
     </article>

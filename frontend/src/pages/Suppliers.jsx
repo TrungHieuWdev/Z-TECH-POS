@@ -1,29 +1,34 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   Ban,
-  Building2,
+  CircleCheck,
+  CirclePause,
   Download,
   Edit,
   Eye,
-  Filter,
-  Handshake,
-  Lock,
   Mail,
-  MapPin,
   Phone,
   Plus,
   Search,
-  Unlock
+  SlidersHorizontal,
+  MoreVertical,
+  Trash2,
+  ShoppingCart,
+  UserRound,
+  X,
 } from 'lucide-react';
 import Modal from '../components/Modal';
 import api from '../api/axios';
+import { isVietnamPhone, normalizePhone, vietnamPhoneMessage } from '../utils/phone';
 
 const PAGE_SIZE = 5;
 
 const statusOptions = [
   { value: 'all', label: 'Tất cả trạng thái' },
   { value: 'active', label: 'Đang hợp tác' },
+  { value: 'paused', label: 'Tạm ngừng' },
   { value: 'inactive', label: 'Ngừng hợp tác' }
 ];
 
@@ -35,7 +40,7 @@ const initialSuppliers = [
     group: 'Đối tác chiến lược',
     contact: 'Anh Minh',
     phone: '0901 234 567',
-    email: 'pk.saigon@gmail.com',
+    email: 'sales@doitacthididong.vn',
     region: 'TP.HCM',
     status: 'active',
     note: 'Nguồn hàng ốp lưng và kính cường lực ổn định.'
@@ -47,7 +52,7 @@ const initialSuppliers = [
     group: 'Phụ kiện công nghệ',
     contact: 'Chị Hạnh',
     phone: '0912 888 999',
-    email: 'mobilevn@gmail.com',
+    email: 'contact@khophukien.vn',
     region: 'Bình Dương',
     status: 'active',
     note: 'Cung cấp cáp, sạc và phụ kiện tiện ích.'
@@ -59,7 +64,7 @@ const initialSuppliers = [
     group: 'Linh kiện cao cấp',
     contact: 'Anh Khoa',
     phone: '0987 456 123',
-    email: 'techpro@gmail.com',
+    email: 'nppmiennam@gmail.com',
     region: 'TP.HCM',
     status: 'inactive',
     note: 'Tạm dừng để kiểm tra lại chính sách giá.'
@@ -71,7 +76,7 @@ const initialSuppliers = [
     group: 'Bán buôn phụ kiện',
     contact: 'Chị Lan',
     phone: '0933 222 111',
-    email: 'giasi24h@gmail.com',
+    email: 'sales@phukiensi24h.vn',
     region: 'Đồng Nai',
     status: 'active',
     note: 'Nguồn hàng số lượng lớn cho chương trình khuyến mãi.'
@@ -97,6 +102,13 @@ function getStatusMeta(status) {
     };
   }
 
+  if (status === 'paused') {
+    return {
+      label: 'Tạm ngừng',
+      badgeClass: 'border border-amber-200 bg-amber-50 text-amber-700'
+    };
+  }
+
   return {
     label: 'Ngừng hợp tác',
     badgeClass: 'bg-red-100 text-red-700'
@@ -114,11 +126,22 @@ function getNextSupplierCode(suppliers) {
 
 function getSupplierStats(suppliers) {
   const active = suppliers.filter((supplier) => supplier.status === 'active').length;
-  return { total: suppliers.length, active, inactive: suppliers.length - active };
+  const paused = suppliers.filter((supplier) => supplier.status === 'paused').length;
+  const inactive = suppliers.filter((supplier) => supplier.status === 'inactive').length;
+  return { total: suppliers.length, active, paused, inactive };
+}
+
+function formatDate(value) {
+  if (!value) return 'Chưa nhập hàng';
+  return new Intl.DateTimeFormat('vi-VN').format(new Date(value));
+}
+
+function formatCurrency(value) {
+  return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(value) || 0);
 }
 
 function buildCsv(suppliers) {
-  const headers = ['Ma NCC', 'Nha cung cap', 'Nhom', 'Lien he', 'Dien thoai', 'Email', 'Khu vuc', 'Trang thai'];
+  const headers = ['Ma NCC', 'Nha cung cap', 'Nhom', 'Lien he', 'Dien thoai', 'Email', 'Khu vuc', 'Lan nhap gan nhat', 'So don nhap', 'Tong tien da nhap', 'Ghi chu mat hang', 'Trang thai'];
   const rows = suppliers.map((supplier) => [
     supplier.code,
     supplier.name,
@@ -127,6 +150,10 @@ function buildCsv(suppliers) {
     supplier.phone,
     supplier.email,
     supplier.region,
+    formatDate(supplier.last_purchase_at),
+    supplier.purchase_order_count || 0,
+    supplier.total_purchased || 0,
+    supplier.note || '',
     getStatusMeta(supplier.status).label
   ]);
 
@@ -136,6 +163,7 @@ function buildCsv(suppliers) {
 }
 
 export default function Suppliers() {
+  const navigate = useNavigate();
   const [suppliers, setSuppliers] = useState([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -144,11 +172,46 @@ export default function Suppliers() {
   const [viewingSupplier, setViewingSupplier] = useState(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [openMenuId, setOpenMenuId] = useState(null);
+  const [menuPosition, setMenuPosition] = useState(null);
+  const [showFilters, setShowFilters] = useState(false);
+  const [deletingSupplier, setDeletingSupplier] = useState(null);
+
+  const toggleActionMenu = (event, supplierId) => {
+    if (openMenuId === supplierId) {
+      setOpenMenuId(null);
+      setMenuPosition(null);
+      return;
+    }
+    const rect = event.currentTarget.getBoundingClientRect();
+    const menuHeight = 310;
+    const opensUpward = window.innerHeight - rect.bottom < menuHeight + 16;
+    setOpenMenuId(supplierId);
+    setMenuPosition(opensUpward
+      ? { bottom: window.innerHeight - rect.top + 8, right: window.innerWidth - rect.right }
+      : { top: rect.bottom + 8, right: window.innerWidth - rect.right });
+  };
+
+  useEffect(() => {
+    if (!openMenuId) return undefined;
+    const closeMenu = () => { setOpenMenuId(null); setMenuPosition(null); };
+    window.addEventListener('scroll', closeMenu, true);
+    window.addEventListener('resize', closeMenu);
+    return () => {
+      window.removeEventListener('scroll', closeMenu, true);
+      window.removeEventListener('resize', closeMenu);
+    };
+  }, [openMenuId]);
 
   const loadSuppliers = async () => {
     try {
       const response = await api.get('/suppliers');
-      setSuppliers(response.data.map((item) => ({ ...item, region: item.address || '', group: '', contact: '' })));
+      setSuppliers(response.data.map((item) => ({
+        ...item,
+        region: item.address || '',
+        group: item.group || '',
+        contact: item.contact || ''
+      })));
     } catch {
       toast.error('Không thể tải danh sách nhà cung cấp');
     }
@@ -220,9 +283,19 @@ export default function Suppliers() {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    const supplierName = form.name.trim();
+    const phone = normalizePhone(form.phone);
+    if (supplierName.length < 2 || supplierName.length > 150) {
+      return toast.error('Tên nhà cung cấp phải từ 2 đến 150 ký tự');
+    }
+    if (form.contact.trim().length < 2) return toast.error('Vui lòng nhập tên người liên hệ');
+    if (!isVietnamPhone(phone)) return toast.error(vietnamPhoneMessage);
+    if (!form.email.trim()) return toast.error('Vui lòng nhập email');
+    if (!form.region.trim()) return toast.error('Vui lòng nhập địa chỉ');
     const payload = {
       supplier_code: editingSupplier?.code ?? getNextSupplierCode(suppliers),
-      supplier_name: form.name.trim(), phone: form.phone.replace(/\s/g, ''),
+      supplier_name: supplierName, supplier_group: form.group.trim() || null,
+      contact_name: form.contact.trim() || null, phone,
       email: form.email.trim() || null, address: form.region.trim() || null,
       note: form.note.trim() || null, status: form.status
     };
@@ -237,17 +310,35 @@ export default function Suppliers() {
     }
   };
 
-  const toggleStatus = async (supplier) => {
-    const nextStatus = supplier.status === 'active' ? 'inactive' : 'active';
+  const updateStatus = async (supplier, nextStatus) => {
+    const actionLabel = nextStatus === 'paused' ? 'tạm ngừng hợp tác' : nextStatus === 'inactive' ? 'ngừng hợp tác' : 'khôi phục hợp tác';
+    if (!window.confirm(`Bạn có chắc muốn ${actionLabel} với ${supplier.name}?`)) return;
     try {
       await api.put(`/suppliers/${supplier.id}`, {
         supplier_code: supplier.code, supplier_name: supplier.name, phone: supplier.phone || null,
+        supplier_group: supplier.group || null, contact_name: supplier.contact || null,
         email: supplier.email || null, address: supplier.region || null, note: supplier.note || null,
         status: nextStatus
       });
       await loadSuppliers();
-      toast.success(nextStatus === 'active' ? 'Đã mở lại hợp tác' : 'Đã ngừng hợp tác');
+      toast.success(nextStatus === 'active' ? 'Đã chuyển sang đang hợp tác' : nextStatus === 'paused' ? 'Đã tạm ngừng hợp tác' : 'Đã ngừng hợp tác');
     } catch (error) { toast.error(error.response?.data?.message || 'Không thể cập nhật trạng thái'); }
+  };
+
+  const deleteSupplier = async (supplier) => {
+    try {
+      await api.delete(`/suppliers/${supplier.id}`);
+      setOpenMenuId(null);
+      await loadSuppliers();
+      toast.success('Đã xóa nhà cung cấp');
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Không thể xóa nhà cung cấp');
+    }
+  };
+
+  const createPurchaseOrder = (supplier) => {
+    setOpenMenuId(null);
+    navigate('/inventory/purchase-orders', { state: { source: 'supplier', supplierId: supplier.id } });
   };
 
   const exportCsv = () => {
@@ -263,75 +354,47 @@ export default function Suppliers() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
+      <div className="flex flex-col justify-between gap-4 border-b border-[#d7eef3] pb-5 lg:flex-row lg:items-center">
         <div>
-          <h1 className="text-2xl font-extrabold text-gray-950">Quản lý nhà cung cấp</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-extrabold text-gray-950">Nhà cung cấp</h1>
+            <span className="grid h-7 w-7 place-items-center rounded-md bg-[#e8f8fb] text-[#2e9db3]"><SlidersHorizontal size={15} /></span>
+          </div>
           <p className="mt-1 text-sm font-medium text-gray-500">
-            Lưu thông tin liên hệ, theo dõi trạng thái và quản lý các đối tác cung cấp hàng hóa.
+            Quản lý thông tin đối tác cung ứng hàng hóa cho hệ thống cửa hàng.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={openCreate}
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#c0edf7] px-5 py-2.5 font-semibold text-[#0f3b46] shadow-sm transition hover:bg-[#a9e3ef] active:bg-[#91d9e8]"
-        >
-          <Plus size={18} />
-          <span>Thêm nhà cung cấp</span>
-        </button>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-3">
-        <section className="flex items-center justify-between rounded-lg border border-[#d7eef3] bg-white p-5 shadow-sm">
-          <div>
-            <p className="text-sm text-gray-500">Tổng nhà cung cấp</p>
-            <p className="mt-1 text-3xl font-bold text-[#0f3b46]">{stats.total}</p>
-            <span className="mt-3 inline-flex items-center rounded-full bg-[#c0edf7] px-3 py-1 text-xs font-semibold text-[#0f3b46]">
-              Hệ thống ổn định
-            </span>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <div className="flex h-11 min-w-72 items-center gap-2 border border-[#d7eef3] bg-white px-4 focus-within:border-[#7ed5e6]">
+            <Search size={18} className="text-gray-400" />
+            <input value={search} onChange={(event) => setSearch(event.target.value)} className="w-full bg-transparent text-sm outline-none" placeholder="Tìm kiếm nhà cung cấp..." />
           </div>
-          <div className="grid h-12 w-12 place-items-center rounded-lg bg-[#c0edf7] text-[#0f3b46]">
-            <Building2 size={26} />
-          </div>
-        </section>
-
-        <section className="flex items-center justify-between rounded-lg border border-[#d7eef3] bg-white p-5 shadow-sm">
-          <div>
-            <p className="text-sm text-gray-500">Đang hợp tác</p>
-            <p className="mt-1 text-3xl font-bold text-emerald-600">{stats.active}</p>
-            <span className="mt-3 inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-              Hoạt động tốt
-            </span>
-          </div>
-          <div className="grid h-12 w-12 place-items-center rounded-lg bg-emerald-50 text-emerald-600">
-            <Handshake size={26} />
-          </div>
-        </section>
-
-        <section className="flex items-center justify-between rounded-lg border border-[#d7eef3] bg-white p-5 shadow-sm">
-          <div>
-            <p className="text-sm text-gray-500">Ngừng hợp tác</p>
-            <p className="mt-1 text-3xl font-bold text-red-600">{stats.inactive}</p>
-            <span className="mt-3 inline-flex items-center rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-700">
-              Cần kiểm tra
-            </span>
-          </div>
-          <div className="grid h-12 w-12 place-items-center rounded-lg bg-red-50 text-red-600">
-            <Ban size={26} />
-          </div>
-        </section>
-      </div>
-
-      <section className="flex flex-col gap-3 rounded-lg border border-[#d7eef3] bg-[#f4fcfe] p-4 shadow-sm md:flex-row md:items-center">
-        <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-[#c0edf7] bg-white px-3 py-2">
-          <Search size={18} className="text-gray-400" />
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            className="w-full outline-none"
-            placeholder="Tìm kiếm nhà cung cấp..."
-          />
+          <button type="button" onClick={openCreate} className="inline-flex h-11 items-center justify-center gap-2 bg-[#159bb5] px-5 font-bold text-white transition hover:bg-[#11869d]">
+            <Plus size={18} /><span>Thêm nhà cung cấp</span>
+          </button>
         </div>
-        <div className="flex gap-3">
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {[
+          ['Tổng nhà cung cấp', stats.total, 'Đối tác', UserRound, 'bg-[#e8f8fb] text-[#159bb5]'],
+          ['Đang hợp tác', stats.active, 'Nhà cung cấp', CircleCheck, 'bg-blue-50 text-blue-600'],
+          ['Tạm ngừng', stats.paused, 'Nhà cung cấp', CirclePause, 'bg-amber-50 text-amber-600'],
+          ['Ngừng hợp tác', stats.inactive, 'Nhà cung cấp', X, 'bg-red-50 text-red-600']
+        ].map(([label, value, unit, Icon, iconClass]) => (
+          <section key={label} className="flex min-h-24 items-center gap-4 border border-[#d7eef3] bg-white p-5 shadow-sm">
+            <div className={`grid h-12 w-12 shrink-0 place-items-center ${iconClass}`}><Icon size={24} /></div>
+            <div><p className="text-xs font-bold uppercase tracking-wide text-gray-500">{label}</p><div className="mt-1 flex items-baseline gap-2"><strong className="text-2xl text-[#0f3b46]">{value}</strong><span className="text-xs font-semibold text-gray-400">{unit}</span></div></div>
+          </section>
+        ))}
+      </div>
+
+      <section className="border border-[#d7eef3] bg-white shadow-sm">
+        <div className="flex items-center justify-between border-b border-[#edf7f9] p-4">
+          <button type="button" onClick={() => setShowFilters((value) => !value)} className="inline-flex h-10 items-center gap-2 border border-gray-300 px-4 text-sm font-bold text-gray-700 hover:bg-[#f4fcfe]"><SlidersHorizontal size={17} /> Bộ lọc</button>
+          <button type="button" onClick={exportCsv} className="grid h-10 w-10 place-items-center border border-[#d7eef3] text-gray-500 hover:bg-[#f4fcfe]" title="Xuất CSV"><Download size={18} /></button>
+        </div>
+        {showFilters && <div className="border-b border-[#edf7f9] bg-[#f8fdfe] p-4">
           <select
             value={statusFilter}
             onChange={(event) => setStatusFilter(event.target.value)}
@@ -343,36 +406,16 @@ export default function Suppliers() {
               </option>
             ))}
           </select>
-          <button
-            type="button"
-            className="grid h-10 w-10 place-items-center rounded-lg border border-[#c0edf7] bg-white text-gray-600 transition hover:bg-[#c0edf7] hover:text-[#0f3b46]"
-            title="Lọc"
-            aria-label="Lọc"
-          >
-            <Filter size={18} />
-          </button>
-          <button
-            type="button"
-            onClick={exportCsv}
-            className="grid h-10 w-10 place-items-center rounded-lg border border-[#c0edf7] bg-white text-gray-600 transition hover:bg-[#c0edf7] hover:text-[#0f3b46]"
-            title="Xuất CSV"
-            aria-label="Xuất CSV"
-          >
-            <Download size={18} />
-          </button>
-        </div>
-      </section>
-
-      <section className="overflow-hidden rounded-lg border border-[#d7eef3] bg-white shadow-sm">
+        </div>}
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1120px] text-left text-sm">
+          <table className="w-full min-w-[980px] text-left text-sm">
             <thead className="bg-[#f4fcfe] text-gray-500">
               <tr>
-                <th className="px-5 py-4 text-xs font-bold uppercase tracking-wide">Mã NCC</th>
                 <th className="px-5 py-4 text-xs font-bold uppercase tracking-wide">Nhà cung cấp</th>
                 <th className="px-5 py-4 text-xs font-bold uppercase tracking-wide">Người liên hệ</th>
-                <th className="px-5 py-4 text-xs font-bold uppercase tracking-wide">Thông tin liên lạc</th>
-                <th className="px-5 py-4 text-xs font-bold uppercase tracking-wide">Khu vực</th>
+                <th className="px-5 py-4 text-xs font-bold uppercase tracking-wide">Liên hệ</th>
+                <th className="px-5 py-4 text-xs font-bold uppercase tracking-wide">Email</th>
+                <th className="hidden px-5 py-4 text-xs font-bold uppercase tracking-wide lg:table-cell">Lần nhập gần nhất</th>
                 <th className="px-5 py-4 text-xs font-bold uppercase tracking-wide">Trạng thái</th>
                 <th className="px-5 py-4 text-right text-xs font-bold uppercase tracking-wide">Thao tác</th>
               </tr>
@@ -380,66 +423,35 @@ export default function Suppliers() {
             <tbody className="divide-y divide-[#edf7f9]">
               {paginatedSuppliers.map((supplier) => {
                 const statusMeta = getStatusMeta(supplier.status);
-                const ToggleIcon = supplier.status === 'active' ? Unlock : Lock;
-
                 return (
                   <tr key={supplier.id} className="transition hover:bg-[#f8fdfe]">
-                    <td className="px-5 py-4 font-bold text-[#0f3b46]">{supplier.code}</td>
                     <td className="px-5 py-4">
-                      <div className="font-semibold text-gray-950">{supplier.name}</div>
-                      <div className="text-xs text-gray-500">{supplier.group}</div>
-                    </td>
-                    <td className="px-5 py-4 font-medium text-gray-800">{supplier.contact}</td>
-                    <td className="px-5 py-4 text-gray-600">
-                      <div className="mb-1 flex items-center gap-2">
-                        <Phone size={15} className="text-gray-400" />
-                        <span>{supplier.phone}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Mail size={15} className="text-gray-400" />
-                        <span>{supplier.email}</span>
+                      <div className="flex items-center gap-3">
+                        <div className="grid h-11 w-11 shrink-0 place-items-center bg-[#e8f8fb] text-xs font-extrabold text-[#159bb5]">{supplier.name.split(/\s+/).slice(0, 2).map((word) => word[0]).join('').toUpperCase()}</div>
+                        <div><div className="font-bold text-gray-950">{supplier.name}</div><div className="mt-1 inline-flex bg-[#f4fcfe] px-2 py-1 text-[11px] font-semibold text-gray-500">{supplier.code}</div></div>
                       </div>
                     </td>
-                    <td className="px-5 py-4 text-gray-600">
-                      <div className="flex items-center gap-2">
-                        <MapPin size={15} className="text-gray-400" />
-                        <span>{supplier.region}</span>
-                      </div>
-                    </td>
+                    <td className="px-5 py-4 font-semibold text-gray-800">{supplier.contact || '—'}</td>
+                    <td className="px-5 py-4"><div className="flex items-center gap-2 font-semibold text-gray-700"><span className="grid h-6 w-6 place-items-center bg-[#e8f8fb] text-[#159bb5]"><Phone size={13} /></span>{supplier.phone || '—'}</div></td>
+                    <td className="px-5 py-4"><div className="flex items-center gap-2 text-gray-600"><span className="grid h-6 w-6 place-items-center bg-gray-50 text-gray-400"><Mail size={13} /></span>{supplier.email || '—'}</div></td>
+                    <td className="hidden whitespace-nowrap px-5 py-4 text-gray-600 lg:table-cell">{formatDate(supplier.last_purchase_at)}</td>
                     <td className="px-5 py-4">
-                      <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${statusMeta.badgeClass}`}>
+                      <span className={`inline-flex px-3 py-1 text-xs font-bold ${statusMeta.badgeClass}`}>
                         {statusMeta.label}
                       </span>
                     </td>
                     <td className="px-5 py-4">
-                      <div className="flex justify-end gap-1">
+                      <div className="relative flex justify-end gap-1">
                         <button
                           type="button"
                           onClick={() => setViewingSupplier(supplier)}
-                          className="rounded-lg p-2 text-gray-500 transition hover:bg-[#c0edf7] hover:text-[#0f3b46]"
+                          className="grid h-8 w-8 place-items-center border border-[#edf7f9] text-gray-400 hover:bg-[#f4fcfe] hover:text-[#0f3b46]"
                           title="Xem"
                           aria-label="Xem"
                         >
                           <Eye size={18} />
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => openEdit(supplier)}
-                          className="rounded-lg p-2 text-gray-500 transition hover:bg-[#c0edf7] hover:text-[#0f3b46]"
-                          title="Sửa"
-                          aria-label="Sửa"
-                        >
-                          <Edit size={18} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => toggleStatus(supplier)}
-                          className="rounded-lg p-2 text-gray-500 transition hover:bg-red-50 hover:text-red-600"
-                          title={supplier.status === 'active' ? 'Ngừng hợp tác' : 'Mở lại hợp tác'}
-                          aria-label={supplier.status === 'active' ? 'Ngừng hợp tác' : 'Mở lại hợp tác'}
-                        >
-                          <ToggleIcon size={18} />
-                        </button>
+                        <button type="button" onClick={(event) => toggleActionMenu(event, supplier.id)} className={`grid h-8 w-8 place-items-center transition ${openMenuId === supplier.id ? 'bg-[#159bb5] text-white shadow-sm' : 'border border-[#d7eef3] text-[#159bb5] hover:bg-[#e8f8fb]'}`} aria-label="Mở menu thao tác"><MoreVertical size={17} /></button>
                       </div>
                     </td>
                   </tr>
@@ -488,6 +500,22 @@ export default function Suppliers() {
         </div>
       </section>
 
+      {openMenuId && menuPosition && (() => {
+        const supplier = suppliers.find((item) => item.id === openMenuId);
+        if (!supplier) return null;
+        return (
+          <div className="fixed z-[100] w-56 border border-[#d7eef3] bg-white py-1 text-left shadow-xl" style={menuPosition}>
+            <button type="button" onClick={() => { setOpenMenuId(null); setViewingSupplier(supplier); }} className="flex w-full items-center gap-3 px-4 py-2.5 font-semibold text-gray-700 hover:bg-[#f4fcfe]"><Eye size={16} /> Xem chi tiết</button>
+            <button type="button" onClick={() => { setOpenMenuId(null); openEdit(supplier); }} className="flex w-full items-center gap-3 px-4 py-2.5 font-semibold text-gray-700 hover:bg-[#f4fcfe]"><Edit size={16} /> Sửa thông tin</button>
+            {supplier.status !== 'inactive' && <button type="button" onClick={() => createPurchaseOrder(supplier)} className="flex w-full items-center gap-3 px-4 py-2.5 font-semibold text-sky-700 hover:bg-sky-50"><ShoppingCart size={16} /> Tạo phiếu nhập</button>}
+            {supplier.status !== 'paused' && supplier.status !== 'inactive' && <button type="button" onClick={() => { setOpenMenuId(null); updateStatus(supplier, 'paused'); }} className="flex w-full items-center gap-3 px-4 py-2.5 font-semibold text-gray-700 hover:bg-[#f4fcfe]"><CirclePause size={16} /> Tạm ngừng hợp tác</button>}
+            {supplier.status !== 'active' && <button type="button" onClick={() => { setOpenMenuId(null); updateStatus(supplier, 'active'); }} className="flex w-full items-center gap-3 px-4 py-2.5 font-semibold text-emerald-700 hover:bg-emerald-50"><CircleCheck size={16} /> Chuyển sang đang hợp tác</button>}
+            {supplier.status !== 'inactive' && <button type="button" onClick={() => { setOpenMenuId(null); updateStatus(supplier, 'inactive'); }} className="flex w-full items-center gap-3 border-t border-gray-100 px-4 py-2.5 font-semibold text-red-600 hover:bg-red-50"><Ban size={16} /> Ngừng hợp tác</button>}
+            <button type="button" onClick={() => { setOpenMenuId(null); setDeletingSupplier(supplier); }} className="flex w-full items-center gap-3 px-4 py-2.5 font-semibold text-red-600 hover:bg-red-50"><Trash2 size={16} /> Xóa nhà cung cấp</button>
+          </div>
+        );
+      })()}
+
       <Modal isOpen={isFormOpen} onClose={closeForm} title={editingSupplier ? 'Sửa nhà cung cấp' : 'Thêm nhà cung cấp'} headerActions={<><button type="button" onClick={closeForm} className="h-11 border border-[#69afd6] bg-white px-5 text-base font-bold text-[#398fbd] hover:bg-sky-50">Hủy</button><button type="submit" form="supplier-form" className="h-11 bg-[#69afd6] px-5 text-base font-bold text-white hover:bg-[#579fc8]">Lưu</button></>}>
         <form id="supplier-form" onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2">
           <label className="md:col-span-2">
@@ -495,15 +523,8 @@ export default function Suppliers() {
             <input
               value={form.name}
               onChange={(event) => setForm({ ...form, name: event.target.value })}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-[#7ed5e6] focus:ring-2 focus:ring-[#c0edf7]"
-              required
-            />
-          </label>
-          <label>
-            <span className="mb-1 block text-sm font-medium text-gray-700">Nhóm cung cấp</span>
-            <input
-              value={form.group}
-              onChange={(event) => setForm({ ...form, group: event.target.value })}
+              minLength={2}
+              maxLength={150}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-[#7ed5e6] focus:ring-2 focus:ring-[#c0edf7]"
               required
             />
@@ -513,6 +534,7 @@ export default function Suppliers() {
             <input
               value={form.contact}
               onChange={(event) => setForm({ ...form, contact: event.target.value })}
+              maxLength={100}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-[#7ed5e6] focus:ring-2 focus:ring-[#c0edf7]"
               required
             />
@@ -521,7 +543,9 @@ export default function Suppliers() {
             <span className="mb-1 block text-sm font-medium text-gray-700">Số điện thoại</span>
             <input
               value={form.phone}
-              onChange={(event) => setForm({ ...form, phone: event.target.value })}
+              onChange={(event) => setForm({ ...form, phone: normalizePhone(event.target.value) })}
+              inputMode="numeric"
+              maxLength={10}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-[#7ed5e6] focus:ring-2 focus:ring-[#c0edf7]"
               required
             />
@@ -532,15 +556,18 @@ export default function Suppliers() {
               type="email"
               value={form.email}
               onChange={(event) => setForm({ ...form, email: event.target.value })}
+              maxLength={100}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-[#7ed5e6] focus:ring-2 focus:ring-[#c0edf7]"
               required
             />
           </label>
           <label>
-            <span className="mb-1 block text-sm font-medium text-gray-700">Khu vực</span>
+            <span className="mb-1 block text-sm font-medium text-gray-700">Địa chỉ</span>
             <input
               value={form.region}
               onChange={(event) => setForm({ ...form, region: event.target.value })}
+              minLength={2}
+              maxLength={500}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-[#7ed5e6] focus:ring-2 focus:ring-[#c0edf7]"
               required
             />
@@ -553,6 +580,7 @@ export default function Suppliers() {
               className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-[#7ed5e6] focus:ring-2 focus:ring-[#c0edf7]"
             >
               <option value="active">Đang hợp tác</option>
+              <option value="paused">Tạm ngừng</option>
               <option value="inactive">Ngừng hợp tác</option>
             </select>
           </label>
@@ -567,7 +595,32 @@ export default function Suppliers() {
         </form>
       </Modal>
 
-      <Modal isOpen={Boolean(viewingSupplier)} onClose={() => setViewingSupplier(null)} title="Chi tiết nhà cung cấp">
+      <Modal
+        isOpen={Boolean(deletingSupplier)}
+        onClose={() => setDeletingSupplier(null)}
+        title="Xác nhận xóa nhà cung cấp"
+        headerActions={<><button type="button" onClick={() => setDeletingSupplier(null)} className="h-10 border border-gray-300 bg-white px-4 text-sm font-bold text-gray-700 hover:bg-gray-50">Hủy</button><button type="button" onClick={async () => { await deleteSupplier(deletingSupplier); setDeletingSupplier(null); }} className="h-10 bg-red-600 px-4 text-sm font-bold text-white hover:bg-red-700">Xóa nhà cung cấp</button></>}
+      >
+        <div className="space-y-3 text-sm leading-6 text-gray-700">
+          <p>Bạn có chắc muốn xóa <strong>{deletingSupplier?.name}</strong>?</p>
+          <p className="border border-amber-200 bg-amber-50 p-3 text-amber-800">Nhà cung cấp đã có dữ liệu nhập hàng sẽ không thể xóa vĩnh viễn. Bạn có thể chuyển sang trạng thái Ngừng hợp tác.</p>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={Boolean(viewingSupplier)}
+        onClose={() => setViewingSupplier(null)}
+        title="Chi tiết nhà cung cấp"
+        headerActions={(
+          <button
+            type="button"
+            onClick={() => setViewingSupplier(null)}
+            className="h-10 border border-[#69afd6] bg-white px-5 text-sm font-bold text-[#398fbd] transition hover:bg-sky-50"
+          >
+            Đóng
+          </button>
+        )}
+      >
         {viewingSupplier && (
           <div className="space-y-4">
             <div className="rounded-lg bg-[#f4fcfe] p-4">
@@ -581,8 +634,8 @@ export default function Suppliers() {
             </div>
             <div className="grid gap-3 text-sm md:grid-cols-2">
               <div>
-                <span className="text-gray-500">Nhóm cung cấp</span>
-                <p className="font-semibold text-gray-950">{viewingSupplier.group}</p>
+                <span className="text-gray-500">Địa chỉ</span>
+                <p className="font-semibold text-gray-950">{viewingSupplier.region || '—'}</p>
               </div>
               <div>
                 <span className="text-gray-500">Người liên hệ</span>
@@ -597,10 +650,30 @@ export default function Suppliers() {
                 <p className="font-semibold text-gray-950">{viewingSupplier.email}</p>
               </div>
               <div>
-                <span className="text-gray-500">Khu vực</span>
-                <p className="font-semibold text-gray-950">{viewingSupplier.region}</p>
+                <span className="text-gray-500">Ngày tạo</span>
+                <p className="font-semibold text-gray-950">{formatDate(viewingSupplier.created_at)}</p>
               </div>
               <div>
+                <span className="text-gray-500">Lần nhập hàng gần nhất</span>
+                <p className="font-semibold text-gray-950">{formatDate(viewingSupplier.last_purchase_at)}</p>
+              </div>
+              <div>
+                <span className="text-gray-500">Tổng số phiếu nhập</span>
+                <p className="font-semibold text-gray-950">{viewingSupplier.purchase_order_count || 0} phiếu</p>
+              </div>
+              <div>
+                <span className="text-gray-500">Tổng giá trị đã nhập</span>
+                <p className="font-semibold text-gray-950">{formatCurrency(viewingSupplier.total_purchased)}</p>
+              </div>
+              <div>
+                <span className="text-gray-500">Đã thanh toán</span>
+                <p className="font-semibold text-emerald-700">{formatCurrency(viewingSupplier.total_paid)}</p>
+              </div>
+              <div>
+                <span className="text-gray-500">Còn nợ</span>
+                <p className="font-semibold text-red-600">{formatCurrency(viewingSupplier.total_debt)}</p>
+              </div>
+              <div className="md:col-span-2">
                 <span className="text-gray-500">Ghi chú</span>
                 <p className="font-semibold text-gray-950">{viewingSupplier.note || 'Chưa có ghi chú'}</p>
               </div>

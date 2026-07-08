@@ -22,7 +22,7 @@ import InventoryTabs from '../components/inventory/InventoryTabs';
 import PurchaseReceivingTab from '../components/inventory/PurchaseReceivingTab';
 import useRestockSuggestions from '../hooks/useRestockSuggestions';
 
-const initialForm = { product_id: '', quantity: '', note: '' };
+const initialForm = { product_id: '', quantity: '', reason: '', note: '' };
 const initialCurrentFilters = { category: '', model: '', stock: '', barcode: '' };
 const initialHistoryFilters = { transaction: '', employee: '', from: '', to: '' };
 const PAGE_SIZE = 10;
@@ -185,15 +185,13 @@ export default function Inventory() {
   }), [products, logs]);
 
   const historyRows = useMemo(() => {
-    const previousByProduct = new Map();
-    return [...logs].reverse().map((log) => {
-      const previous = previousByProduct.get(log.product_id);
-      const after = Number(log.quantity || 0);
-      const before = previous ?? (log.type === 'in' ? Math.max(0, after - Number(log.quantity || 0)) : null);
-      const change = log.type === 'in' ? Number(log.quantity || 0) : before === null ? null : after - before;
-      previousByProduct.set(log.product_id, after);
+    return logs.map((log) => {
+      const type = String(log.type || '').toUpperCase();
+      const before = Number.isFinite(Number(log.before_quantity)) ? Number(log.before_quantity) : null;
+      const after = Number.isFinite(Number(log.after_quantity)) ? Number(log.after_quantity) : null;
+      const change = before === null || after === null ? null : after - before;
       const isCount = /kiểm kê/i.test(String(log.note || ''));
-      const transaction = log.type === 'in'
+      const transaction = type === 'IMPORT'
         ? 'in'
         : isCount
           ? 'count'
@@ -201,7 +199,7 @@ export default function Inventory() {
             ? 'increase'
             : 'decrease';
       return { ...log, before, after, change, transaction };
-    }).reverse();
+    });
   }, [logs]);
 
   const filteredLogs = useMemo(() => {
@@ -258,7 +256,9 @@ export default function Inventory() {
       quantity: Number(form.quantity),
       note: mode === 'count'
         ? `Kiểm kê${form.note.trim() ? ` - ${form.note.trim()}` : ''}`
-        : form.note
+        : mode === 'adjust'
+          ? `${form.reason.trim()}${form.note.trim() ? ` - ${form.note.trim()}` : ''}`
+          : form.note
     };
     try {
       if (mode === 'in') {
@@ -339,7 +339,7 @@ export default function Inventory() {
         </div></div>}
         {activeTab === 'receiving' ? (
           <div className="bg-gray-50/40 p-4">
-            <PurchaseReceivingTab restockSuggestions={restockSuggestions} suggestedItems={suggestedItems} canManage={hasFullAccess} onCreated={loadData} onSuggestedItemsConsumed={() => setSuggestedItems(null)} />
+            <PurchaseReceivingTab restockSuggestions={restockSuggestions} suggestedItems={suggestedItems} preferredSupplierId={location.state?.source === 'supplier' ? location.state.supplierId : null} canManage={hasFullAccess} onCreated={loadData} onSuggestedItemsConsumed={() => setSuggestedItems(null)} />
           </div>
         ) : activeTab === 'adjustment' ? (
           hasFullAccess ? (
@@ -482,9 +482,9 @@ export default function Inventory() {
               {products.map((product) => <option key={product.id} value={product.id}>{product.name} - tồn {product.stock_quantity}</option>)}
             </select>
           </label>
-          {mode === 'count' && (
+          {(mode === 'count' || mode === 'adjust') && (
             <div>
-              <span className="mb-1 block text-sm font-medium text-gray-700">Tồn kho hiện tại</span>
+              <span className="mb-1 block text-sm font-medium text-gray-700">Tồn hiện tại</span>
               <p className="text-lg font-bold text-gray-950">{selectedProduct ? selectedStock.toLocaleString('vi-VN') : '—'}</p>
             </div>
           )}
@@ -492,13 +492,26 @@ export default function Inventory() {
             <span className="mb-1 block text-sm font-medium text-gray-700">{mode === 'in' ? 'Số lượng nhập' : mode === 'count' ? 'Số lượng thực tế kiểm kê' : 'Tồn kho mới'}</span>
             <input type="number" min={mode === 'in' ? 1 : 0} value={form.quantity} onChange={(event) => setForm({ ...form, quantity: event.target.value })} className="w-full border border-gray-300 px-3 py-2 outline-none focus:border-sky-500" required />
           </label>
-          {mode === 'count' && (
+          {(mode === 'count' || mode === 'adjust') && (
             <div>
               <span className="mb-1 block text-sm font-medium text-gray-700">Chênh lệch</span>
               <p className={`text-sm font-bold ${countDifference === null ? 'text-gray-500' : countDifference < 0 ? 'text-red-600' : countDifference > 0 ? 'text-emerald-700' : 'text-gray-700'}`}>
                 {countDifference === null ? '—' : `${countDifference > 0 ? '+' : ''}${countDifference.toLocaleString('vi-VN')} sản phẩm`}
               </p>
             </div>
+          )}
+          {mode === 'adjust' && (
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-gray-700">Lý do điều chỉnh</span>
+              <select value={form.reason} onChange={(event) => setForm({ ...form, reason: event.target.value })} className="w-full border border-gray-300 px-3 py-2 outline-none focus:border-sky-500" required>
+                <option value="">Chọn lý do điều chỉnh</option>
+                <option value="Hàng hư / mất">Hàng hư / mất</option>
+                <option value="Kiểm kê chênh lệch">Kiểm kê chênh lệch</option>
+                <option value="Nhập sai số lượng">Nhập sai số lượng</option>
+                <option value="Xuất / trả hàng">Xuất / trả hàng</option>
+                <option value="Điều chỉnh khác">Điều chỉnh khác</option>
+              </select>
+            </label>
           )}
           <label className="block">
             <span className="mb-1 block text-sm font-medium text-gray-700">Ghi chú</span>
