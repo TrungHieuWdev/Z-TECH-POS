@@ -3,16 +3,12 @@ import { Link } from 'react-router-dom';
 import {
   CalendarCheck,
   CalendarDays,
-  ArrowDownRight,
-  ArrowUpRight,
   ChevronDown,
   CreditCard,
-  PackageCheck,
   PackageOpen,
   ReceiptText,
   RotateCcw,
   TrendingUp,
-  UsersRound,
   WalletCards
 } from 'lucide-react';
 import api from '../api/axios';
@@ -140,7 +136,11 @@ function getRevenueCaption(currentRevenue, previousRevenue, comparisonLabel) {
   const current = safeNumber(currentRevenue);
   const previous = safeNumber(previousRevenue);
 
-  if (previous <= 0) return current > 0 ? `Không có dữ liệu trong ${comparisonLabel}` : `${comparisonLabel} chưa có dữ liệu`;
+  if (previous <= 0) {
+    return comparisonLabel === 'ngày trước đó'
+      ? 'Chưa có dữ liệu so với ngày trước đó'
+      : 'Không có dữ liệu ngày trước';
+  }
 
   const delta = current - previous;
   if (delta === 0) return `Không đổi so với ${comparisonLabel}`;
@@ -151,7 +151,11 @@ function getCountCaption(currentValue, previousValue, noun, comparisonLabel) {
   const current = Math.round(safeNumber(currentValue));
   const previous = Math.round(safeNumber(previousValue));
 
-  if (previous === 0) return current > 0 ? `${comparisonLabel} chưa có dữ liệu` : `Không đổi so với ${comparisonLabel}`;
+  if (previous === 0) {
+    return comparisonLabel === 'ngày trước đó'
+      ? 'Chưa có dữ liệu so với ngày trước đó'
+      : 'Không có dữ liệu ngày trước';
+  }
 
   const delta = current - previous;
   if (delta === 0) return `Không đổi so với ${comparisonLabel}`;
@@ -165,6 +169,8 @@ export default function Dashboard() {
     monthRevenue: 0,
     todayOrders: 0,
     yesterdayOrders: 0,
+    averageOrderValue: 0,
+    previousAverageOrderValue: 0,
     lowStockCount: 0,
     productsSold: 0,
     previousProductsSold: 0,
@@ -179,7 +185,12 @@ export default function Dashboard() {
   });
   const [topProducts, setTopProducts] = useState([]);
   const [recentOrders, setRecentOrders] = useState([]);
-  const [staffPerformance, setStaffPerformance] = useState([]);
+  const [operationalAlerts, setOperationalAlerts] = useState({
+    lowStockProducts: 0,
+    overduePendingPayments: 0,
+    slowMovingProducts: 0,
+    expiringWarranties: 0
+  });
   const [revenueChart, setRevenueChart] = useState([]);
   const [dashboardPeriod, setDashboardPeriod] = useState('7days');
   const [dateFrom, setDateFrom] = useState(() => getLocalDateValue(new Date(Date.now() - 6 * 86400000)));
@@ -198,12 +209,12 @@ export default function Dashboard() {
 
       try {
         const params = { period: dashboardPeriod, date_from: dateFrom, date_to: dateTo };
-        const [summaryRes, topRes, recentRes, chartRes, staffRes] = await Promise.all([
+        const [summaryRes, topRes, recentRes, chartRes, alertsRes] = await Promise.all([
           api.get('/dashboard/summary', { params }),
           api.get('/dashboard/top-products', { params }),
           api.get('/dashboard/recent-orders', { params }),
           api.get('/dashboard/revenue-chart', { params }).catch(() => ({ data: [] })),
-          api.get('/dashboard/staff-performance', { params }).catch(() => ({ data: [] }))
+          api.get('/dashboard/operational-alerts', { cache: false }).catch(() => ({ data: null }))
         ]);
 
         if (requestId !== requestIdRef.current) return;
@@ -212,7 +223,14 @@ export default function Dashboard() {
         setTopProducts(Array.isArray(topRes.data) ? topRes.data : []);
         setRecentOrders(Array.isArray(recentRes.data) ? recentRes.data : []);
         setRevenueChart(Array.isArray(chartRes.data) ? chartRes.data : []);
-        setStaffPerformance(Array.isArray(staffRes.data) ? staffRes.data : []);
+        setOperationalAlerts(alertsRes.data && typeof alertsRes.data === 'object'
+          ? alertsRes.data
+          : {
+              lowStockProducts: safeNumber(summaryRes.data?.lowStockCount),
+              overduePendingPayments: 0,
+              slowMovingProducts: 0,
+              expiringWarranties: 0
+            });
         setDisplayedPeriod(dashboardPeriod);
         setDisplayedRange({ from: dateFrom, to: dateTo });
         setError('');
@@ -234,14 +252,13 @@ export default function Dashboard() {
     return dashboardPeriodOptions.find((option) => option.value === displayedPeriod)?.label || dashboardPeriodOptions[0].label;
   }, [displayedRange, displayedPeriod]);
 
-  const revenueComparisonAmount = safeNumber(summary.todayRevenue) - safeNumber(summary.yesterdayRevenue);
   const comparisonDays = displayedRange.from && displayedRange.to
     ? Math.round((new Date(`${displayedRange.to}T00:00:00`) - new Date(`${displayedRange.from}T00:00:00`)) / 86400000) + 1
     : Number.parseInt(displayedPeriod, 10) || 1;
-  const comparisonLabel = displayedPeriod === 'today' && !displayedRange.from
-    ? 'hôm qua'
-    : displayedPeriod === 'yesterday' && !displayedRange.from
-      ? 'ngày trước'
+  const comparisonLabel = displayedPeriod === 'yesterday'
+    ? 'ngày trước đó'
+    : displayedPeriod === 'today'
+      ? 'hôm qua'
       : `${comparisonDays} ngày trước`;
 
   const cards = [
@@ -264,13 +281,13 @@ export default function Dashboard() {
       tone: 'gray'
     },
     {
-      id: 'low-stock',
-      label: 'Sắp hết hàng',
-      value: `${safeNumber(summary.lowStockCount).toLocaleString('vi-VN')} sản phẩm`,
-      caption: summary.lowStockCount > 0 ? 'Dưới mức tồn tối thiểu' : 'Kho đang ổn định',
-      icon: PackageCheck,
-      tone: 'amber',
-      to: '/products?lowStock=1'
+      id: 'average-order-value',
+      label: 'Giá trị đơn trung bình',
+      value: formatCurrency(summary.averageOrderValue),
+      caption: getRevenueCaption(summary.averageOrderValue, summary.previousAverageOrderValue, comparisonLabel),
+      trend: safeNumber(summary.averageOrderValue) - safeNumber(summary.previousAverageOrderValue),
+      icon: CreditCard,
+      tone: 'slate'
     },
     {
       id: 'products-sold',
@@ -309,25 +326,14 @@ export default function Dashboard() {
     };
   }, [summary.paymentCashCount, summary.paymentTransferCount]);
 
-  const staffStats = useMemo(() => {
-    return staffPerformance
-      .map((staff) => ({
-        ...staff,
-        count: safeNumber(staff.count),
-        total: safeNumber(staff.total)
-      }))
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 5);
-  }, [staffPerformance]);
-
   const paymentChart = useMemo(() => {
     const cashAngle = paymentStats.cashPercent * 3.6;
     const cashConnectorAngle = cashAngle > 0 ? cashAngle / 2 : 18;
     const transferConnectorAngle = cashAngle + ((360 - cashAngle) / 2);
-    const centerX = 160;
-    const centerY = 102;
-    const outerRadius = 60;
-    const innerRadius = 32;
+    const centerX = 210;
+    const centerY = 95;
+    const outerRadius = 62;
+    const innerRadius = 34;
 
     return {
       centerX,
@@ -471,23 +477,37 @@ export default function Dashboard() {
         {cards.map((card) => {
           const Icon = card.icon;
           const CardWrapper = card.to ? Link : 'article';
+          const comparisonSuffix = ` so với ${comparisonLabel}`;
+          const hasColoredDelta = card.trend !== undefined
+            && card.trend !== 0
+            && card.caption.endsWith(comparisonSuffix);
+          const deltaText = hasColoredDelta
+            ? card.caption.slice(0, -comparisonSuffix.length)
+            : '';
 
           return (
             <CardWrapper
               key={card.id}
               to={card.to}
-              className={`rounded-lg border bg-white p-3 shadow-[0_1px_3px_rgba(25,28,29,0.08)] ${card.tone === 'amber' && summary.lowStockCount > 0 ? 'border-red-500' : 'border-[#e1e3e4]'} ${
+              className={`rounded-lg border border-[#e1e3e4] bg-white p-3 shadow-[0_1px_3px_rgba(25,28,29,0.08)] ${
                 card.to ? 'block transition hover:border-[#c8dff0] hover:shadow-[0_8px_24px_rgba(116,184,224,0.18)]' : ''
               }`}
             >
               <div className="flex min-h-[76px] items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className={`truncate text-[13px] font-bold leading-4 ${card.tone === 'amber' && summary.lowStockCount > 0 ? 'text-red-700' : 'text-[#4f5459]'}`}>{card.label}</p>
+                  <p className="truncate text-[13px] font-bold leading-4 text-[#4f5459]">{card.label}</p>
                   <p className="mt-2 min-h-6 text-lg font-bold leading-6 text-[#191c1d]">{card.value}</p>
-                  <div className={`mt-1 flex min-w-0 items-center gap-1 text-xs font-medium leading-4 ${card.trend > 0 ? 'text-emerald-700' : card.trend < 0 ? 'text-red-600' : 'text-[#43474d]'}`}>
-                    {card.trend > 0 && <ArrowUpRight size={14} className="shrink-0" aria-label="Tăng" />}
-                    {card.trend < 0 && <ArrowDownRight size={14} className="shrink-0" aria-label="Giảm" />}
-                    <span className="truncate" title={card.caption}>{card.caption}</span>
+                  <div className="mt-1 flex min-h-8 min-w-0 flex-wrap content-start items-baseline gap-x-1 gap-y-0 text-[11px] font-medium leading-4" title={card.caption}>
+                    {hasColoredDelta ? (
+                      <>
+                        <span className={`font-semibold ${card.trend > 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                          {card.trend > 0 ? '+' : '-'} {deltaText}
+                        </span>
+                        <span className="text-[#43474d]">so với {comparisonLabel}</span>
+                      </>
+                    ) : (
+                      <span className="line-clamp-2 text-[#43474d]">{card.caption}</span>
+                    )}
                   </div>
                 </div>
                 <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${cardTones[card.tone]}`}>
@@ -501,12 +521,9 @@ export default function Dashboard() {
 
       <section className="grid gap-3 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.75fr)]">
         <RevenueAreaChart
-          totalRevenue={summary.todayRevenue}
-          comparisonAmount={revenueComparisonAmount}
           chartRows={revenueChart}
           period={displayedPeriod}
           periodLabel={dashboardPeriodLabel}
-          comparisonLabel={comparisonLabel}
         />
 
         <article className="rounded-lg border border-[#e1e3e4] bg-white p-3 shadow-[0_1px_3px_rgba(25,28,29,0.08)]">
@@ -536,7 +553,7 @@ export default function Dashboard() {
                 </div>
                 <div className="shrink-0 text-right">
                   <p className="text-sm font-bold text-[#191c1d]">{formatCurrency(product.revenue)}</p>
-                  <p className="mt-0.5 text-xs font-medium text-[#73777d]">giá {formatCurrency(product.price)}</p>
+                  <p className="mt-0.5 text-xs font-medium text-[#73777d]">Doanh thu:  {formatCurrency(product.price)}</p>
                 </div>
               </div>
             ))}
@@ -545,19 +562,19 @@ export default function Dashboard() {
       </section>
 
       <section className="grid gap-3 xl:grid-cols-3">
-        <article className="min-h-[220px] rounded-lg border border-[#e1e3e4] bg-white p-3 shadow-[0_1px_3px_rgba(25,28,29,0.08)]">
+        <article className="flex min-h-[220px] flex-col rounded-lg border border-[#e1e3e4] bg-white p-3 shadow-[0_1px_3px_rgba(25,28,29,0.08)]">
           <div className="mb-2 flex items-center justify-between gap-3">
             <h2 className="text-sm font-bold leading-5 text-[#191c1d]">Phương thức thanh toán</h2>
             <CreditCard size={18} className="text-brand-strong" />
           </div>
 
-          <div className="min-h-[176px] overflow-hidden">
-            <svg viewBox="0 0 320 220" className="h-[180px] w-full" role="img" aria-label="Biểu đồ phương thức thanh toán">
+          <div className="min-h-[176px] flex-1 overflow-hidden">
+            <svg viewBox="0 0 420 190" className="h-full w-full" role="img" aria-label="Biểu đồ phương thức thanh toán">
               {paymentStats.total > 0 ? (
                 <>
                   <defs>
                     <mask id="payment-donut-reveal">
-                      <rect width="320" height="220" fill="#000000" />
+                      <rect width="420" height="190" fill="#000000" />
                       <circle
                         className="payment-donut-reveal"
                         cx={paymentChart.centerX}
@@ -629,23 +646,30 @@ export default function Dashboard() {
         </article>
 
         <article className="min-h-[220px] rounded-lg border border-[#e1e3e4] bg-white p-3 shadow-[0_1px_3px_rgba(25,28,29,0.08)]">
-          <div className="mb-2 flex items-center justify-between gap-3">
-            <h2 className="text-sm font-bold leading-5 text-[#191c1d]">Hiệu suất bán hàng của nhân viên</h2>
-            <UsersRound size={18} className="text-brand-strong" />
+          <div className="mb-2.5 flex items-center gap-3">
+            <h2 className="text-sm font-black uppercase leading-5 tracking-[0.2em] text-[#172033]">Cảnh báo vận hành</h2>
           </div>
 
-          <div className="space-y-2">
-            {staffStats.length === 0 && (
-              <p className="py-3 text-sm font-medium text-[#73777d]">Chưa có dữ liệu nhân viên.</p>
-            )}
-            {staffStats.map((staff) => (
-              <div key={staff.name} className="flex items-center justify-between gap-3 text-sm">
-                <span className="truncate font-medium text-[#43474d]">{staff.name}</span>
-                <span className="shrink-0 text-xs font-semibold text-[#191c1d]">
-                  {staff.count} đơn - {formatCurrency(staff.total)}
-                </span>
+          <div className="grid gap-2.5">
+            <div className="min-h-[72px] border border-rose-200 bg-rose-50 px-3 py-2.5 text-rose-700">
+              <div className="min-w-0">
+                <p className="text-xs font-black leading-4">Khẩn cấp <span className="font-extrabold">(2)</span></p>
+                <div className="mt-1.5 space-y-1 text-[11px] font-bold leading-4">
+                  <p><strong className="mr-1 text-base font-black">{safeNumber(operationalAlerts.lowStockProducts).toLocaleString('vi-VN')}</strong> sản phẩm sắp hết hàng</p>
+                  <p><strong className="mr-1 text-base font-black">{safeNumber(operationalAlerts.overduePendingPayments).toLocaleString('vi-VN')}</strong> đơn chờ thanh toán quá 24 giờ</p>
+                </div>
               </div>
-            ))}
+            </div>
+
+            <div className="min-h-[72px] border border-amber-200 bg-amber-50 px-3 py-2.5 text-amber-800">
+              <div className="min-w-0">
+                <p className="text-xs font-black leading-4">Cần theo dõi <span className="font-extrabold">(2)</span></p>
+                <div className="mt-1.5 space-y-1 text-[11px] font-bold leading-4">
+                  <p><strong className="mr-1 text-base font-black">{safeNumber(operationalAlerts.slowMovingProducts).toLocaleString('vi-VN')}</strong> sản phẩm bán chậm</p>
+                  <p><strong className="mr-1 text-base font-black">{safeNumber(operationalAlerts.expiringWarranties).toLocaleString('vi-VN')}</strong> phiếu bảo hành sắp đến hạn</p>
+                </div>
+              </div>
+            </div>
           </div>
         </article>
 

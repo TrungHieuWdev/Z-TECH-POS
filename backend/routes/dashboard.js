@@ -3,6 +3,7 @@ import auth, { requireFullAccess } from '../middleware/auth.js';
 import {
   getCategoryShare,
   getLowStock,
+  getOperationalAlerts,
   getRecentOrders,
   getRevenueChart,
   getStaffPerformance,
@@ -16,6 +17,7 @@ router.get('/summary', auth, requireFullAccess, getSummary);
 router.get('/revenue-chart', auth, requireFullAccess, getRevenueChart);
 router.get('/top-products', auth, requireFullAccess, getTopProducts);
 router.get('/low-stock', auth, requireFullAccess, getLowStock);
+router.get('/operational-alerts', auth, requireFullAccess, getOperationalAlerts);
 router.get('/category-share', auth, requireFullAccess, getCategoryShare);
 router.get('/recent-orders', auth, requireFullAccess, getRecentOrders);
 router.get('/staff-performance', auth, requireFullAccess, getStaffPerformance);

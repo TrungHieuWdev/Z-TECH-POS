@@ -147,6 +147,8 @@ export async function getSummary(req, res) {
     const previousProductsSoldValue = toNumber(previousProductsSold[0].value);
     const estimatedProfitValue = toNumber(estimatedProfit[0].value);
     const previousEstimatedProfitValue = toNumber(previousEstimatedProfit[0].value);
+    const averageOrderValue = todayOrdersValue > 0 ? todayRevenueValue / todayOrdersValue : 0;
+    const previousAverageOrderValue = yesterdayOrdersValue > 0 ? yesterdayRevenueValue / yesterdayOrdersValue : 0;
 
     res.json({
       todayRevenue: todayRevenueValue,
@@ -154,6 +156,8 @@ export async function getSummary(req, res) {
       monthRevenue: toNumber(monthRevenue[0].value),
       todayOrders: todayOrdersValue,
       yesterdayOrders: yesterdayOrdersValue,
+      averageOrderValue,
+      previousAverageOrderValue,
       lowStockCount: toNumber(lowStock[0].value),
       productsSold: productsSoldValue,
       previousProductsSold: previousProductsSoldValue,
@@ -161,6 +165,7 @@ export async function getSummary(req, res) {
       previousEstimatedProfit: previousEstimatedProfitValue,
       revenueGrowth: getPercentChange(todayRevenueValue, yesterdayRevenueValue),
       orderGrowth: getPercentChange(todayOrdersValue, yesterdayOrdersValue),
+      averageOrderValueGrowth: getPercentChange(averageOrderValue, previousAverageOrderValue),
       productsSoldGrowth: getPercentChange(productsSoldValue, previousProductsSoldValue),
       estimatedProfitGrowth: getPercentChange(estimatedProfitValue, previousEstimatedProfitValue),
       paymentCashCount: toNumber(paymentTotals[0].cash_count),
@@ -309,6 +314,65 @@ export async function getRecentOrders(req, res) {
     })));
   } catch (error) {
     res.status(500).json({ message: 'Không thể lấy đơn hàng gần đây', error: error.message });
+  }
+}
+
+export async function getOperationalAlerts(req, res) {
+  try {
+    const [lowStockRows, overduePaymentRows, slowMovingRows, expiringWarrantyRows] = await Promise.all([
+      query(
+        `SELECT COUNT(*) AS value
+         FROM products
+         WHERE is_active = 1 AND stock_quantity <= min_stock`
+      ),
+      query(
+        `SELECT COUNT(*) AS value
+         FROM payments
+         WHERE status = 'pending'
+           AND created_at < DATE_SUB(NOW(), INTERVAL 24 HOUR)`
+      ),
+      query(
+        `SELECT COUNT(*) AS value
+         FROM products p
+         WHERE p.is_active = 1
+           AND p.stock_quantity > 0
+           AND EXISTS (
+             SELECT 1
+             FROM order_items history_item
+             JOIN orders history_order ON history_order.id = history_item.order_id
+             WHERE history_item.product_id = p.id
+               AND history_order.status = 'completed'
+           )
+           AND NOT EXISTS (
+             SELECT 1
+             FROM order_items recent_item
+             JOIN orders recent_order ON recent_order.id = recent_item.order_id
+             WHERE recent_item.product_id = p.id
+               AND recent_order.status = 'completed'
+               AND recent_order.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+           )`
+      ),
+      query(
+        `SELECT COUNT(*) AS value
+         FROM warranties
+         WHERE status = 'active'
+           AND warranty_end BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)`
+      )
+    ]);
+
+    res.json({
+      lowStockProducts: toNumber(lowStockRows[0].value),
+      overduePendingPayments: toNumber(overduePaymentRows[0].value),
+      slowMovingProducts: toNumber(slowMovingRows[0].value),
+      expiringWarranties: toNumber(expiringWarrantyRows[0].value),
+      rules: {
+        overduePaymentHours: 24,
+        slowMovingDays: 30,
+        warrantyDueDays: 7
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Không thể lấy cảnh báo vận hành', error: error.message });
   }
 }
 

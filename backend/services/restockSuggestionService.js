@@ -1,5 +1,5 @@
 import { query } from '../config/db.js';
-import { generateRestockReasons } from './huggingFaceRestockService.js';
+import { generateRestockReasons } from './geminiRestockService.js';
 import { calculateRestockForecast, classifyRestockPriority } from '../utils/restockForecast.js';
 import { randomUUID } from 'node:crypto';
 
@@ -222,7 +222,7 @@ export async function getRestockSuggestions(input = {}) {
       const reason = ai.reasonsByProductId.get(item.productId);
       if (reason) {
         item.reason = reason;
-        item.reasonSource = 'huggingface';
+        item.reasonSource = 'gemini';
       }
     }
   } catch (error) {

@@ -14,6 +14,9 @@ const dbConfig = {
 
 const pool = mysql.createPool({
   ...dbConfig,
+  // MySQL TIMESTAMP values and report boundaries are interpreted consistently
+  // in the store's business timezone (Asia/Ho_Chi_Minh = UTC+07:00).
+  timezone: '+07:00',
   waitForConnections: true,
   connectionLimit: Number(process.env.DB_CONNECTION_LIMIT || 10),
   queueLimit: Number(process.env.DB_QUEUE_LIMIT || 0)

@@ -1,722 +1,324 @@
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import {
-  Banknote,
-  ChevronLeft,
-  ChevronRight,
-  Download,
-  Filter,
-  Package,
-  Search,
-  ShoppingBag,
-  TrendingUp,
-  WalletCards
-} from 'lucide-react';
-import {
-  Bar,
-  CartesianGrid,
-  ComposedChart,
-  Legend,
-  Line,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis
-} from 'recharts';
-import api from '../api/axios';
-import { formatCurrency, formatDate, formatTime } from '../utils/format';
+import { BrainCircuit, ChevronLeft, ChevronRight, Download, Info, RotateCcw, Search, Sparkles } from 'lucide-react';
+import { formatCurrency } from '../utils/format';
+import { exportRevenueReport, loadRevenueDashboard, loadRevenueProducts, runAiRevenueAnalysis } from '../services/revenueReportService';
+import { AiReportChart, HourlyChart, PaymentChart, TrendChart } from '../components/reports/RevenueCharts';
 
-const periodOptions = [
-  { value: 'today', label: 'Hôm nay' },
-  { value: '7days', label: '7 ngày qua' },
-  { value: 'month', label: 'Tháng này' }
+const paymentLabels = { cash: 'Tiền mặt', card: 'Thẻ', transfer: 'Chuyển khoản', e_wallet: 'Ví điện tử', other: 'Khác' };
+const statusLabels = { all: 'Tất cả trạng thái', completed: 'Hoàn thành', cancelled: 'Đã hủy' };
+
+function dateText(date) {
+  const year = date.getFullYear();
+  return `${year}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function rangeFor(period) {
+  const today = new Date();
+  const from = new Date(today);
+  if (period === '7days') from.setDate(today.getDate() - 6);
+  if (period === '30days') from.setDate(today.getDate() - 29);
+  if (period === 'month') from.setDate(1);
+  return { from: dateText(from), to: dateText(today) };
+}
+
+function initialFilters() {
+  const defaults = { ...rangeFor('7days'), compare: true, categoryId: '', employeeId: '', paymentMethod: '', orderStatus: 'all' };
+  const query = new URLSearchParams(window.location.search);
+  for (const key of Object.keys(defaults)) {
+    if (query.has(key)) defaults[key] = key === 'compare' ? query.get(key) !== 'false' : query.get(key);
+  }
+  return defaults;
+}
+
+function changeTone(change, inverse = false) {
+  const value = Number(change || 0) * (inverse ? -1 : 1);
+  if (value > 0) return 'text-emerald-700 bg-emerald-50';
+  if (value < 0) return 'text-rose-700 bg-rose-50';
+  return 'text-slate-600 bg-slate-100';
+}
+
+function ChangeBadge({ value, inverse = false }) {
+  const number = Number(value || 0);
+  return (
+    <span className={`inline-flex px-2 py-0.5 text-xs font-bold ${changeTone(number, inverse)}`}>
+      {number > 0 ? '+' : ''}{number.toLocaleString('vi-VN')}%
+    </span>
+  );
+}
+
+function Panel({ title, subtitle, children, empty = false }) {
+  return (
+    <section className="border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="mb-4">
+        <h2 className="text-base font-extrabold text-slate-900">{title}</h2>
+        {subtitle && <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p>}
+      </div>
+      {empty ? <div className="grid h-56 place-items-center text-sm text-slate-500">Không có dữ liệu phù hợp với bộ lọc.</div> : children}
+    </section>
+  );
+}
+
+function Skeleton({ className = '' }) {
+  return <div className={`animate-pulse bg-slate-200 ${className}`} />;
+}
+
+function FilterSelect({ label, value, onChange, children }) {
+  return (
+    <label className="min-w-0">
+      <span className="mb-1 block text-xs font-bold text-slate-600">{label}</span>
+      <select value={value} onChange={(event) => onChange(event.target.value)} className="h-10 w-full border border-slate-300 bg-white px-2 text-sm outline-none focus:border-cyan-600">
+        {children}
+      </select>
+    </label>
+  );
+}
+
+function AiPanel({ data, isLoading, error, onAnalyze }) {
+  const priority = { high: 'Cao', medium: 'Trung bình', low: 'Thấp' };
+  const findingTone = { positive: 'border-emerald-300 bg-emerald-50', info: 'border-cyan-300 bg-cyan-50', warning: 'border-amber-300 bg-amber-50', critical: 'border-rose-300 bg-rose-50' };
+  return (
+    <section className="border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div><h2 className="flex items-center gap-2 text-lg font-black text-slate-900"><BrainCircuit size={21} className="text-cyan-700" /> Gemini phân tích POS</h2><p className="mt-1 text-xs text-slate-500">Gemini 3.1 Flash-Lite phân tích dữ liệu của báo cáo MySQL đang hiển thị; không ảnh hưởng việc xem KPI và biểu đồ.</p></div>
+        <button type="button" onClick={onAnalyze} disabled={isLoading} className="flex h-11 shrink-0 items-center justify-center gap-2 bg-cyan-700 px-4 text-sm font-extrabold text-white hover:bg-cyan-800 disabled:cursor-wait disabled:opacity-60"><Sparkles size={17} /> {isLoading ? 'AI đang phân tích...' : data ? 'Phân tích lại' : 'Tạo báo cáo AI'}</button>
+      </div>
+      {error && <div className="mt-4 border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">{error}</div>}
+      {isLoading && <div className="mt-5 grid gap-3 sm:grid-cols-3"><Skeleton className="h-24" /><Skeleton className="h-24" /><Skeleton className="h-24" /></div>}
+      {!data && !isLoading && <div className="mt-5 grid min-h-28 place-items-center border border-dashed border-slate-300 bg-slate-50 px-4 text-center text-sm text-slate-600">Báo cáo MySQL đã sẵn sàng. Bấm “Tạo báo cáo AI” nếu cần thêm nhận xét và đề xuất.</div>}
+      {data && !isLoading && <div className="mt-5 space-y-5">
+        <div className="grid gap-3 lg:grid-cols-[140px_1fr]">
+          <div className="border border-cyan-200 bg-cyan-50 p-4 text-center"><p className="text-xs font-bold uppercase text-cyan-800">Sức khỏe POS</p><p className="mt-2 text-4xl font-black text-cyan-900">{data.healthScore}</p><p className="text-xs text-cyan-800">/ 100</p></div>
+          <div className="border border-slate-200 p-4"><p className="text-xs font-bold uppercase text-slate-500">Tóm tắt ngắn · {data.model}</p><p className="mt-2 text-sm leading-6 text-slate-800">{data.executiveSummary}</p></div>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{(data.findings || []).map((item, index) => <article key={`${item.title}-${index}`} className={`border p-3 ${findingTone[item.severity] || findingTone.info}`}><h3 className="font-extrabold text-slate-900">{item.title}</h3><p className="mt-1 text-sm text-slate-700">{item.insight}</p><p className="mt-2 text-xs font-semibold text-slate-600">{item.evidence?.[0]}</p></article>)}</div>
+        {(data.actions || []).length > 0 && <div><h3 className="mb-2 font-extrabold text-slate-900">Đề xuất ngắn</h3><div className="grid gap-3 md:grid-cols-2">{data.actions.map((action) => <article key={action.title} className="border border-slate-200 p-3"><div className="flex justify-between gap-2"><p className="font-bold text-slate-900">{action.title}</p><span className="h-fit bg-slate-100 px-1.5 py-0.5 text-[11px] font-bold">{priority[action.priority]}</span></div><p className="mt-1 text-sm text-slate-600">{action.reason}</p></article>)}</div></div>}
+        <p className="text-[11px] text-slate-500">Nguồn: {data.provider} · snapshot đã tổng hợp và ẩn danh · {data.cached ? 'kết quả từ cache' : 'phân tích mới'}.</p>
+      </div>}
+    </section>
+  );
+}
+
+const productColumns = [
+  ['sku', 'Mã SP'], ['name', 'Tên sản phẩm'], ['categoryName', 'Danh mục'], ['soldQuantity', 'SL bán'],
+  ['grossRevenue', 'DT gộp'], ['discount', 'Giảm giá'], ['netRevenue', 'DT thuần'], ['cost', 'Giá vốn'],
+  ['grossProfit', 'LN gộp'], ['margin', 'Biên LN'], ['returnedQuantity', 'SL hoàn']
 ];
 
-const paymentLabels = {
-  cash: 'Tiền mặt',
-  card: 'Thẻ',
-  transfer: 'Chuyển khoản'
-};
-
-const chartColors = ['#5FA9D4', '#73C0CF', '#96D5E2', '#B7E4EC', '#C9D8E6', '#AFC7D7'];
-const ORDER_PAGE_SIZE = 8;
-
-const emptyReport = {
-  summary: {
-    revenue: 0,
-    orders: 0,
-    soldQuantity: 0,
-    grossProfit: 0,
-    revenueGrowth: 0,
-    orderGrowth: 0
-  },
-  daily: [],
-  recentOrders: [],
-  categories: [],
-  topProducts: [],
-  attentionProducts: []
-};
-
-function toInputDate(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
-function getRangeByPeriod(period) {
-  const today = new Date();
-
-  if (period === 'today') {
-    const current = toInputDate(today);
-    return { dateFrom: current, dateTo: current };
-  }
-
-  if (period === 'month') {
-    return {
-      dateFrom: toInputDate(new Date(today.getFullYear(), today.getMonth(), 1)),
-      dateTo: toInputDate(today)
-    };
-  }
-
-  const start = new Date(today);
-  start.setDate(today.getDate() - 6);
-  return {
-    dateFrom: toInputDate(start),
-    dateTo: toInputDate(today)
-  };
-}
-
-function formatPercent(value) {
-  const numberValue = Number(value || 0);
-  const prefix = numberValue > 0 ? '+' : '';
-  return `${prefix}${numberValue.toLocaleString('vi-VN')}%`;
-}
-
-function buildCsv(products) {
-  const headers = ['Sản phẩm', 'Danh mục', 'Số lượng bán', 'Doanh thu', 'Tồn kho'];
-  const rows = products.map((product) => [
-    product.name,
-    product.category_name,
-    product.quantity,
-    product.revenue,
-    product.stock_quantity
-  ]);
-
-  return [headers, ...rows]
-    .map((row) => row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
-    .join('\n');
-}
-``
-function getDonutSegments(categories) {
-  let offset = 0;
-
-  return categories.map((category, index) => {
-    const segment = {
-      ...category,
-      color: chartColors[index % chartColors.length],
-      offset
-    };
-    offset -= Number(category.percentage || 0);
-    return segment;
-  });
-}
-
-function buildDailyChartData(rows, dateFrom, dateTo) {
-  if (!dateFrom || !dateTo) return [];
-
-  const valuesByDate = new Map((rows || []).map((row) => [row.date, row]));
-  const start = new Date(`${dateFrom}T00:00:00`);
-  const end = new Date(`${dateTo}T00:00:00`);
-  const data = [];
-
-  for (const date = new Date(start); date <= end; date.setDate(date.getDate() + 1)) {
-    const key = toInputDate(date);
-    const row = valuesByDate.get(key) || {};
-    data.push({
-      date: key,
-      label: `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}`,
-      revenue: Number(row.revenue || 0),
-      grossProfit: Number(row.grossProfit || 0),
-      profitMarker: Number(row.revenue || 0)
-    });
-  }
-
-  return data;
-}
-
-function formatChartAxis(value) {
-  const number = Number(value || 0);
-  if (number === 0) return '0';
-  if (Math.abs(number) >= 1000000) return `${(number / 1000000).toLocaleString('vi-VN', { maximumFractionDigits: 1 })}tr`;
-  return `${Math.round(number / 1000)}k`;
-}
-
-function getAttentionMeta(product, dateFrom, dateTo) {
-  const stock = Number(product.stock_quantity || 0);
-  const minimum = Math.max(Number(product.min_stock || 0), 1);
-  const sold = Number(product.sold_quantity || 0);
-  const start = new Date(`${dateFrom}T00:00:00`);
-  const end = new Date(`${dateTo}T00:00:00`);
-  const days = Math.max(Math.round((end - start) / 86400000) + 1, 1);
-  const dailySales = sold / days;
-
-  const daysRemaining = dailySales > 0 ? Math.ceil(stock / dailySales) : null;
-
-  if (stock <= minimum || (daysRemaining !== null && daysRemaining <= 7)) {
-    let reason = 'Tồn kho đã chạm mức tối thiểu';
-    if (dailySales >= 1 && stock <= minimum) reason = 'Bán chạy nhưng tồn kho thấp';
-    else if (daysRemaining !== null) reason = `Sắp hết hàng trong khoảng ${daysRemaining} ngày`;
-    return { key: 'urgent', group: 'Cần nhập gấp', reason, action: 'Nhập ngay', priority: 0, tone: 'bg-red-50 text-red-700 ring-red-200', rowTone: 'bg-red-50/30' };
-  }
-
-  if (stock > minimum * 2 && dailySales < 0.2) {
-    return { key: 'slow', group: 'Bán chậm cần theo dõi', reason: `Tồn kho cao nhưng chỉ bán ${sold} sản phẩm trong kỳ`, action: 'Giảm giá', priority: 1, tone: 'bg-orange-50 text-orange-700 ring-orange-200', rowTone: 'bg-orange-50/30' };
-  }
-
-  return { key: 'normal', group: 'Bình thường', reason: 'Tồn kho và tốc độ bán đang ổn định', action: 'Theo dõi', priority: 2, tone: 'bg-emerald-50 text-emerald-700 ring-emerald-200', rowTone: 'bg-emerald-50/20' };
-}
-
-function getPaginationItems(currentPage, totalPages) {
-  if (totalPages <= 5) return Array.from({ length: totalPages }, (_, index) => index + 1);
-
-  if (currentPage <= 3) return [1, 2, 3, 'ellipsis-end', totalPages];
-  if (currentPage >= totalPages - 2) {
-    return [1, 'ellipsis-start', totalPages - 2, totalPages - 1, totalPages];
-  }
-
-  return [
-    1,
-    'ellipsis-start',
-    currentPage - 1,
-    currentPage,
-    currentPage + 1,
-    'ellipsis-end',
-    totalPages
-  ];
-}
-
 export default function Reports() {
-  const defaultRange = useMemo(() => getRangeByPeriod('7days'), []);
+  const startingFilters = useMemo(initialFilters, []);
+  const [filters, setFilters] = useState(startingFilters);
+  const [draft, setDraft] = useState(startingFilters);
   const [period, setPeriod] = useState('7days');
-  const [dateFrom, setDateFrom] = useState(defaultRange.dateFrom);
-  const [dateTo, setDateTo] = useState(defaultRange.dateTo);
+  const [dashboard, setDashboard] = useState(null);
+  const [products, setProducts] = useState({ items: [], pagination: { page: 1, total: 0, totalPages: 1 } });
+  const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
-  const [orderPage, setOrderPage] = useState(1);
-  const [report, setReport] = useState(emptyReport);
-  const [isLoading, setIsLoading] = useState(true);
+  const [searchInput, setSearchInput] = useState('');
+  const [sortBy, setSortBy] = useState('netRevenue');
+  const [sortOrder, setSortOrder] = useState('desc');
+  const [loading, setLoading] = useState(true);
+  const [productsLoading, setProductsLoading] = useState(true);
   const [error, setError] = useState('');
-
-  async function loadReport() {
-    if (!dateFrom || !dateTo) {
-      setError('Vui lòng chọn đầy đủ ngày bắt đầu và ngày kết thúc');
-      return;
-    }
-
-    try {
-      setIsLoading(true);
-      const response = await api.get('/reports/sales', {
-        params: {
-          date_from: dateFrom,
-          date_to: dateTo
-        }
-      });
-
-      setReport(response.data);
-      setError('');
-    } catch (requestError) {
-      setReport(emptyReport);
-      setError(requestError.response?.data?.message || 'Không thể tải báo cáo doanh thu');
-    } finally {
-      setIsLoading(false);
-    }
-  }
+  const [aiAnalysis, setAiAnalysis] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState('');
 
   useEffect(() => {
-    loadReport();
-  }, [dateFrom, dateTo]);
-
-  const summary = report.summary || emptyReport.summary;
-  const donutSegments = useMemo(() => getDonutSegments(report.categories || []), [report.categories]);
-  const dailyChartData = useMemo(
-    () => buildDailyChartData(report.daily, dateFrom, dateTo),
-    [report.daily, dateFrom, dateTo]
-  );
-
-  const filteredOrders = useMemo(() => {
-    const keyword = search.trim().toLowerCase();
-    const orders = report.recentOrders || [];
-
-    if (!keyword) return orders;
-
-    return orders.filter((order) =>
-      [order.order_number, order.customer_name, order.cashier_name]
-        .filter(Boolean)
-        .some((value) => value.toLowerCase().includes(keyword))
-    );
-  }, [report.recentOrders, search]);
-  const totalOrderPages = Math.max(1, Math.ceil(filteredOrders.length / ORDER_PAGE_SIZE));
-  const visibleOrders = filteredOrders.slice((orderPage - 1) * ORDER_PAGE_SIZE, orderPage * ORDER_PAGE_SIZE);
-  const paginationItems = getPaginationItems(orderPage, totalOrderPages);
-  const occupiedRows = Math.max(visibleOrders.length, filteredOrders.length === 0 ? 1 : 0);
-  const fillerRowCount = Math.max(0, ORDER_PAGE_SIZE - occupiedRows);
+    const query = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => { if (value !== '') query.set(key, String(value)); });
+    window.history.replaceState(null, '', `${window.location.pathname}?${query.toString()}`);
+    let active = true;
+    setLoading(true);
+    setAiAnalysis(null);
+    setAiError('');
+    loadRevenueDashboard(filters)
+      .then((data) => { if (active) { setDashboard(data); setError(''); } })
+      .catch((requestError) => { if (active) setError(requestError.response?.data?.message || 'Không thể tải báo cáo doanh thu.'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [filters]);
 
   useEffect(() => {
-    setOrderPage(1);
-  }, [search, dateFrom, dateTo]);
+    const timer = setTimeout(() => { setSearch(searchInput.trim()); setPage(1); }, 350);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
   useEffect(() => {
-    if (orderPage > totalOrderPages) setOrderPage(totalOrderPages);
-  }, [orderPage, totalOrderPages]);
+    let active = true;
+    setProductsLoading(true);
+    loadRevenueProducts({ ...filters, page, limit: 10, search, sortBy, sortOrder })
+      .then((data) => { if (active) setProducts(data); })
+      .catch((requestError) => { if (active) toast.error(requestError.response?.data?.message || 'Không thể tải bảng sản phẩm'); })
+      .finally(() => { if (active) setProductsLoading(false); });
+    return () => { active = false; };
+  }, [filters, page, search, sortBy, sortOrder]);
 
-  const hasSalesData = Number(summary.orders || 0) > 0;
+  const applyFilters = () => {
+    if (!draft.from || !draft.to || draft.from > draft.to) return toast.error('Khoảng ngày không hợp lệ');
+    setPage(1);
+    setFilters(draft);
+  };
 
-  const statCards = [
-    {
-      title: 'Tổng doanh thu',
-      value: formatCurrency(summary.revenue),
-      note: `${formatPercent(summary.revenueGrowth)} so với kỳ trước`,
-      icon: Banknote,
-      tone: 'bg-[#c0edf7] text-[#0f3b46]'
-    },
-    {
-      title: 'Tổng đơn hàng',
-      value: Number(summary.orders || 0).toLocaleString('vi-VN'),
-      note: `${formatPercent(summary.orderGrowth)} so với kỳ trước`,
-      icon: ShoppingBag,
-      tone: 'bg-[#f4fcfe] text-[#0f3b46]'
-    },
-    {
-      title: 'Sản phẩm đã bán',
-      value: Number(summary.soldQuantity || 0).toLocaleString('vi-VN'),
-      note: hasSalesData ? 'Tính từ đơn hàng hoàn tất' : 'Chưa có đơn hoàn tất',
-      icon: Package,
-      tone: 'bg-[#f4fcfe] text-gray-600'
-    },
-    {
-      title: 'Lợi nhuận gộp',
-      value: formatCurrency(summary.grossProfit),
-      note: 'Theo giá vốn sản phẩm',
-      icon: WalletCards,
-      tone: 'bg-emerald-50 text-emerald-600'
-    }
-  ];
-
-  const handlePeriodChange = (value) => {
+  const choosePeriod = (value) => {
     setPeriod(value);
-
-    if (value !== 'custom') {
-      const nextRange = getRangeByPeriod(value);
-      setDateFrom(nextRange.dateFrom);
-      setDateTo(nextRange.dateTo);
-    }
+    const dates = rangeFor(value);
+    const next = { ...draft, ...dates };
+    setDraft(next);
+    setPage(1);
+    setFilters(next);
   };
 
-  const exportReport = () => {
-    const products = report.topProducts || [];
-    if (products.length === 0) {
-      toast.error('Chưa có dữ liệu để xuất báo cáo');
-      return;
-    }
-
-    const blob = new Blob([`\ufeff${buildCsv(products)}`], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-
-    link.href = url;
-    link.download = `bao-cao-doanh-thu-${dateFrom}-${dateTo}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    URL.revokeObjectURL(url);
-    toast.success('Đã xuất báo cáo CSV');
+  const resetFilters = () => {
+    const next = { ...rangeFor('7days'), compare: true, categoryId: '', employeeId: '', paymentMethod: '', orderStatus: 'all' };
+    setPeriod('7days'); setDraft(next); setFilters(next); setSearchInput(''); setPage(1);
   };
+
+  const exportCsv = async () => {
+    try {
+      const response = await exportRevenueReport({ ...filters, search, sortBy, sortOrder });
+      const url = URL.createObjectURL(response.data);
+      const link = document.createElement('a');
+      link.href = url; link.download = `bao-cao-doanh-thu-${filters.from}-${filters.to}.csv`;
+      document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
+      toast.success('Đã xuất báo cáo CSV');
+    } catch (requestError) { toast.error(requestError.response?.data?.message || 'Không thể xuất báo cáo'); }
+  };
+
+  const analyzeWithAi = async () => {
+    try {
+      setAiLoading(true); setAiError('');
+      setAiAnalysis(await runAiRevenueAnalysis(filters));
+    } catch (requestError) {
+      setAiAnalysis(null);
+      const message = requestError.code === 'ECONNABORTED'
+        ? 'Gemini phản hồi quá thời gian. Báo cáo MySQL vẫn sử dụng bình thường.'
+        : !requestError.response
+          ? 'Không kết nối được backend. Hãy kiểm tra máy chủ rồi thử lại.'
+          : requestError.response.data?.message || 'Gemini chưa thể phân tích POS lúc này.';
+      setAiError(message);
+    } finally { setAiLoading(false); }
+  };
+
+  const metrics = dashboard?.summary?.metrics || {};
+  const options = dashboard?.summary?.filterOptions || {};
+  const categoryChartSpec = useMemo(() => {
+    const items = dashboard?.categories?.items || [];
+    const leading = items.slice(0, 4);
+    const remainingRevenue = items.slice(4).reduce((sum, item) => sum + Number(item.netRevenue || 0), 0);
+    const visible = remainingRevenue > 0
+      ? [...leading, { name: 'Khác', netRevenue: remainingRevenue }]
+      : leading;
+    return {
+      id: 'category_revenue', type: 'doughnut',
+      labels: visible.map((item) => item.name),
+      datasets: [{ label: 'Doanh thu thuần', data: visible.map((item) => item.netRevenue) }],
+      valueFormat: 'currency'
+    };
+  }, [dashboard?.categories?.items]);
+  const hasTrendData = (dashboard?.trend?.points || []).some((item) => item.netRevenue || item.grossProfit);
+  const kpis = [
+    ['Doanh thu thuần', metrics.netRevenue, metrics.changes?.netRevenue, 'Doanh thu gộp - giảm giá - hoàn trả; không gồm VAT.', false, true],
+    ['Lợi nhuận gộp', metrics.grossProfit, metrics.changes?.grossProfit, 'Doanh thu thuần - giá vốn. Giá vốn dùng cost_price hiện tại.', false, true],
+    ['Hóa đơn hoàn thành', metrics.completedOrders, metrics.changes?.completedOrders, 'Số hóa đơn có trạng thái completed.', false, false],
+    ['Giá trị đơn TB', metrics.averageOrderValue, metrics.changes?.averageOrderValue, 'Doanh thu thuần / số hóa đơn hoàn thành.', false, true],
+    ['Tổng giảm giá', metrics.discount, metrics.changes?.discount, 'Tổng discount được phân bổ theo giá trị dòng hàng.', true, true],
+    ['Tổng hoàn trả', metrics.refunds, metrics.changes?.refunds, 'Chỉ giao dịch refund riêng; đơn cancelled đã bị loại và không trừ lần hai.', true, true]
+  ];
 
   return (
-    <div className="space-y-6">
-      <section>
-        <h1 className="text-2xl font-extrabold text-gray-950">Báo cáo tổng quan</h1>
-        <p className="mt-1 text-sm font-medium text-gray-500">Phân tích doanh thu, lợi nhuận, sản phẩm và giao dịch theo từng khoảng thời gian.</p>
+    <div className="space-y-5 pb-8">
+      <header>
+        <h1 className="text-2xl font-black text-slate-950">Báo cáo</h1>
+        <div role="tablist" className="mt-3 border-b border-slate-200">
+          <button role="tab" aria-selected="true" className="border-b-2 border-cyan-700 px-3 py-2 text-sm font-extrabold text-cyan-800">Báo cáo doanh thu & AI</button>
+        </div>
+      </header>
+
+      <section className="border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap gap-2">
+          {[['today', 'Hôm nay'], ['7days', '7 ngày'], ['30days', '30 ngày'], ['month', 'Tháng này']].map(([value, label]) => (
+            <button key={value} type="button" onClick={() => choosePeriod(value)} className={`h-9 border px-3 text-sm font-bold ${period === value ? 'border-cyan-700 bg-cyan-50 text-cyan-800' : 'border-slate-300 text-slate-600 hover:bg-slate-50'}`}>{label}</button>
+          ))}
+          <button type="button" onClick={() => setPeriod('custom')} className={`h-9 border px-3 text-sm font-bold ${period === 'custom' ? 'border-cyan-700 bg-cyan-50 text-cyan-800' : 'border-slate-300 text-slate-600'}`}>Tùy chọn</button>
+        </div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
+          <label><span className="mb-1 block text-xs font-bold text-slate-600">Từ ngày</span><input type="date" value={draft.from} onChange={(e) => { setPeriod('custom'); setDraft({ ...draft, from: e.target.value }); }} className="h-10 w-full border border-slate-300 px-2 text-sm" /></label>
+          <label><span className="mb-1 block text-xs font-bold text-slate-600">Đến ngày</span><input type="date" value={draft.to} onChange={(e) => { setPeriod('custom'); setDraft({ ...draft, to: e.target.value }); }} className="h-10 w-full border border-slate-300 px-2 text-sm" /></label>
+          <FilterSelect label="Danh mục" value={draft.categoryId} onChange={(value) => setDraft({ ...draft, categoryId: value })}><option value="">Tất cả danh mục</option>{(options.categories || []).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</FilterSelect>
+          <FilterSelect label="Nhân viên" value={draft.employeeId} onChange={(value) => setDraft({ ...draft, employeeId: value })}><option value="">Tất cả nhân viên</option>{(options.employees || []).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</FilterSelect>
+          <FilterSelect label="Thanh toán" value={draft.paymentMethod} onChange={(value) => setDraft({ ...draft, paymentMethod: value })}><option value="">Tất cả phương thức</option>{(options.paymentMethods || []).map((item) => <option key={item} value={item}>{paymentLabels[item] || item}</option>)}</FilterSelect>
+          <FilterSelect label="Trạng thái" value={draft.orderStatus} onChange={(value) => setDraft({ ...draft, orderStatus: value })}>{['all', ...(options.orderStatuses || [])].map((item) => <option key={item} value={item}>{statusLabels[item] || item}</option>)}</FilterSelect>
+          <label className="flex items-end"><span className="flex h-10 w-full items-center gap-2 border border-slate-300 px-2 text-sm font-semibold text-slate-700"><input type="checkbox" checked={draft.compare} onChange={(e) => setDraft({ ...draft, compare: e.target.checked })} /> So sánh kỳ trước</span></label>
+          <button type="button" onClick={applyFilters} className="h-10 self-end bg-cyan-700 px-3 text-sm font-extrabold text-white hover:bg-cyan-800">Áp dụng</button>
+        </div>
+        <div className="mt-3 flex flex-wrap justify-end gap-2">
+          <button type="button" onClick={resetFilters} className="flex h-9 items-center gap-2 border border-slate-300 px-3 text-sm font-bold text-slate-700"><RotateCcw size={15} /> Đặt lại</button>
+          <button type="button" onClick={exportCsv} className="flex h-9 items-center gap-2 border border-cyan-700 px-3 text-sm font-bold text-cyan-800"><Download size={15} /> Xuất CSV</button>
+        </div>
       </section>
 
-      {error && (
-        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
-          {error}
-        </div>
+      {error && <div className="border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">{error}</div>}
+
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+        {loading ? Array.from({ length: 6 }, (_, index) => <Skeleton key={index} className="h-28" />) : kpis.map(([label, value, change, tooltip, inverse, currency]) => (
+          <article key={label} className="border border-slate-200 bg-white p-3 shadow-sm" title={tooltip}>
+            <div className="flex items-start justify-between gap-2"><p className="text-xs font-bold text-slate-600">{label}</p><Info size={14} className="text-slate-400" /></div>
+            <p className="mt-3 truncate text-xl font-black text-slate-950">{currency ? formatCurrency(value) : Number(value || 0).toLocaleString('vi-VN')}</p>
+            <div className="mt-2 flex items-center gap-2"><ChangeBadge value={change} inverse={inverse} /><span className="text-[11px] text-slate-500">kỳ trước</span></div>
+          </article>
+        ))}
+      </section>
+
+      {loading ? <Skeleton className="h-80" /> : (
+        <Panel title="XU HƯỚNG DOANH THU" subtitle="Doanh thu thuần và lợi nhuận gộp lấy trực tiếp từ MySQL." empty={!hasTrendData}>
+          <div className="h-72"><TrendChart trend={dashboard?.trend} /></div>
+        </Panel>
       )}
 
-      <section className="flex flex-col gap-4 rounded-lg border border-[#d7eef3] bg-white p-4 shadow-sm xl:flex-row xl:items-center">
-        <div className="flex rounded-lg bg-[#f4fcfe] p-1">
-          {periodOptions.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              onClick={() => handlePeriodChange(option.value)}
-              className={`h-10 rounded-md px-4 text-sm font-semibold transition ${
-                period === option.value ? 'bg-white text-[#0f3b46] shadow-sm' : 'text-gray-600 hover:bg-white'
-              }`}
-            >
-              {option.label}
-            </button>
-          ))}
+      <div className="grid gap-5 xl:grid-cols-2">
+        {loading ? <Skeleton className="h-96" /> : (
+          <Panel title="CƠ CẤU DOANH THU THEO DANH MỤC" subtitle="Tỷ trọng doanh thu thuần lấy trực tiếp từ hóa đơn POS." empty={!categoryChartSpec.labels.length}>
+            <div className="h-80"><AiReportChart spec={categoryChartSpec} /></div>
+          </Panel>
+        )}
+        {loading ? <Skeleton className="h-96" /> : (
+          <Panel title="CƠ CẤU THANH TOÁN" subtitle="Số tiền và tỷ trọng theo phương thức thanh toán." empty={!dashboard?.payments?.items?.length}>
+            <div className="h-80"><PaymentChart items={dashboard?.payments?.items} labels={paymentLabels} /></div>
+          </Panel>
+        )}
+      </div>
+
+      {loading ? <Skeleton className="h-80" /> : (
+        <Panel title="DOANH THU THEO KHUNG GIỜ" subtitle={dashboard?.hourly?.peakHour == null ? 'Theo thời gian thanh toán hoặc hoàn tất hóa đơn.' : `Khung giờ cao nhất: ${String(dashboard.hourly.peakHour).padStart(2, '0')}:00.`} empty={!dashboard?.hourly?.items?.length}>
+          <div className="h-72"><HourlyChart items={dashboard?.hourly?.items} peakHour={dashboard?.hourly?.peakHour} /></div>
+        </Panel>
+      )}
+
+      <AiPanel data={aiAnalysis} isLoading={aiLoading} error={aiError} onAnalyze={analyzeWithAi} />
+
+      <Panel title="Chi tiết sản phẩm" subtitle={`${products.pagination?.total || 0} sản phẩm theo bộ lọc hiện tại`}>
+        <div className="mb-3 flex max-w-md items-center border border-slate-300 bg-white px-3">
+          <Search size={16} className="text-slate-400" /><input value={searchInput} onChange={(e) => setSearchInput(e.target.value)} placeholder="Tìm mã hoặc tên sản phẩm" className="h-10 w-full px-2 text-sm outline-none" />
         </div>
-
-        <div className="flex flex-wrap items-center gap-3">
-          <input
-            type="date"
-            value={dateFrom}
-            onChange={(event) => {
-              setPeriod('custom');
-              setDateFrom(event.target.value);
-            }}
-            className="h-10 rounded-lg border border-[#d7eef3] bg-white px-3 text-sm outline-none focus:border-[#7ed5e6] focus:ring-2 focus:ring-[#c0edf7]"
-          />
-          <span className="text-sm text-gray-500">đến</span>
-          <input
-            type="date"
-            value={dateTo}
-            onChange={(event) => {
-              setPeriod('custom');
-              setDateTo(event.target.value);
-            }}
-            className="h-10 rounded-lg border border-[#d7eef3] bg-white px-3 text-sm outline-none focus:border-[#7ed5e6] focus:ring-2 focus:ring-[#c0edf7]"
-          />
-        </div>
-
-        <div className="flex gap-3 xl:ml-auto">
-          <button
-            type="button"
-            onClick={loadReport}
-            className="inline-flex h-10 items-center gap-2 rounded-lg bg-[#c0edf7] px-4 text-sm font-bold text-[#0f3b46] transition hover:bg-[#a9e3ef]"
-          >
-            <Filter size={18} />
-            <span>Lọc báo cáo</span>
-          </button>
-          <button
-            type="button"
-            onClick={exportReport}
-            className="inline-flex h-10 items-center gap-2 rounded-lg border border-[#d7eef3] bg-white px-4 text-sm font-bold text-gray-600 transition hover:bg-[#f4fcfe] hover:text-[#0f3b46]"
-          >
-            <Download size={18} />
-            <span>Xuất báo cáo</span>
-          </button>
-        </div>
-      </section>
-
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {statCards.map((card) => {
-          const Icon = card.icon;
-
-          return (
-            <div key={card.title} className="rounded-lg border border-[#d7eef3] bg-white p-5 shadow-sm">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-medium text-gray-500">{card.title}</p>
-                  <p className="mt-1 text-[22px] font-bold text-gray-950">{isLoading ? '...' : card.value}</p>
-                  <p className="mt-3 flex items-center gap-1 text-xs font-bold text-emerald-600">
-                    <TrendingUp size={15} />
-                    {card.note}
-                  </p>
-                </div>
-                <div className={`grid h-12 w-12 place-items-center rounded-lg ${card.tone}`}>
-                  <Icon size={25} />
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </section>
-
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
-        <div className="flex h-[420px] flex-col rounded-lg border border-[#d7eef3] bg-white p-5 shadow-sm">
-          <div className="mb-4 shrink-0">
-            <h2 className="text-base font-bold text-gray-950">Doanh thu & lợi nhuận theo ngày</h2>
-            <p className="mt-1 text-xs font-medium text-gray-500">
-              Dữ liệu từ đơn hàng hoàn tất trong khoảng thời gian đã chọn
-            </p>
-          </div>
-          <div className="min-h-0 w-full flex-1">
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={dailyChartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                <CartesianGrid stroke="#e5edf2" strokeDasharray="4 4" vertical={false} />
-                <XAxis
-                  dataKey="label"
-                  axisLine={{ stroke: '#d7e4ea' }}
-                  tickLine={false}
-                  minTickGap={24}
-                  tick={{ fill: '#64748b', fontSize: 11, fontWeight: 600 }}
-                  dy={8}
-                />
-                <YAxis
-                  axisLine={false}
-                  tickLine={false}
-                  width={48}
-                  tickFormatter={formatChartAxis}
-                  tick={{ fill: '#64748b', fontSize: 11, fontWeight: 600 }}
-                />
-                <Tooltip
-                  formatter={(value, name, item) => [
-                    formatCurrency(name === 'Lợi nhuận gộp' ? item.payload.grossProfit : value),
-                    name
-                  ]}
-                  labelFormatter={(label) => `Ngày ${label}`}
-                  contentStyle={{ border: '1px solid #d7eef3', borderRadius: 8, fontSize: 12 }}
-                />
-                <Legend wrapperStyle={{ fontSize: 12, fontWeight: 600, paddingTop: 12 }} />
-                <Bar
-                  dataKey="revenue"
-                  name="Doanh thu"
-                  fill="#2f8cf0"
-                  radius={[3, 3, 0, 0]}
-                  maxBarSize={30}
-                  animationDuration={500}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="profitMarker"
-                  name="Lợi nhuận gộp"
-                  stroke="#0ca678"
-                  strokeWidth={2.5}
-                  dot={{ r: 3, fill: '#ffffff', stroke: '#0ca678', strokeWidth: 2 }}
-                  activeDot={{ r: 5 }}
-                  animationDuration={500}
-                />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        <div className="flex h-[420px] flex-col rounded-lg border border-[#d7eef3] bg-white p-5 shadow-sm">
-          <h2 className="mb-4 shrink-0 text-base font-bold text-gray-950">Doanh thu theo danh mục</h2>
-          <div className="min-h-0 flex-1 overflow-y-auto pr-1">
-            <div className="flex flex-col items-center gap-4">
-            <div className="relative h-36 w-36 shrink-0">
-              <svg className="h-full w-full -rotate-90" viewBox="0 0 36 36">
-                <circle cx="18" cy="18" fill="transparent" r="15.9" stroke="#f1f5f9" strokeWidth="4.2" />
-                {donutSegments.map((category) => (
-                  <circle
-                    key={category.name}
-                    cx="18"
-                    cy="18"
-                    fill="transparent"
-                    r="15.9"
-                    stroke={category.color}
-                    strokeDasharray={`${category.percentage}, 100`}
-                    strokeDashoffset={category.offset}
-                    strokeWidth="4.2"
-                  />
-                ))}
-              </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-xs font-bold uppercase text-gray-500">Tổng cộng</span>
-                <span className="text-2xl font-bold text-gray-950">{hasSalesData ? '100%' : '0%'}</span>
-              </div>
-            </div>
-            <div className="w-full space-y-3">
-              {!isLoading && report.categories.length === 0 && (
-                <p className="text-center text-sm font-medium text-gray-500">Chưa có doanh thu theo danh mục.</p>
-              )}
-              {donutSegments.map((category) => (
-                <div key={category.name} className="flex items-center justify-between gap-3 text-sm">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <span className="h-3.5 w-3.5 shrink-0 rounded-full" style={{ backgroundColor: category.color }} />
-                    <span className="truncate text-gray-600">{category.name}</span>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <div className="font-bold text-gray-950">{category.percentage}%</div>
-                    <div className="text-xs font-medium text-gray-500">{formatCurrency(category.revenue)}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="grid gap-4 xl:grid-cols-2">
-        <div className="overflow-hidden rounded-lg border border-[#d7eef3] bg-white shadow-sm">
-          <div className="border-b border-[#edf7f9] px-4 py-3">
-            <h2 className="text-sm font-bold text-gray-950">Top sản phẩm bán chạy</h2>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[620px] text-left text-xs">
-              <thead className="bg-[#f8fdfe] text-gray-500">
-                <tr>
-                  <th className="w-10 px-3 py-2.5 text-center font-bold">#</th>
-                  <th className="px-3 py-2.5 font-bold">Sản phẩm</th>
-                  <th className="px-3 py-2.5 font-bold">Danh mục</th>
-                  <th className="px-3 py-2.5 text-right font-bold">SL bán</th>
-                  <th className="px-3 py-2.5 text-right font-bold">Doanh thu</th>
-                  <th className="px-3 py-2.5 text-right font-bold">Lợi nhuận</th>
-                  <th className="px-3 py-2.5 text-center font-bold">Tồn</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#edf7f9]">
-                {!isLoading && report.topProducts.length === 0 && (
-                  <tr><td colSpan="7" className="px-4 py-8 text-center text-gray-500">Chưa có sản phẩm bán ra trong kỳ.</td></tr>
-                )}
-                {report.topProducts.slice(0, 5).map((product, index) => (
-                  <tr key={product.product_id} className="hover:bg-[#f8fdfe]">
-                    <td className="px-3 py-2 text-center font-semibold text-gray-500">{index + 1}</td>
-                    <td className="max-w-[170px] px-3 py-2 font-semibold text-gray-950"><p className="truncate">{product.name}</p></td>
-                    <td className="max-w-[130px] px-3 py-2 text-gray-600"><p className="truncate">{product.category_name}</p></td>
-                    <td className="px-3 py-2 text-right font-semibold">{Number(product.quantity || 0).toLocaleString('vi-VN')}</td>
-                    <td className="whitespace-nowrap px-3 py-2 text-right font-semibold">{formatCurrency(product.revenue)}</td>
-                    <td className="whitespace-nowrap px-3 py-2 text-right font-semibold">{formatCurrency(product.gross_profit)}</td>
-                    <td className="px-3 py-2 text-center font-bold text-emerald-600">{Number(product.stock_quantity || 0).toLocaleString('vi-VN')}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div className="overflow-hidden rounded-lg border border-[#d7eef3] bg-white shadow-sm">
-          <div className="border-b border-[#edf7f9] px-4 py-3">
-            <h2 className="text-sm font-bold text-gray-950">Sản phẩm cần chú ý</h2>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] table-fixed text-left text-xs">
-              <colgroup>
-                <col className="w-[25%]" />
-                <col className="w-[8%]" />
-                <col className="w-[9%]" />
-                <col className="w-[18%]" />
-                <col className="w-[25%]" />
-                <col className="w-[15%]" />
-              </colgroup>
-              <thead className="bg-[#f8fdfe] text-gray-500">
-                <tr>
-                  <th className="px-3 py-2.5 font-bold">Sản phẩm</th>
-                  <th className="px-3 py-2.5 text-right font-bold">Đã bán</th>
-                  <th className="px-3 py-2.5 text-right font-bold">Tồn kho</th>
-                  <th className="px-3 py-2.5 font-bold">Phân loại</th>
-                  <th className="px-3 py-2.5 font-bold">Lý do</th>
-                  <th className="px-3 py-2.5 text-center font-bold">Hành động đề xuất</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#edf7f9]">
-                {(report.attentionProducts || [])
-                  .map((product) => ({ product, meta: getAttentionMeta(product, dateFrom, dateTo) }))
-                  .sort((a, b) => a.meta.priority - b.meta.priority)
-                  .map(({ product, meta }) => (
-                    <tr key={product.product_id} className="hover:bg-[#f8fdfe]">
-                      <td className="px-3 py-2.5 font-semibold text-gray-950"><p className="truncate" title={product.name}>{product.name}</p></td>
-                      <td className="px-2 py-2.5 text-right font-semibold">{Number(product.sold_quantity || 0).toLocaleString('vi-VN')}</td>
-                      <td className={`px-2 py-2.5 text-right font-bold ${meta.key === 'urgent' ? 'text-red-600' : 'text-emerald-600'}`}>{Number(product.stock_quantity || 0).toLocaleString('vi-VN')}</td>
-                      <td className="px-3 py-2.5"><span className={`inline-flex max-w-full rounded px-2 py-1 text-center font-bold leading-4 ring-1 ring-inset ${meta.tone}`}>{meta.group}</span></td>
-                      <td className="px-3 py-2.5 leading-5 text-gray-600">{meta.reason}</td>
-                      <td className="px-3 py-2.5 text-center"><span className={`inline-flex whitespace-nowrap rounded px-2 py-1 font-bold ring-1 ring-inset ${meta.tone}`}>{meta.action}</span></td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-
-      <section className="overflow-hidden rounded-lg border border-[#d7eef3] bg-white shadow-sm">
-        <div className="flex flex-col gap-3 border-b border-[#edf7f9] px-4 py-3 md:flex-row md:items-center md:justify-between">
-          <h2 className="text-sm font-bold text-gray-950">Danh sách đơn hàng trong kỳ</h2>
-          <div className="flex h-9 w-full items-center gap-2 rounded-lg border border-[#d7eef3] bg-white px-3 md:w-[300px]">
-            <Search size={17} className="text-gray-400" />
-            <input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              className="w-full text-sm outline-none"
-              placeholder="Tìm mã đơn, khách hàng..."
-            />
-          </div>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1040px] text-left text-xs">
-            <thead className="bg-[#f8fdfe] text-gray-500">
-              <tr>
-                <th className="px-4 py-2.5 font-bold">Mã đơn</th>
-                <th className="px-4 py-2.5 font-bold">Thời gian</th>
-                <th className="px-4 py-2.5 font-bold">Khách hàng</th>
-                <th className="px-4 py-2.5 font-bold">Nhân viên</th>
-                <th className="px-4 py-2.5 font-bold">Thanh toán</th>
-                <th className="px-4 py-2.5 text-right font-bold">Tổng tiền</th>
-                <th className="px-4 py-2.5 text-right font-bold">Lợi nhuận</th>
-                <th className="px-4 py-2.5 text-center font-bold">Trạng thái</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#edf7f9]">
-              {!isLoading && filteredOrders.length === 0 && (
-                <tr>
-                  <td colSpan="8" className="h-11 px-4 text-center text-sm font-medium text-gray-500">
-                    Không tìm thấy đơn hàng phù hợp trong khoảng ngày này.
-                  </td>
-                </tr>
-              )}
-              {visibleOrders.map((order) => (
-                <tr key={order.id} className="h-11 hover:bg-[#f8fdfe]">
-                  <td className="whitespace-nowrap px-4 py-2.5 font-bold text-[#0f3b46]">{order.order_number}</td>
-                  <td className="whitespace-nowrap px-4 py-2.5 text-gray-600">{formatTime(order.created_at)} - {formatDate(order.created_at)}</td>
-                  <td className="max-w-[150px] px-4 py-2.5 text-gray-600"><p className="truncate">{order.customer_name}</p></td>
-                  <td className="max-w-[160px] px-4 py-2.5 text-gray-600"><p className="truncate">{order.cashier_name}</p></td>
-                  <td className="whitespace-nowrap px-4 py-2.5 text-gray-600">{paymentLabels[order.payment_method] || order.payment_method}</td>
-                  <td className="whitespace-nowrap px-4 py-2.5 text-right font-bold text-gray-950">{formatCurrency(order.total)}</td>
-                  <td className="whitespace-nowrap px-4 py-2.5 text-right font-bold text-gray-950">{formatCurrency(order.gross_profit)}</td>
-                  <td className="px-4 py-2.5 text-center"><span className="inline-flex rounded bg-emerald-50 px-2 py-1 font-bold text-emerald-700">Hoàn thành</span></td>
-                </tr>
-              ))}
-              {Array.from({ length: fillerRowCount }, (_, index) => (
-                <tr key={`empty-order-row-${index}`} aria-hidden="true" className="h-11">
-                  <td colSpan="8">&nbsp;</td>
+        <div className="overflow-x-auto border border-slate-200">
+          <table className="min-w-[1320px] w-full text-left text-xs">
+            <thead className="bg-slate-100 text-slate-700"><tr>{productColumns.map(([key, label]) => (
+              <th key={key} className="whitespace-nowrap px-3 py-2.5 font-extrabold"><button type="button" onClick={() => { if (sortBy === key) setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc'); else { setSortBy(key); setSortOrder('desc'); } }} className="hover:text-cyan-800">{label}{sortBy === key ? (sortOrder === 'asc' ? ' ↑' : ' ↓') : ''}</button></th>
+            ))}</tr></thead>
+            <tbody className="divide-y divide-slate-100">
+              {productsLoading ? <tr><td colSpan={11} className="p-6 text-center text-slate-500">Đang tải dữ liệu sản phẩm...</td></tr> : products.items.length === 0 ? <tr><td colSpan={11} className="p-8 text-center text-slate-500">Không có sản phẩm phù hợp.</td></tr> : products.items.map((item) => (
+                <tr key={item.productId} className="hover:bg-slate-50">
+                  <td className="px-3 py-2.5 font-semibold">{item.sku || '—'}</td><td className="max-w-[240px] px-3 py-2.5 font-bold text-slate-900">{item.name}</td><td className="px-3 py-2.5">{item.categoryName}</td><td className="px-3 py-2.5 text-right">{item.soldQuantity}</td>
+                  {[item.grossRevenue, item.discount, item.netRevenue, item.cost, item.grossProfit].map((value, index) => <td key={index} className="whitespace-nowrap px-3 py-2.5 text-right">{formatCurrency(value)}</td>)}
+                  <td className={`px-3 py-2.5 text-right font-bold ${item.margin < 0 ? 'text-rose-700' : 'text-emerald-700'}`}>{item.margin}%</td><td className="px-3 py-2.5 text-right">{item.returnedQuantity}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <div className="flex min-h-12 flex-col gap-3 border-t border-[#edf7f9] px-4 py-3 text-xs text-gray-500 sm:flex-row sm:items-center sm:justify-between">
-          <span>
-            Hiển thị {filteredOrders.length ? (orderPage - 1) * ORDER_PAGE_SIZE + 1 : 0}
-            {' - '}{Math.min(orderPage * ORDER_PAGE_SIZE, filteredOrders.length)} trong {filteredOrders.length.toLocaleString('vi-VN')} đơn
-          </span>
-          <nav className="flex items-center gap-1" aria-label="Phân trang đơn hàng">
-            <button
-              type="button"
-              title="Trang trước"
-              aria-label="Trang trước"
-              disabled={orderPage === 1}
-              onClick={() => setOrderPage((page) => Math.max(1, page - 1))}
-              className="grid h-8 w-8 place-items-center border border-[#d7eef3] text-[#0f3b46] transition hover:bg-[#f4fcfe] disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <ChevronLeft size={16} />
-            </button>
-            {paginationItems.map((item) => typeof item === 'number' ? (
-              <button
-                key={item}
-                type="button"
-                onClick={() => setOrderPage(item)}
-                aria-current={item === orderPage ? 'page' : undefined}
-                className={`h-8 min-w-8 border px-2 font-bold transition ${
-                  item === orderPage
-                    ? 'border-[#5fbfd1] bg-[#c0edf7] text-[#0f3b46]'
-                    : 'border-[#d7eef3] bg-white text-gray-600 hover:bg-[#f4fcfe]'
-                }`}
-              >
-                {item}
-              </button>
-            ) : (
-              <span key={item} className="grid h-8 w-8 place-items-center font-bold text-gray-400">…</span>
-            ))}
-            <button
-              type="button"
-              title="Trang sau"
-              aria-label="Trang sau"
-              disabled={orderPage === totalOrderPages}
-              onClick={() => setOrderPage((page) => Math.min(totalOrderPages, page + 1))}
-              className="grid h-8 w-8 place-items-center border border-[#d7eef3] text-[#0f3b46] transition hover:bg-[#f4fcfe] disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <ChevronRight size={16} />
-            </button>
-          </nav>
-        </div>
-      </section>
+        <div className="mt-3 flex items-center justify-between text-sm text-slate-600"><span>Trang {products.pagination?.page || 1}/{products.pagination?.totalPages || 1}</span><div className="flex gap-1"><button type="button" aria-label="Trang trước" disabled={page <= 1} onClick={() => setPage((value) => value - 1)} className="grid h-8 w-8 place-items-center border border-slate-300 disabled:opacity-40"><ChevronLeft size={16} /></button><button type="button" aria-label="Trang sau" disabled={page >= (products.pagination?.totalPages || 1)} onClick={() => setPage((value) => value + 1)} className="grid h-8 w-8 place-items-center border border-slate-300 disabled:opacity-40"><ChevronRight size={16} /></button></div></div>
+      </Panel>
     </div>
   );
 }

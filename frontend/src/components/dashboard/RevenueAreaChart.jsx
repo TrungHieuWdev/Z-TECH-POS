@@ -23,38 +23,19 @@ const chartDisplayDays = {
   '90days': 30
 };
 
-const periodYAxisConfigs = {
-  '7days': {
-    max: 50000000,
-    step: 10000000
-  },
-  '14days': {
-    max: 100000000,
-    step: 20000000
-  },
-  '30days': {
-    max: 200000000,
-    step: 50000000
-  },
-  '90days': {
-    max: 200000000,
-    step: 50000000
-  }
-};
-
 function safeNumber(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : 0;
 }
 
-function formatYAxis(value) {
+function formatMoneyYAxis(value) {
   if (value === 0) return '0';
-  return `${Math.round(value / 1000)}k`;
-}
-
-function formatMillionYAxis(value) {
-  if (value === 0) return '0';
-  return `${Math.round(value / 1000000)} triệu`;
+  if (Math.abs(value) >= 1000000) {
+    const millions = value / 1000000;
+    return `${millions.toLocaleString('vi-VN', { maximumFractionDigits: 1 })} triệu`;
+  }
+  if (Math.abs(value) >= 1000) return `${Math.round(value / 1000)}k`;
+  return Math.round(value).toLocaleString('vi-VN');
 }
 
 function formatDateLabel(date) {
@@ -106,41 +87,56 @@ function buildChartData(chartRows, period) {
   }));
 }
 
-function buildPeriodYAxisConfig(period) {
-  const config = periodYAxisConfigs[period];
+function getNiceStep(value) {
+  if (value <= 0) return 100000;
 
-  if (!config) {
+  const magnitude = 10 ** Math.floor(Math.log10(value));
+  const normalized = value / magnitude;
+  const niceNormalized = normalized <= 1
+    ? 1
+    : normalized <= 2
+      ? 2
+      : normalized <= 2.5
+        ? 2.5
+        : normalized <= 5
+          ? 5
+          : 10;
+
+  return niceNormalized * magnitude;
+}
+
+function buildYAxisConfig(data) {
+  const maxRevenue = Math.max(0, ...data.map((item) => safeNumber(item.revenue)));
+
+  if (maxRevenue === 0) {
     return {
-      width: 42,
+      width: 56,
       domain: [0, 400000],
       ticks: [0, 100000, 200000, 300000, 400000],
-      tickFormatter: formatYAxis
+      tickFormatter: formatMoneyYAxis
     };
   }
 
-  const ticks = [];
-  for (let value = 0; value <= config.max; value += config.step) {
-    ticks.push(value);
-  }
+  const step = getNiceStep((maxRevenue * 1.15) / 4);
+  const axisMax = Math.ceil((maxRevenue * 1.15) / step) * step;
+  const ticks = Array.from(
+    { length: Math.round(axisMax / step) + 1 },
+    (_, index) => index * step
+  );
 
   return {
-    width: 72,
-    domain: [0, config.max],
+    width: axisMax >= 1000000 ? 72 : 56,
+    domain: [0, axisMax],
     ticks,
-    tickFormatter: formatMillionYAxis
+    tickFormatter: formatMoneyYAxis
   };
 }
 
 export default function RevenueAreaChart({
-  totalRevenue = 0,
-  comparisonAmount = 0,
   chartRows = [],
   period = 'today',
-  periodLabel = 'Hôm nay',
-  comparisonLabel = 'hôm qua'
+  periodLabel = 'Hôm nay'
 }) {
-  const safeTotal = safeNumber(totalRevenue);
-  const safeComparison = safeNumber(comparisonAmount);
   const isToday = period === 'today';
   const data = buildChartData(Array.isArray(chartRows) ? chartRows : [], period);
   const shouldShowEveryDate = period === '14days' || period === '30days';
@@ -148,20 +144,13 @@ export default function RevenueAreaChart({
   const xAxisTicks = period === '90days'
     ? data.filter((_, index) => index % 7 === 0 || index === data.length - 1).map((item) => item.date)
     : undefined;
-  const yAxisConfig = isToday
-    ? {
-        width: 64,
-        domain: [0, 10000000],
-        ticks: [0, 2500000, 5000000, 7500000, 10000000],
-        tickFormatter: formatMillionYAxis
-      }
-    : buildPeriodYAxisConfig(period);
+  const yAxisConfig = buildYAxisConfig(data);
 
   return (
     <article className="flex h-full min-h-[340px] flex-col rounded-lg border border-[#e1e3e4] bg-white p-3 shadow-[0_1px_3px_rgba(25,28,29,0.08)]">
       <div className="mb-2 flex items-start justify-between gap-4">
         <div>
-          <h2 className="text-base font-semibold leading-6 text-[#191c1d]">Cơ cấu doanh thu</h2>
+          <h2 className="text-base font-semibold leading-6 text-[#191c1d]">Doanh thu theo thời gian</h2>
         </div>
         <span className="rounded-lg bg-brand-surface px-2.5 py-1.5 text-xs font-semibold text-brand-ink">
           {periodLabel}
@@ -223,21 +212,6 @@ export default function RevenueAreaChart({
         </ResponsiveContainer>
       </div>
 
-      <div className="mt-3 flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-[#e1e3e4] pt-3">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <div className="flex items-center gap-2 text-xs font-semibold text-[#73777d]">
-            <span className="h-2.5 w-2.5 rounded-full bg-[#1f86f2]" />
-            Tổng doanh thu
-          </div>
-          <p className="text-base font-bold text-[#191c1d]">{formatCurrency(safeTotal)}</p>
-        </div>
-        <div className={`flex flex-wrap items-center justify-end gap-x-2 gap-y-1 text-right ${safeComparison < 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-          <p className="text-xs font-bold">
-            {safeComparison < 0 ? '↓' : '↑'} {formatCurrency(Math.abs(safeComparison))}
-          </p>
-          <p className="text-[11px] font-semibold">so với {comparisonLabel}</p>
-        </div>
-      </div>
     </article>
   );
 }
