@@ -70,6 +70,36 @@ const deviceFamilyOptions = [
 ];
 
 const initialCustomerForm = { name: '', phone: '', email: '', address: '' };
+const SCAN_AUTO_SUBMIT_DELAY = 350;
+
+function normalizeScanCode(value = '') {
+  return String(value)
+    .replace(/[\r\n\t]+/g, '')
+    .trim();
+}
+
+function isScanCodeMatch(product, code) {
+  const normalizedCode = normalizeScanCode(code);
+  const digits = normalizedCode.replace(/\D/g, '');
+  const values = [
+    product?.barcode,
+    product?.sku,
+    `PRD-${String(product?.id || '').padStart(4, '0')}`
+  ].map(normalizeScanCode);
+
+  if (values.includes(normalizedCode)) return true;
+
+  const barcodeDigits = normalizeScanCode(product?.barcode).replace(/\D/g, '');
+  if (!digits || !barcodeDigits) return false;
+  if (barcodeDigits === digits) return true;
+  if (digits.length === 12 && barcodeDigits.length === 13) {
+    return barcodeDigits.slice(0, 12) === digits || barcodeDigits.slice(1) === digits;
+  }
+  if (digits.length === 13 && barcodeDigits.length === 12) {
+    return digits.slice(0, 12) === barcodeDigits || digits.slice(1) === barcodeDigits;
+  }
+  return false;
+}
 
 function formatCountdown(totalSeconds) {
   const safeSeconds = Math.max(Number(totalSeconds || 0), 0);
@@ -311,6 +341,8 @@ export default function POS() {
   const [isScanning, setIsScanning] = useState(false);
   const scanInputRef = useRef(null);
   const scanModeRef = useRef(false);
+  const scanBufferRef = useRef('');
+  const scanBufferTimerRef = useRef(null);
   const [categoryId, setCategoryId] = useState('');
   const [deviceFamily, setDeviceFamily] = useState('');
   const [usedPoints, setUsedPoints] = useState(0);
@@ -394,6 +426,64 @@ export default function POS() {
       setScanMode(false);
     }
   }, [isConfirmOpen, isCustomerPickerOpen, isCustomerFormOpen, isPromotionOpen]);
+
+  useEffect(() => {
+    if (!scanMode) {
+      scanBufferRef.current = '';
+      if (scanBufferTimerRef.current) window.clearTimeout(scanBufferTimerRef.current);
+      return undefined;
+    }
+
+    const flushScanBuffer = () => {
+      const code = normalizeScanCode(scanBufferRef.current);
+      scanBufferRef.current = '';
+      if (code) processScannedCode(code);
+    };
+
+    const handleGlobalScanKey = (event) => {
+      if (!scanModeRef.current || isScanning || event.ctrlKey || event.metaKey || event.altKey) return;
+      const activeElement = document.activeElement;
+      const isScanInputActive = activeElement === scanInputRef.current;
+      const isTypingInAnotherField = activeElement?.matches?.('input, textarea, select, [contenteditable="true"]') && !isScanInputActive;
+      if (isTypingInAnotherField) return;
+
+      if (event.key === 'Enter') {
+        if (scanBufferRef.current) {
+          event.preventDefault();
+          flushScanBuffer();
+        }
+        return;
+      }
+
+      if (event.key.length !== 1) return;
+      if (!/[0-9A-Za-z\-_.]/.test(event.key)) return;
+
+      if (!isScanInputActive) event.preventDefault();
+      scanBufferRef.current += event.key;
+      setScanCode(scanBufferRef.current);
+
+      if (scanBufferTimerRef.current) window.clearTimeout(scanBufferTimerRef.current);
+      scanBufferTimerRef.current = window.setTimeout(flushScanBuffer, SCAN_AUTO_SUBMIT_DELAY);
+    };
+
+    document.addEventListener('keydown', handleGlobalScanKey, true);
+    return () => {
+      document.removeEventListener('keydown', handleGlobalScanKey, true);
+      if (scanBufferTimerRef.current) window.clearTimeout(scanBufferTimerRef.current);
+    };
+  }, [scanMode, isScanning]);
+
+  useEffect(() => {
+    if (!scanMode || isScanning) return undefined;
+    const code = String(scanCode || '').trim();
+    if (!code) return undefined;
+
+    const timer = window.setTimeout(() => {
+      processScannedCode(code);
+    }, SCAN_AUTO_SUBMIT_DELAY);
+
+    return () => window.clearTimeout(timer);
+  }, [scanCode, scanMode, isScanning]);
 
 
   useEffect(() => {
@@ -638,13 +728,17 @@ export default function POS() {
   };
 
   const processScannedCode = async (rawCode) => {
-    const code = String(rawCode || '').trim();
+    const code = normalizeScanCode(rawCode);
     if (!code || isScanning) return;
 
     setIsScanning(true);
     try {
-      const response = await api.get(`/products/barcode/${encodeURIComponent(code)}`);
-      const product = response.data;
+      let product = products.find((item) => isScanCodeMatch(item, code));
+
+      if (!product) {
+        const response = await api.get(`/products/barcode/${encodeURIComponent(code)}`);
+        product = response.data;
+      }
 
       if (!allowOutOfStockSale && Number(product.stock_quantity) <= 0) {
         toast.error('Sản phẩm đã hết hàng');
@@ -1191,7 +1285,13 @@ export default function POS() {
               <input
                 ref={scanInputRef}
                 value={scanCode}
-                onChange={(event) => setScanCode(event.target.value)}
+                onChange={(event) => setScanCode(normalizeScanCode(event.target.value))}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    processScannedCode(event.currentTarget.value);
+                  }
+                }}
                 disabled={isScanning}
                 readOnly={!scanMode}
                 inputMode="none"

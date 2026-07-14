@@ -131,6 +131,12 @@ function getSearchTokens(search = '') {
   return search.trim().split(/\s+/).filter(Boolean);
 }
 
+function normalizeScanCode(value = '') {
+  return String(value)
+    .replace(/[\r\n\t]+/g, '')
+    .trim();
+}
+
 function appendGenericAccessoryFilter(sql, params) {
   const keywordConditions = genericAccessoryKeywords.map(() => `${genericAccessoryTextSql} LIKE ?`).join(' OR ');
   const modelSpecificConditions = modelSpecificProductNameKeywords
@@ -159,6 +165,7 @@ function appendTextSearch(sql, params, tokens) {
       AND (
         p.name LIKE ?
         OR p.sku LIKE ?
+        OR p.barcode LIKE ?
         OR CONCAT('PRD-', LPAD(p.id, 4, '0')) LIKE ?
         OR p.description LIKE ?
         OR dm.name LIKE ?
@@ -169,6 +176,7 @@ function appendTextSearch(sql, params, tokens) {
       )
     `;
     params.push(
+      `%${token}%`,
       `%${token}%`,
       `%${token}%`,
       `%${token}%`,
@@ -442,7 +450,7 @@ export async function getById(req, res) {
 
 export async function scan(req, res) {
   try {
-    const code = String(req.params.barcode || '').trim();
+    const code = normalizeScanCode(req.params.barcode);
 
     if (!code) {
       return res.status(404).json({ message: 'Không tìm thấy sản phẩm với mã vạch này' });
@@ -450,9 +458,16 @@ export async function scan(req, res) {
 
     const products = await query(
       `${productSelect}
-       WHERE p.is_active = 1 AND p.barcode = ?
+       WHERE p.is_active = 1
+         AND (
+           TRIM(p.barcode) = ?
+           OR LEFT(TRIM(p.barcode), 12) = ?
+           OR RIGHT(TRIM(p.barcode), 12) = ?
+           OR TRIM(p.sku) = ?
+           OR CONCAT('PRD-', LPAD(p.id, 4, '0')) = ?
+         )
        LIMIT 1`,
-      [code]
+      [code, code, code, code, code]
     );
     const product = products[0];
 

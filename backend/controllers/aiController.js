@@ -8,7 +8,8 @@ export async function getInventoryRestockSuggestions(req, res) {
       targetDays: req.query.targetDays,
       limit: req.query.limit,
       categoryId: req.query.categoryId,
-      deviceFamily: req.query.deviceFamily
+      deviceFamily: req.query.deviceFamily,
+      userId: req.user?.id
     });
 
     res.json(result);

@@ -107,7 +107,7 @@ function buildCsv(products) {
     .map((row) => row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
     .join('\n');
 }
-
+``
 function getDonutSegments(categories) {
   let offset = 0;
 
