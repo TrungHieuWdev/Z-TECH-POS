@@ -5,21 +5,24 @@ import {
 import { Bar, Doughnut, Line } from 'react-chartjs-2';
 import { formatCurrency } from '../../utils/format';
 
-const colors = ['#138496', '#2563eb', '#16a34a', '#d97706', '#7c3aed', '#64748b'];
-const categoryRevenueColors = ['#7C3AED', '#DB2777', '#0891B2', '#475569', '#A855F7', '#0E7490'];
+const SYSTEM_BLUE = '#74B8E0';
+const colors = [SYSTEM_BLUE, '#16b8cf', '#8255e8', '#14a88f', '#eea11d', '#e94d85'];
+const categoryRevenueColors = [SYSTEM_BLUE, '#14b884', '#f59e0b', '#ef5350', '#8255e8', '#64748b'];
+const topProductColors = [SYSTEM_BLUE, '#06b6d4', '#e84d87', '#10a88a', '#f59e0b'];
+const chartFont = "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
 
-const categoryOutsideLabels = {
-  id: 'categoryOutsideLabels',
+const outsideLabelsPlugin = {
+  id: 'outsideLabels',
   afterDraw(chart) {
     const dataset = chart.data.datasets[0];
-    if (!dataset?.categoryRevenue) return;
+    if (!dataset?.outsideLabels) return;
     const values = dataset.data.map(Number);
     const total = values.reduce((sum, value) => sum + value, 0);
     if (!total) return;
     const meta = chart.getDatasetMeta(0);
     const { ctx } = chart;
     ctx.save();
-    ctx.font = `700 ${chart.width < 520 ? 11 : 13}px Arial, sans-serif`;
+    ctx.font = `700 ${chart.width < 520 ? 10 : 12}px ${chartFont}`;
     ctx.lineWidth = 1.25;
     const labels = meta.data.map((arc, index) => {
       const { x, y, startAngle, endAngle, outerRadius } = arc.getProps(['x', 'y', 'startAngle', 'endAngle', 'outerRadius'], true);
@@ -49,7 +52,12 @@ const categoryOutsideLabels = {
       const percentage = Math.round(values[index] / total * 100);
       const text = `${chart.data.labels[index]} ${percentage}%`;
       const textWidth = ctx.measureText(text).width;
-      const textX = direction > 0 ? chart.width - 12 : 12;
+      const preferredTextX = direction > 0
+        ? x + outerRadius + textWidth + 28
+        : x - outerRadius - textWidth - 28;
+      const textX = direction > 0
+        ? Math.min(chart.width - 8, preferredTextX)
+        : Math.max(8, preferredTextX);
       const endX = direction > 0 ? textX - textWidth - 5 : textX + textWidth + 5;
       const startX = x + Math.cos(angle) * (outerRadius + 3);
       const startY = y + Math.sin(angle) * (outerRadius + 3);
@@ -69,28 +77,214 @@ const categoryOutsideLabels = {
   }
 };
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, ArcElement, Tooltip, Legend, Title, Filler, categoryOutsideLabels);
+const centerLabelPlugin = {
+  id: 'centerLabel',
+  afterDraw(chart) {
+    const dataset = chart.data.datasets[0];
+    if (!dataset?.centerLabel) return;
+    const total = dataset.data.reduce((sum, value) => sum + Number(value || 0), 0);
+    if (total <= 0) return;
+
+    const firstArc = chart.getDatasetMeta(0)?.data?.[0];
+    if (!firstArc) return;
+
+    const { x, y, innerRadius } = firstArc.getProps(['x', 'y', 'innerRadius'], true);
+    const fontSize = Math.max(17, Math.min(24, innerRadius * 0.42));
+    const { ctx } = chart;
+    ctx.save();
+    ctx.fillStyle = '#0f172a';
+    ctx.font = `800 ${fontSize}px ${chartFont}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(dataset.centerLabel, x, y);
+    ctx.restore();
+  }
+};
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, ArcElement, Tooltip, Legend, Title, Filler, outsideLabelsPlugin, centerLabelPlugin);
 const moneyAxis = (value) => {
   const number = Number(value || 0);
-  if (Math.abs(number) >= 1000000000) return `${(number / 1000000000).toFixed(1)} tỷ`;
-  if (Math.abs(number) >= 1000000) return `${(number / 1000000).toFixed(1)} tr`;
-  if (Math.abs(number) >= 1000) return `${Math.round(number / 1000)}k`;
+  const compactNumber = (amount) => amount.toLocaleString('vi-VN', { maximumFractionDigits: 1 });
+  if (Math.abs(number) >= 1000000000) return `${compactNumber(number / 1000000000)} tỷ`;
+  if (Math.abs(number) >= 1000000) return `${compactNumber(number / 1000000)} triệu`;
+  if (Math.abs(number) >= 1000) return `${compactNumber(number / 1000)} nghìn`;
   return String(number);
 };
+
+const tooltipStyle = {
+  backgroundColor: '#ffffff',
+  titleColor: '#0f172a',
+  bodyColor: '#334155',
+  borderColor: '#dbe4ee',
+  borderWidth: 1,
+  padding: 11,
+  cornerRadius: 8,
+  displayColors: true,
+  boxPadding: 4,
+  titleFont: { family: chartFont, size: 12, weight: '700' },
+  bodyFont: { family: chartFont, size: 12, weight: '600' }
+};
+
+const axisTicks = { color: '#64748b', font: { family: chartFont, size: 11, weight: '500' } };
+const gridStyle = { color: '#e8eef5', borderDash: [4, 4], drawTicks: false };
 
 const baseOptions = {
   responsive: true,
   maintainAspectRatio: false,
-  animation: { duration: 250 },
+  animation: { duration: 450, easing: 'easeOutQuart' },
+  interaction: { mode: 'index', intersect: false },
+  layout: { padding: { top: 4 } },
   plugins: {
-    legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, padding: 16 } },
-    tooltip: { callbacks: { label: (context) => `${context.dataset.label}: ${formatCurrency(context.parsed.y ?? context.parsed)}` } }
+    legend: { position: 'bottom', labels: { color: '#475569', usePointStyle: true, pointStyle: 'circle', boxWidth: 7, boxHeight: 7, padding: 18, font: { family: chartFont, size: 11, weight: '600' } } },
+    tooltip: { ...tooltipStyle, callbacks: { label: (context) => `${context.dataset.label}: ${formatCurrency(context.parsed.y ?? context.parsed.x ?? context.parsed)}` } }
   },
   scales: {
-    x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 12 } },
-    y: { beginAtZero: true, grid: { color: '#e5e7eb' }, ticks: { callback: moneyAxis } }
+    x: { border: { display: false }, grid: { display: false }, ticks: { ...axisTicks, maxRotation: 0, autoSkip: true, maxTicksLimit: 12 } },
+    y: { beginAtZero: true, border: { display: false }, grid: gridStyle, ticks: { ...axisTicks, padding: 8, callback: moneyAxis } }
   }
 };
+
+function compactDateLabel(label) {
+  const parts = String(label || '').split('-');
+  if (parts.length === 3) return `${parts[2]}/${parts[1]}`;
+  if (parts.length === 2) return `${parts[1]}/${parts[0]}`;
+  return label;
+}
+
+export function DailyRevenueChart({ trend }) {
+  const points = trend?.points || [];
+  const values = points.map((item) => Number(item.netRevenue || 0));
+  const peak = Math.max(...values, 0);
+  const data = {
+    labels: points.map((item) => compactDateLabel(item.label)),
+    datasets: [{
+      label: 'Doanh thu thuần',
+      data: values,
+      backgroundColor: values.map((value, index) => value === peak && peak > 0 ? SYSTEM_BLUE : colors[(index + 1) % colors.length]),
+      hoverBackgroundColor: SYSTEM_BLUE,
+      borderRadius: 7,
+      borderSkipped: false,
+      maxBarThickness: 42
+    }]
+  };
+  return <Bar data={data} options={{
+    ...baseOptions,
+    plugins: { ...baseOptions.plugins, legend: { display: false } }
+  }} />;
+}
+
+export function GrossProfitChart({ trend }) {
+  const points = trend?.points || [];
+  const values = points.map((item) => Number(item.grossProfit || 0));
+  const labels = points.map((item) => compactDateLabel(item.label));
+
+  const data = {
+    labels,
+    datasets: [{
+      label: 'Lợi nhuận gộp',
+      data: values,
+      borderColor: '#8255e8',
+      backgroundColor: 'rgba(130, 85, 232, 0.10)',
+      borderWidth: 2.5,
+      pointRadius: 3,
+      pointHoverRadius: 6,
+      pointBackgroundColor: '#ffffff',
+      pointBorderColor: '#8255e8',
+      pointBorderWidth: 2,
+      tension: 0.35,
+      fill: true
+    }]
+  };
+  return <Line data={data} options={{
+    ...baseOptions,
+    plugins: { ...baseOptions.plugins, legend: { display: false } }
+  }} />;
+}
+
+export function CategoryRevenueChart({ items = [] }) {
+  const sliceColors = items.map((_, index) => categoryRevenueColors[index % categoryRevenueColors.length]);
+  const data = {
+    labels: items.map((item) => item.name),
+    datasets: [{
+      label: 'Doanh thu',
+      data: items.map((item) => item.netRevenue),
+      centerLabel: '100%',
+      backgroundColor: sliceColors,
+      hoverBackgroundColor: sliceColors,
+      borderColor: '#ffffff',
+      hoverBorderColor: '#ffffff',
+      borderWidth: 4,
+      hoverBorderWidth: 4,
+      hoverOffset: 0
+    }]
+  };
+  return (
+    <div className="grid h-full grid-cols-[minmax(0,1.08fr)_minmax(145px,0.72fr)] items-center gap-2">
+      <div className="h-full min-h-0 min-w-0">
+        <Doughnut data={data} options={{
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: { duration: 450, easing: 'easeOutQuart' },
+          cutout: '64%',
+          radius: '88%',
+          layout: { padding: 4 },
+          plugins: {
+            legend: { display: false },
+            tooltip: { ...tooltipStyle, callbacks: { label: (context) => {
+              const item = items[context.dataIndex];
+              return `${context.label}: ${formatCurrency(item.netRevenue)} (${item.percentage}%)`;
+            } } }
+          }
+        }} />
+      </div>
+      <ul className="min-w-0 space-y-2 pr-1 text-xs">
+        {items.map((item, index) => (
+          <li key={`${item.name}-${index}`} className="flex min-w-0 items-center gap-2">
+            <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ backgroundColor: sliceColors[index] }} />
+            <span className="min-w-0 flex-1 truncate font-semibold text-slate-600" title={item.name}>{item.name}</span>
+            <span className="shrink-0 font-extrabold text-slate-800">{Number(item.percentage || 0).toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+export function TopProductsChart({ items = [] }) {
+  const palette = ['#8255e8', '#16b8cf', '#e94d85', '#14a88f', '#eea11d'];
+  const shortenedLabels = items.map((item) => {
+    const name = String(item.name || 'Chưa có tên');
+    return name.length > 24 ? `${name.slice(0, 24)}…` : name;
+  });
+  const data = {
+    labels: shortenedLabels,
+    datasets: [{
+      label: 'Doanh thu thuần',
+      data: items.map((item) => item.netRevenue),
+      backgroundColor: items.map((_, index) => palette[index % palette.length]),
+      borderRadius: 6,
+      borderSkipped: false,
+      maxBarThickness: 28
+    }]
+  };
+  return <Bar data={data} options={{
+    ...baseOptions,
+    indexAxis: 'y',
+    interaction: { mode: 'nearest', axis: 'y', intersect: false },
+    plugins: {
+      ...baseOptions.plugins,
+      legend: { display: false },
+      tooltip: { ...tooltipStyle, callbacks: {
+        title: (contexts) => items[contexts[0]?.dataIndex]?.name || '',
+        label: (context) => `Doanh thu: ${formatCurrency(context.raw)}`
+      } }
+    },
+    scales: {
+      x: { beginAtZero: true, border: { display: false }, grid: gridStyle, ticks: { ...axisTicks, callback: moneyAxis } },
+      y: { border: { display: false }, grid: { display: false }, ticks: { ...axisTicks, autoSkip: false } }
+    }
+  }} />;
+}
 
 export function TrendChart({ trend }) {
   const actual = trend?.points || [];
@@ -122,7 +316,7 @@ export function CategoryChart({ items = [] }) {
     labels: items.map((item) => `${item.name} (${item.percentage}%)`),
     datasets: [
       { label: 'Doanh thu', data: items.map((item) => item.netRevenue), backgroundColor: '#52b8c7', xAxisID: 'x' },
-      { label: 'Số lượng', data: items.map((item) => item.soldQuantity), backgroundColor: '#a7c7e7', xAxisID: 'quantity' }
+      { label: 'Số lượng', data: items.map((item) => item.soldQuantity), backgroundColor: SYSTEM_BLUE, xAxisID: 'quantity' }
     ]
   };
   const options = {
@@ -144,20 +338,22 @@ export function CategoryChart({ items = [] }) {
 }
 
 export function PaymentChart({ items = [], labels = {} }) {
+  const paymentColors = colors.slice(0, items.length);
   const data = {
     labels: items.map((item) => labels[item.paymentMethod] || item.paymentMethod),
     datasets: [{
-      data: items.map((item) => item.amount), backgroundColor: colors.slice(0, items.length),
-      borderColor: '#fff', borderWidth: 2
+      data: items.map((item) => item.transactionCount), centerLabel: '100%', backgroundColor: paymentColors, hoverBackgroundColor: paymentColors,
+      borderColor: '#fff', hoverBorderColor: '#fff', borderWidth: 4, hoverBorderWidth: 4, hoverOffset: 0, outsideLabels: true
     }]
   };
   const options = {
-    responsive: true, maintainAspectRatio: false, cutout: '62%',
+    responsive: true, maintainAspectRatio: false, animation: { duration: 450, easing: 'easeOutQuart' },
+    cutout: '64%', radius: '76%', layout: { padding: { top: 20, right: 34, bottom: 20, left: 34 } },
     plugins: {
-      legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8 } },
-      tooltip: { callbacks: { label: (context) => {
+      legend: { display: false },
+      tooltip: { ...tooltipStyle, callbacks: { label: (context) => {
         const item = items[context.dataIndex];
-        return `${context.label}: ${formatCurrency(item.amount)} (${item.percentage}%)`;
+        return `${context.label}: ${item.transactionCount.toLocaleString('vi-VN')} giao dịch · ${formatCurrency(item.amount)} (${item.percentage}%)`;
       } } }
     }
   };
@@ -169,57 +365,105 @@ export function HourlyChart({ items = [], peakHour }) {
     labels: items.map((item) => `${String(item.hour).padStart(2, '0')}:00`),
     datasets: [{
       label: 'Doanh thu thuần', data: items.map((item) => item.netRevenue),
-      backgroundColor: items.map((item) => item.hour === peakHour ? '#0f766e' : '#8bd5df')
+      backgroundColor: items.map((item) => item.hour === peakHour ? SYSTEM_BLUE : '#16b8cf'),
+      hoverBackgroundColor: '#16b8cf',
+      borderRadius: 6,
+      borderSkipped: false,
+      maxBarThickness: 36
     }]
   };
   return <Bar data={data} options={{ ...baseOptions, plugins: { ...baseOptions.plugins, legend: { display: false } } }} />;
 }
 
-export function AiReportChart({ spec }) {
+export function AiReportChart({ spec, revealIndex = 0 }) {
   const isNumber = spec.valueFormat === 'number';
+  const isHorizontalBar = spec.type === 'bar' && (spec.orientation === 'horizontal' || (spec.labels || []).length > 6);
+  const isBusinessTrend = spec.id === 'ai_business_trend';
+  const isTopProducts = spec.id === 'ai_top_products';
+  const entranceDelay = 180 + revealIndex * 160;
+  const revealAnimation = {
+    duration: 1050,
+    easing: 'easeOutQuart',
+    delay: (context) => context.type === 'data'
+      ? entranceDelay + context.datasetIndex * 100 + context.dataIndex * 55
+      : entranceDelay
+  };
   const palette = ['#138496', '#16803a', '#d97706', '#64748b', '#7c3aed'];
+  const chartLabels = isBusinessTrend
+    ? (spec.labels || []).map((label) => compactDateLabel(label))
+    : spec.labels || [];
   const data = {
-    labels: spec.labels || [],
-    datasets: (spec.datasets || []).map((dataset, index) => ({
-      label: dataset.label,
-      data: dataset.data,
-      borderColor: dataset.color || palette[index % palette.length],
-      backgroundColor: spec.type === 'line' ? `${dataset.color || palette[index % palette.length]}22` : dataset.color || palette[index % palette.length],
-      borderDash: dataset.dashed ? [6, 4] : undefined,
-      borderWidth: 2,
-      pointRadius: spec.type === 'line' ? 2 : undefined,
-      tension: 0.25,
-      fill: false
-    }))
+    labels: chartLabels,
+    datasets: (spec.datasets || []).map((dataset, index) => {
+      const values = isBusinessTrend
+        ? (dataset.data || []).map((value) => Math.max(0, Number(value) || 0))
+        : dataset.data;
+      const itemColors = isTopProducts
+        ? (values || []).map((_, itemIndex) => topProductColors[itemIndex % topProductColors.length])
+        : null;
+      return {
+        label: dataset.label,
+        data: values,
+        borderColor: itemColors || dataset.color || palette[index % palette.length],
+        backgroundColor: spec.type === 'line'
+          ? `${dataset.color || palette[index % palette.length]}22`
+          : itemColors || dataset.color || palette[index % palette.length],
+        hoverBackgroundColor: itemColors || undefined,
+        borderDash: dataset.dashed ? [6, 4] : undefined,
+        borderWidth: isTopProducts ? 0 : 2,
+        pointRadius: spec.type === 'line' ? 2 : undefined,
+        tension: 0.25,
+        cubicInterpolationMode: isBusinessTrend ? 'monotone' : undefined,
+        fill: false
+      };
+    })
   };
   const tooltipLabel = (context) => `${context.dataset.label}: ${isNumber
     ? Number(context.raw || 0).toLocaleString('vi-VN')
     : formatCurrency(context.raw)}`;
   if (spec.type === 'doughnut') {
     const isCategoryRevenue = spec.id === 'category_revenue';
+    const hasCategoryCenter = isCategoryRevenue || spec.id === 'ai_category_mix';
     const doughnutData = {
       ...data,
       datasets: data.datasets.map((dataset) => ({
         ...dataset,
+        centerLabel: hasCategoryCenter ? '100%' : dataset.centerLabel,
         backgroundColor: (spec.labels || []).map((_, index) => (
-          isCategoryRevenue
+          hasCategoryCenter
+            ? categoryRevenueColors[index % categoryRevenueColors.length]
+            : palette[index % palette.length]
+        )),
+        hoverBackgroundColor: (spec.labels || []).map((_, index) => (
+          hasCategoryCenter
             ? categoryRevenueColors[index % categoryRevenueColors.length]
             : palette[index % palette.length]
         )),
         borderColor: '#fff',
+        hoverBorderColor: '#fff',
         borderWidth: isCategoryRevenue ? 5 : 2,
-        hoverOffset: 5,
-        categoryRevenue: isCategoryRevenue
+        hoverBorderWidth: isCategoryRevenue ? 5 : 2,
+        hoverOffset: 0,
+        outsideLabels: isCategoryRevenue
       }))
     };
     return <Doughnut data={doughnutData} options={{
       responsive: true,
       maintainAspectRatio: false,
+      animation: revealAnimation && {
+        duration: 1250,
+        easing: 'easeOutQuart',
+        delay: (context) => context.type === 'data'
+          ? entranceDelay + context.dataIndex * 85
+          : entranceDelay,
+        animateRotate: true,
+        animateScale: true
+      },
       cutout: isCategoryRevenue ? '58%' : '60%',
       radius: isCategoryRevenue ? '72%' : '90%',
       layout: isCategoryRevenue ? { padding: { top: 22, right: 24, bottom: 22, left: 24 } } : undefined,
       plugins: {
-        categoryOutsideLabels: { enabled: isCategoryRevenue },
+        outsideLabels: { enabled: isCategoryRevenue },
         legend: isCategoryRevenue ? { display: false } : { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8 } },
         tooltip: { callbacks: { label: (context) => {
           const total = context.dataset.data.reduce((sum, value) => sum + Number(value || 0), 0);
@@ -229,16 +473,84 @@ export function AiReportChart({ spec }) {
       }
     }} />;
   }
+  const pointCount = Math.max(1, chartLabels.length);
+  const pointDelay = Math.max(38, Math.min(95, Math.round(1250 / pointCount)));
+  const previousPointY = (context) => {
+    if (context.index === 0) return context.chart.scales.y.getPixelForValue(0);
+    const previousPoint = context.chart.getDatasetMeta(context.datasetIndex).data[context.index - 1];
+    return previousPoint?.getProps(['y'], true).y ?? context.chart.scales.y.getPixelForValue(0);
+  };
+  const progressiveLineAnimations = {
+    x: {
+      type: 'number',
+      easing: 'linear',
+      duration: pointDelay,
+      from: Number.NaN,
+      delay: (context) => entranceDelay + context.datasetIndex * 100 + context.index * pointDelay
+    },
+    y: {
+      type: 'number',
+      easing: 'easeOutCubic',
+      duration: pointDelay * 1.8,
+      from: previousPointY,
+      delay: (context) => entranceDelay + context.datasetIndex * 100 + context.index * pointDelay
+    }
+  };
+  const growingBarAnimations = isHorizontalBar ? {
+    x: {
+      type: 'number',
+      duration: 900,
+      easing: 'easeOutQuart',
+      from: (context) => context.chart.scales.x.getPixelForValue(0),
+      delay: (context) => entranceDelay + context.datasetIndex * 100 + context.index * 110
+    }
+  } : {
+    y: {
+      type: 'number',
+      duration: 900,
+      easing: 'easeOutQuart',
+      from: (context) => context.chart.scales.y.getPixelForValue(0),
+      delay: (context) => entranceDelay + context.datasetIndex * 100 + context.index * 110
+    }
+  };
   const options = {
     ...baseOptions,
-    indexAxis: spec.type === 'bar' && (spec.labels || []).length > 6 ? 'y' : 'x',
-    plugins: { ...baseOptions.plugins, tooltip: { callbacks: { label: tooltipLabel } } },
-    scales: spec.type === 'bar' && (spec.labels || []).length > 6 ? {
+    animation: revealAnimation,
+    animations: spec.type === 'line' ? progressiveLineAnimations : growingBarAnimations,
+    indexAxis: isHorizontalBar ? 'y' : 'x',
+    layout: isTopProducts
+      ? { padding: { top: 8, right: 8, bottom: 8, left: 0 } }
+      : baseOptions.layout,
+    interaction: isTopProducts
+      ? { mode: 'nearest', axis: 'y', intersect: true }
+      : baseOptions.interaction,
+    plugins: {
+      ...baseOptions.plugins,
+      legend: isTopProducts ? { display: false } : baseOptions.plugins.legend,
+      tooltip: {
+        ...tooltipStyle,
+        callbacks: {
+          title: isTopProducts ? (contexts) => contexts[0]?.label || '' : undefined,
+          label: tooltipLabel
+        }
+      }
+    },
+    scales: isHorizontalBar ? {
       x: { beginAtZero: true, grid: { color: '#e5e7eb' }, ticks: { callback: isNumber ? undefined : moneyAxis } },
       y: { grid: { display: false }, ticks: { autoSkip: false } }
     } : {
-      x: { grid: { display: false }, ticks: { autoSkip: true, maxTicksLimit: 12 } },
-      y: { beginAtZero: true, grid: { color: '#e5e7eb' }, ticks: { callback: isNumber ? undefined : moneyAxis } }
+      x: {
+        grid: { display: false },
+        ticks: isBusinessTrend
+          ? { autoSkip: false, minRotation: 45, maxRotation: 45, font: { size: 10 } }
+          : { autoSkip: true, maxTicksLimit: 12 }
+      },
+      y: {
+        beginAtZero: true,
+        min: isBusinessTrend ? 0 : undefined,
+        grid: { color: '#e5e7eb' },
+        ticks: { callback: isNumber ? undefined : moneyAxis }
+      }
     }
   };
   return spec.type === 'line' ? <Line data={data} options={options} /> : <Bar data={data} options={options} />;

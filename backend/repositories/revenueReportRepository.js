@@ -63,6 +63,17 @@ export async function getAggregate(filters, range = {}) {
   return rows[0] || {};
 }
 
+export async function getDataAvailability() {
+  const rows = await query(
+    `SELECT
+       DATE_FORMAT(MIN(created_at), '%Y-%m-%d') AS available_from,
+       DATE_FORMAT(MAX(created_at), '%Y-%m-%d') AS available_to
+     FROM orders
+     WHERE status = 'completed'`
+  );
+  return rows[0] || {};
+}
+
 export async function getDaily(filters, range = {}) {
   const where = buildWhere(filters, { ...range, completedOnly: true });
   return query(
@@ -76,6 +87,23 @@ export async function getDaily(filters, range = {}) {
      WHERE ${where.sql}
      GROUP BY DATE_FORMAT(o.created_at, '%Y-%m-%d')
      ORDER BY date`,
+    where.params
+  );
+}
+
+export async function getHourlyTrend(filters) {
+  const where = buildWhere(filters, { completedOnly: true });
+  return query(
+    `SELECT HOUR(o.created_at) AS hour,
+       COALESCE(SUM(${lineNet}), 0) AS net_revenue,
+       COALESCE(SUM(${lineNet} - ${lineCost}), 0) AS gross_profit
+     FROM order_items oi
+     JOIN orders o ON o.id = oi.order_id
+     JOIN products p ON p.id = oi.product_id
+     ${refundJoin}
+     WHERE ${where.sql}
+     GROUP BY HOUR(o.created_at)
+     ORDER BY hour`,
     where.params
   );
 }
@@ -103,6 +131,7 @@ export async function getPaymentMethods(filters, range = {}) {
   const where = buildWhere(filters, { ...range, completedOnly: true });
   return query(
     `SELECT COALESCE(o.payment_method, 'other') AS payment_method,
+       COUNT(DISTINCT o.id) AS transaction_count,
        COALESCE(SUM(${lineNet}), 0) AS amount
      FROM order_items oi
      JOIN orders o ON o.id = oi.order_id
@@ -205,8 +234,26 @@ export async function getPosOverview(filters) {
   const salesParams = [...dateParams];
   if (filters.employeeId) salesParams.push(filters.employeeId);
   if (filters.paymentMethod) salesParams.push(filters.paymentMethod);
+  const pairClauses = [
+    "o.status = 'completed'",
+    'o.created_at >= DATE_SUB(?, INTERVAL 89 DAY)',
+    'o.created_at < DATE_ADD(?, INTERVAL 1 DAY)'
+  ];
+  const pairParams = [filters.to, filters.to];
+  if (filters.employeeId) {
+    pairClauses.push('o.user_id = ?');
+    pairParams.push(filters.employeeId);
+  }
+  if (filters.paymentMethod) {
+    pairClauses.push('o.payment_method = ?');
+    pairParams.push(filters.paymentMethod);
+  }
+  if (filters.categoryId) {
+    pairClauses.push('(first_product.category_id = ? OR second_product.category_id = ?)');
+    pairParams.push(filters.categoryId, filters.categoryId);
+  }
 
-  const [inventoryRows, inventoryRiskRows, employeeRows, customerRows, purchaseRows, promotionRows, statusRows] = await Promise.all([
+  const [inventoryRows, inventoryRiskRows, employeeRows, customerRows, purchaseRows, promotionRows, statusRows, slowMovingRows, slowMovingCountRows, crossSellRows] = await Promise.all([
     query(
       `SELECT COUNT(*) AS active_products,
          SUM(CASE WHEN COALESCE(p.stock_quantity, 0) = 0 THEN 1 ELSE 0 END) AS out_of_stock,
@@ -267,6 +314,62 @@ export async function getPosOverview(filters) {
        FROM orders WHERE created_at >= ? AND created_at < DATE_ADD(?, INTERVAL 1 DAY)
        GROUP BY status`,
       dateParams
+    ),
+    query(
+      `SELECT p.id AS product_id, p.name,
+         COALESCE(p.stock_quantity, 0) AS stock_quantity,
+         COALESCE(p.min_stock, 0) AS min_stock,
+         DATE_FORMAT(sales.last_sold_at, '%Y-%m-%d') AS last_sold_at
+       FROM products p
+       JOIN (
+         SELECT oi.product_id, MAX(o.created_at) AS last_sold_at
+         FROM order_items oi
+         JOIN orders o ON o.id = oi.order_id
+         WHERE o.status = 'completed'
+         GROUP BY oi.product_id
+       ) sales ON sales.product_id = p.id
+       WHERE p.is_active = 1
+         AND p.stock_quantity > 0
+         AND sales.last_sold_at < DATE_SUB(NOW(), INTERVAL 30 DAY)${categoryClause}
+       ORDER BY sales.last_sold_at ASC, p.stock_quantity DESC
+       LIMIT 10`,
+      inventoryParams
+    ),
+    query(
+      `SELECT
+         COUNT(*) AS total
+       FROM products p
+       JOIN (
+         SELECT oi.product_id, MAX(o.created_at) AS last_sold_at
+         FROM order_items oi
+         JOIN orders o ON o.id = oi.order_id
+         WHERE o.status = 'completed'
+         GROUP BY oi.product_id
+       ) sales ON sales.product_id = p.id
+       WHERE p.is_active = 1
+         AND p.stock_quantity > 0
+         AND sales.last_sold_at < DATE_SUB(NOW(), INTERVAL 30 DAY)${categoryClause}`,
+      inventoryParams
+    ),
+    query(
+      `SELECT
+         first_product.id AS first_product_id,
+         first_product.name AS first_product_name,
+         second_product.id AS second_product_id,
+         second_product.name AS second_product_name,
+         COUNT(DISTINCT o.id) AS paired_orders
+       FROM order_items first_item
+       JOIN order_items second_item
+         ON second_item.order_id = first_item.order_id
+        AND second_item.product_id > first_item.product_id
+       JOIN orders o ON o.id = first_item.order_id
+       JOIN products first_product ON first_product.id = first_item.product_id
+       JOIN products second_product ON second_product.id = second_item.product_id
+       WHERE ${pairClauses.join(' AND ')}
+       GROUP BY first_product.id, first_product.name, second_product.id, second_product.name
+       ORDER BY paired_orders DESC, first_product.id, second_product.id
+       LIMIT 10`,
+      pairParams
     )
   ]);
 
@@ -277,6 +380,9 @@ export async function getPosOverview(filters) {
     customers: customerRows[0] || {},
     purchases: purchaseRows[0] || {},
     promotions: promotionRows[0] || {},
-    orderStatuses: statusRows
+    orderStatuses: statusRows,
+    slowMovingProducts: slowMovingRows,
+    slowMovingCount: Number(slowMovingCountRows[0]?.total || 0),
+    crossSellPairs: crossSellRows
   };
 }

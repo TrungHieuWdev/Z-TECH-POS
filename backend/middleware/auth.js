@@ -2,7 +2,6 @@ import jwt from 'jsonwebtoken';
 import { getJwtSecret } from '../config/auth.js';
 
 const fullAccessRoles = new Set(['admin', 'owner', 'manager']);
-const aiSuggestionRoles = new Set([...fullAccessRoles, 'employee', 'cashier', 'warehouse']);
 
 export default function auth(req, res, next) {
   const authHeader = req.headers.authorization;
@@ -35,16 +34,4 @@ export function requireFullAccess(req, res, next) {
   }
 
   return res.status(403).json({ message: 'Bạn không có quyền thực hiện thao tác này' });
-}
-
-export function hasAiSuggestionAccess(user) {
-  return aiSuggestionRoles.has(String(user?.role || '').toLowerCase());
-}
-
-export function requireAiSuggestionAccess(req, res, next) {
-  if (hasAiSuggestionAccess(req.user)) {
-    return next();
-  }
-
-  return res.status(403).json({ message: 'Bạn không có quyền xem gợi ý nhập hàng' });
 }

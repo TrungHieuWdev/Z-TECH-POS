@@ -32,10 +32,11 @@ function getLocalDateValue(date = new Date()) {
 }
 
 const cardTones = {
-  blue: 'bg-brand-soft text-brand-ink',
-  gray: 'bg-brand-surface text-brand-strong',
-  amber: 'bg-brand-muted text-brand-ink',
-  slate: 'bg-[#eef7fc] text-brand-deep'
+  blue: 'bg-blue-50 text-blue-700',
+  amber: 'bg-amber-50 text-amber-700',
+  cyan: 'bg-cyan-50 text-cyan-700',
+  violet: 'bg-violet-50 text-violet-700',
+  emerald: 'bg-emerald-50 text-emerald-700'
 };
 
 const topProductRankStyles = [
@@ -65,6 +66,19 @@ function getTodayGrowthCaption(value, comparisonLabel = 'hôm qua') {
 function safeNumber(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : 0;
+}
+
+function getChangePercent(currentValue, previousValue) {
+  const current = safeNumber(currentValue);
+  const previous = safeNumber(previousValue);
+  if (previous === 0) return current === 0 ? 0 : null;
+  return ((current - previous) / Math.abs(previous)) * 100;
+}
+
+function formatChangePercent(value) {
+  if (value === null) return null;
+  const rounded = Math.round(value * 10) / 10;
+  return `${rounded > 0 ? '+' : ''}${rounded.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%`;
 }
 
 function polarToCartesian(centerX, centerY, radius, angleInDegrees) {
@@ -187,7 +201,7 @@ export default function Dashboard() {
   const [recentOrders, setRecentOrders] = useState([]);
   const [operationalAlerts, setOperationalAlerts] = useState({
     lowStockProducts: 0,
-    overduePendingPayments: 0,
+    outOfStockProducts: 0,
     slowMovingProducts: 0,
     expiringWarranties: 0
   });
@@ -227,7 +241,7 @@ export default function Dashboard() {
           ? alertsRes.data
           : {
               lowStockProducts: safeNumber(summaryRes.data?.lowStockCount),
-              overduePendingPayments: 0,
+              outOfStockProducts: 0,
               slowMovingProducts: 0,
               expiringWarranties: 0
             });
@@ -267,7 +281,7 @@ export default function Dashboard() {
       label: 'Doanh thu',
       value: formatCurrency(summary.todayRevenue),
       caption: getRevenueCaption(summary.todayRevenue, summary.yesterdayRevenue, comparisonLabel),
-      trend: safeNumber(summary.todayRevenue) - safeNumber(summary.yesterdayRevenue),
+      change: getChangePercent(summary.todayRevenue, summary.yesterdayRevenue),
       icon: WalletCards,
       tone: 'blue'
     },
@@ -276,36 +290,36 @@ export default function Dashboard() {
       label: 'Đơn hàng',
       value: safeNumber(summary.todayOrders).toLocaleString('vi-VN'),
       caption: getCountCaption(summary.todayOrders, summary.yesterdayOrders, 'đơn', comparisonLabel),
-      trend: safeNumber(summary.todayOrders) - safeNumber(summary.yesterdayOrders),
+      change: getChangePercent(summary.todayOrders, summary.yesterdayOrders),
       icon: ReceiptText,
-      tone: 'gray'
+      tone: 'amber'
     },
     {
       id: 'average-order-value',
       label: 'Giá trị đơn trung bình',
       value: formatCurrency(summary.averageOrderValue),
       caption: getRevenueCaption(summary.averageOrderValue, summary.previousAverageOrderValue, comparisonLabel),
-      trend: safeNumber(summary.averageOrderValue) - safeNumber(summary.previousAverageOrderValue),
+      change: getChangePercent(summary.averageOrderValue, summary.previousAverageOrderValue),
       icon: CreditCard,
-      tone: 'slate'
+      tone: 'cyan'
     },
     {
       id: 'products-sold',
       label: 'Sản phẩm đã bán',
       value: safeNumber(summary.productsSold).toLocaleString('vi-VN'),
       caption: getCountCaption(summary.productsSold, summary.previousProductsSold, 'sản phẩm', comparisonLabel),
-      trend: safeNumber(summary.productsSold) - safeNumber(summary.previousProductsSold),
+      change: getChangePercent(summary.productsSold, summary.previousProductsSold),
       icon: PackageOpen,
-      tone: 'slate'
+      tone: 'violet'
     },
     {
       id: 'profit',
       label: 'Lợi nhuận tạm tính',
       value: formatCurrency(summary.estimatedProfit),
       caption: getRevenueCaption(summary.estimatedProfit, summary.previousEstimatedProfit, comparisonLabel),
-      trend: safeNumber(summary.estimatedProfit) - safeNumber(summary.previousEstimatedProfit),
+      change: getChangePercent(summary.estimatedProfit, summary.previousEstimatedProfit),
       icon: TrendingUp,
-      tone: 'gray'
+      tone: 'emerald'
     }
   ];
 
@@ -477,42 +491,38 @@ export default function Dashboard() {
         {cards.map((card) => {
           const Icon = card.icon;
           const CardWrapper = card.to ? Link : 'article';
-          const comparisonSuffix = ` so với ${comparisonLabel}`;
-          const hasColoredDelta = card.trend !== undefined
-            && card.trend !== 0
-            && card.caption.endsWith(comparisonSuffix);
-          const deltaText = hasColoredDelta
-            ? card.caption.slice(0, -comparisonSuffix.length)
-            : '';
+          const changeText = formatChangePercent(card.change);
+          const changeTone = card.change > 0
+            ? 'bg-emerald-50 text-emerald-700'
+            : card.change < 0
+              ? 'bg-rose-50 text-rose-700'
+              : 'bg-slate-100 text-slate-600';
 
           return (
             <CardWrapper
               key={card.id}
               to={card.to}
-              className={`rounded-lg border border-[#e1e3e4] bg-white p-3 shadow-[0_1px_3px_rgba(25,28,29,0.08)] ${
-                card.to ? 'block transition hover:border-[#c8dff0] hover:shadow-[0_8px_24px_rgba(116,184,224,0.18)]' : ''
+              title={card.caption}
+              className={`border border-slate-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md ${
+                card.to ? 'block' : ''
               }`}
             >
-              <div className="flex min-h-[76px] items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate text-[13px] font-bold leading-4 text-[#4f5459]">{card.label}</p>
-                  <p className="mt-2 min-h-6 text-lg font-bold leading-6 text-[#191c1d]">{card.value}</p>
-                  <div className="mt-1 flex min-h-8 min-w-0 flex-wrap content-start items-baseline gap-x-1 gap-y-0 text-[11px] font-medium leading-4" title={card.caption}>
-                    {hasColoredDelta ? (
-                      <>
-                        <span className={`font-semibold ${card.trend > 0 ? 'text-emerald-700' : 'text-red-600'}`}>
-                          {card.trend > 0 ? '+' : '-'} {deltaText}
-                        </span>
-                        <span className="text-[#43474d]">so với {comparisonLabel}</span>
-                      </>
-                    ) : (
-                      <span className="line-clamp-2 text-[#43474d]">{card.caption}</span>
-                    )}
-                  </div>
-                </div>
-                <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${cardTones[card.tone]}`}>
-                  <Icon size={18} />
-                </div>
+              <div className="flex items-start justify-between gap-2">
+                <p className="min-w-0 truncate pt-1 text-xs font-extrabold uppercase tracking-wide text-slate-500">{card.label}</p>
+                <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-md ${cardTones[card.tone]}`}>
+                  <Icon size={18} strokeWidth={1.8} />
+                </span>
+              </div>
+              <p className="mt-3 truncate text-2xl font-black text-slate-950">{card.value}</p>
+              <div className="mt-2 flex min-h-6 flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
+                {changeText === null ? (
+                  <span className="font-semibold text-slate-500">Chưa có dữ liệu kỳ trước</span>
+                ) : (
+                  <>
+                    <span className={`inline-flex px-2 py-0.5 text-xs font-bold ${changeTone}`}>{changeText}</span>
+                    <span className="text-slate-500">so với {comparisonLabel}</span>
+                  </>
+                )}
               </div>
             </CardWrapper>
           );
@@ -653,20 +663,32 @@ export default function Dashboard() {
           <div className="grid gap-2.5">
             <div className="min-h-[72px] border border-rose-200 bg-rose-50 px-3 py-2.5 text-rose-700">
               <div className="min-w-0">
-                <p className="text-xs font-black leading-4">Khẩn cấp <span className="font-extrabold">(2)</span></p>
+                <p className="text-xs font-black leading-4">Khẩn cấp</p>
                 <div className="mt-1.5 space-y-1 text-[11px] font-bold leading-4">
-                  <p><strong className="mr-1 text-base font-black">{safeNumber(operationalAlerts.lowStockProducts).toLocaleString('vi-VN')}</strong> sản phẩm sắp hết hàng</p>
-                  <p><strong className="mr-1 text-base font-black">{safeNumber(operationalAlerts.overduePendingPayments).toLocaleString('vi-VN')}</strong> đơn chờ thanh toán quá 24 giờ</p>
+                  <div className="flex items-center justify-between gap-3">
+                    <p><strong className="mr-1 text-base font-black">{safeNumber(operationalAlerts.lowStockProducts).toLocaleString('vi-VN')}</strong> sản phẩm sắp hết hàng</p>
+                    <Link to="/products?stock=low" className="shrink-0 border border-rose-300 bg-white px-2 py-0.5 text-[11px] font-black text-rose-700 transition hover:bg-rose-100">Xem</Link>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <p><strong className="mr-1 text-base font-black">{safeNumber(operationalAlerts.outOfStockProducts).toLocaleString('vi-VN')}</strong> sản phẩm hết hàng</p>
+                    <Link to="/products?stock=out" className="shrink-0 border border-rose-300 bg-white px-2 py-0.5 text-[11px] font-black text-rose-700 transition hover:bg-rose-100">Xem</Link>
+                  </div>
                 </div>
               </div>
             </div>
 
             <div className="min-h-[72px] border border-amber-200 bg-amber-50 px-3 py-2.5 text-amber-800">
               <div className="min-w-0">
-                <p className="text-xs font-black leading-4">Cần theo dõi <span className="font-extrabold">(2)</span></p>
+                <p className="text-xs font-black leading-4">Cần theo dõi</p>
                 <div className="mt-1.5 space-y-1 text-[11px] font-bold leading-4">
-                  <p><strong className="mr-1 text-base font-black">{safeNumber(operationalAlerts.slowMovingProducts).toLocaleString('vi-VN')}</strong> sản phẩm bán chậm</p>
-                  <p><strong className="mr-1 text-base font-black">{safeNumber(operationalAlerts.expiringWarranties).toLocaleString('vi-VN')}</strong> phiếu bảo hành sắp đến hạn</p>
+                  <div className="flex items-center justify-between gap-3">
+                    <p><strong className="mr-1 text-base font-black">{safeNumber(operationalAlerts.slowMovingProducts).toLocaleString('vi-VN')}</strong> sản phẩm bán chậm</p>
+                    <Link to="/products?view=slow-moving" className="shrink-0 border border-amber-300 bg-white px-2 py-0.5 text-[11px] font-black text-amber-800 transition hover:bg-amber-100">Xem</Link>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <p><strong className="mr-1 text-base font-black">{safeNumber(operationalAlerts.expiringWarranties).toLocaleString('vi-VN')}</strong> phiếu bảo hành sắp đến hạn</p>
+                    <Link to="/warranties?view=expiring" className="shrink-0 border border-amber-300 bg-white px-2 py-0.5 text-[11px] font-black text-amber-800 transition hover:bg-amber-100">Xem</Link>
+                  </div>
                 </div>
               </div>
             </div>

@@ -386,7 +386,7 @@ const productSelect = `
 
 export async function getAll(req, res) {
   try {
-    const { category_id, search = '', device_family, device_model_id } = req.query;
+    const { category_id, search = '', device_family, device_model_id, slow_moving } = req.query;
     const params = [];
     let sql = `${productSelect} WHERE p.is_active = 1`;
 
@@ -419,6 +419,26 @@ export async function getAll(req, res) {
     if (device_model_id) {
       sql += ' AND p.device_model_id = ?';
       params.push(device_model_id);
+    }
+
+    if (slow_moving === '1') {
+      sql += `
+        AND p.stock_quantity > 0
+        AND EXISTS (
+          SELECT 1
+          FROM order_items history_item
+          JOIN orders history_order ON history_order.id = history_item.order_id
+          WHERE history_item.product_id = p.id
+            AND history_order.status = 'completed'
+        )
+        AND NOT EXISTS (
+          SELECT 1
+          FROM order_items recent_item
+          JOIN orders recent_order ON recent_order.id = recent_item.order_id
+          WHERE recent_item.product_id = p.id
+            AND recent_order.status = 'completed'
+            AND recent_order.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+        )`;
     }
 
     sql = appendTextSearch(sql, params, getSearchTokens(search));

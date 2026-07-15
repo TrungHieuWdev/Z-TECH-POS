@@ -99,7 +99,7 @@ export function mapWarranty(row) {
     code: buildWarrantyCode(row),
     orderId: row.order_id,
     orderNumber: row.order_number,
-    customerName: row.customer_name || 'Khach le',
+    customerName: row.customer_name || 'Khách thường',
     customerPhone: row.customer_phone || '',
     productName: row.product_name,
     sku: row.sku || `SKU-${String(row.product_id || row.order_item_id).padStart(5, '0')}`,
@@ -121,12 +121,10 @@ export function mapWarranty(row) {
   };
 }
 
-export async function getAll(req, res) {
-  try {
-    await ensureWarrantyData();
-    const { date_from, date_to } = req.query;
-    const params = [];
-    let sql = `
+export async function listWarranties({ dateFrom = '', dateTo = '' } = {}) {
+  await ensureWarrantyData();
+  const params = [];
+  let sql = `
       SELECT
         oi.id AS order_item_id,
         oi.quantity,
@@ -158,20 +156,29 @@ export async function getAll(req, res) {
       WHERE 1 = 1
     `;
 
-    if (date_from) {
-      sql += ' AND DATE(o.created_at) >= ?';
-      params.push(date_from);
-    }
+  if (dateFrom) {
+    sql += ' AND DATE(o.created_at) >= ?';
+    params.push(dateFrom);
+  }
 
-    if (date_to) {
-      sql += ' AND DATE(o.created_at) <= ?';
-      params.push(date_to);
-    }
+  if (dateTo) {
+    sql += ' AND DATE(o.created_at) <= ?';
+    params.push(dateTo);
+  }
 
-    sql += ' ORDER BY o.created_at DESC, oi.id DESC';
+  sql += ' ORDER BY o.created_at DESC, oi.id DESC';
 
-    const rows = await query(sql, params);
-    res.json(rows.map(mapWarranty));
+  const rows = await query(sql, params);
+  return rows.map(mapWarranty);
+}
+
+export async function getAll(req, res) {
+  try {
+    const warranties = await listWarranties({
+      dateFrom: req.query.date_from,
+      dateTo: req.query.date_to
+    });
+    res.json(warranties);
   } catch (error) {
     res.status(500).json({ message: 'Khong the lay danh sach bao hanh', error: error.message });
   }

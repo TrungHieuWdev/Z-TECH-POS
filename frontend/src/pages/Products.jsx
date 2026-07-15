@@ -271,8 +271,13 @@ function productMatchesCategory(product, category) {
 export default function Products({ tabNavigation = null }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const hasFullAccess = isFullAccessRole(getUser()?.role);
-  const lowStockOnly = searchParams.get('lowStock') === '1';
+  const requestedStockState = ['low', 'out'].includes(searchParams.get('stock'))
+    ? searchParams.get('stock')
+    : searchParams.get('lowStock') === '1'
+      ? 'low'
+      : '';
   const showTopProducts = searchParams.get('view') === 'top-products';
+  const showSlowMovingProducts = searchParams.get('view') === 'slow-moving';
   const topProductsPeriod = topPeriodLabels[searchParams.get('period')] ? searchParams.get('period') : '30days';
   const selectedCategoryId = searchParams.get('category_id') || '';
   const [products, setProducts] = useState([]);
@@ -284,7 +289,7 @@ export default function Products({ tabNavigation = null }) {
   const [categoryId, setCategoryId] = useState(selectedCategoryId);
   const [deviceFamily, setDeviceFamily] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
-  const [activeTab, setActiveTab] = useState(lowStockOnly ? 'low' : 'all');
+  const [activeTab, setActiveTab] = useState(requestedStockState || 'all');
   const [currentPage, setCurrentPage] = useState(1);
   const [isOpen, setIsOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
@@ -502,7 +507,9 @@ export default function Products({ tabNavigation = null }) {
   };
 
   async function loadProducts() {
-    const response = await api.get('/products');
+    const response = await api.get('/products', {
+      params: showSlowMovingProducts ? { slow_moving: '1' } : undefined
+    });
     const allProducts = Array.isArray(response.data) ? response.data : [];
     setProducts(allProducts);
   }
@@ -519,7 +526,7 @@ export default function Products({ tabNavigation = null }) {
 
   useEffect(() => {
     loadProducts();
-  }, []);
+  }, [showSlowMovingProducts]);
 
   useEffect(() => {
     if (!showTopProducts) return;
@@ -535,8 +542,12 @@ export default function Products({ tabNavigation = null }) {
   }, [showTopProducts, topProductsPeriod]);
 
   useEffect(() => {
-    if (lowStockOnly) setActiveTab('low');
-  }, [lowStockOnly]);
+    if (requestedStockState) setActiveTab(requestedStockState);
+  }, [requestedStockState]);
+
+  useEffect(() => {
+    if (showSlowMovingProducts) setActiveTab('all');
+  }, [showSlowMovingProducts]);
 
   useEffect(() => {
     setCategoryId(selectedCategoryId);
@@ -668,6 +679,18 @@ export default function Products({ tabNavigation = null }) {
 
       {tabNavigation}
 
+      {showSlowMovingProducts && (
+        <section className="flex flex-wrap items-center justify-between gap-3 border border-amber-300 bg-amber-50 px-4 py-3 text-amber-900">
+          <div>
+            <p className="font-extrabold">Sản phẩm bán chậm: {products.length.toLocaleString('vi-VN')}</p>
+            <p className="mt-0.5 text-xs font-medium">Các sản phẩm đã từng bán nhưng không phát sinh đơn hoàn thành trong 30 ngày gần đây.</p>
+          </div>
+          <button type="button" onClick={() => setSearchParams({})} className="inline-flex items-center gap-2 border border-amber-300 bg-white px-3 py-2 text-sm font-bold transition hover:bg-amber-100">
+            <ArrowLeft size={16} /> Tất cả sản phẩm
+          </button>
+        </section>
+      )}
+
       <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         {[
           { label: 'Tổng sản phẩm', value: productStats.total, note: `${productStats.noCode} chưa có SKU/mã vạch`, icon: Package, tone: 'bg-brand-surface text-brand-strong' },
@@ -773,7 +796,7 @@ export default function Products({ tabNavigation = null }) {
         </div>
         <div className="flex gap-1 overflow-x-auto border-t border-gray-100 px-4 pt-2">
           {quickTabs.map((tab) => (
-            <button key={tab.value} type="button" onClick={() => { setActiveTab(tab.value); if (lowStockOnly) setSearchParams({}); }} className={`shrink-0 border-b-2 px-3 py-2 text-sm font-bold ${activeTab === tab.value ? 'border-brand-strong text-brand-strong' : 'border-transparent text-gray-500'}`}>{tab.label}</button>
+            <button key={tab.value} type="button" onClick={() => { setActiveTab(tab.value); if (requestedStockState || showSlowMovingProducts) setSearchParams({}); }} className={`shrink-0 border-b-2 px-3 py-2 text-sm font-bold ${activeTab === tab.value ? 'border-brand-strong text-brand-strong' : 'border-transparent text-gray-500'}`}>{tab.label}</button>
           ))}
         </div>
       </section>

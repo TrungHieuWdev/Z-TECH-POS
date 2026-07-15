@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
+import { useSearchParams } from 'react-router-dom';
 import {
   CalendarDays,
   ChevronsLeft,
@@ -207,12 +208,11 @@ function CompactActionSelect({ warranty, onAction }) {
 
 function WarrantyRow({ warranty, onView, onAction }) {
   const daysLeft = getDaysLeft(warranty.expiresAt);
+  const isExpiredWarranty = warranty.status !== 'no_warranty' && daysLeft <= 0;
   const expiryText =
     warranty.status === 'no_warranty'
       ? 'Không có hạn BH'
-      : daysLeft >= 0
-        ? `Còn ${daysLeft.toLocaleString('vi-VN')} ngày`
-        : 'Đã quá hạn';
+      : `Còn ${daysLeft.toLocaleString('vi-VN')} ngày`;
 
   return (
     <tr className="border-b border-gray-200 transition hover:bg-[#f8fdfe] last:border-b-0">
@@ -241,7 +241,13 @@ function WarrantyRow({ warranty, onView, onAction }) {
         <div className="text-sm font-semibold text-gray-900">
           {warranty.status === 'no_warranty' ? '-' : formatDate(warranty.expiresAt)}
         </div>
-        <div className="mt-1 text-xs text-gray-600">{expiryText}</div>
+        {isExpiredWarranty ? (
+          <span className="mt-1 inline-flex bg-red-600 px-2 py-0.5 text-xs font-bold text-white">
+            Hết hạn BH
+          </span>
+        ) : (
+          <div className="mt-1 text-xs text-gray-600">{expiryText}</div>
+        )}
       </td>
       <td className="px-4 py-4 align-top">
         <StatusBadge status={warranty.status} />
@@ -331,6 +337,8 @@ async function adjustInventoryForExchange() {
 }
 
 export default function Warranty() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const expiringOnly = searchParams.get('view') === 'expiring';
   const currentUser = getUser();
   const canEditWarrantySettings = isFullAccessRole(currentUser?.role);
   const [showWarrantySettings, setShowWarrantySettings] = useState(false);
@@ -504,6 +512,13 @@ export default function Warranty() {
     const keyword = search.trim().toLowerCase();
 
     return enrichedWarranties.filter((warranty) => {
+      const daysLeft = getDaysLeft(warranty.expiresAt);
+      const matchesExpiringAlert = !expiringOnly || (
+        warranty.warrantyEnabled
+        && warranty.status === 'active'
+        && daysLeft >= 0
+        && daysLeft <= 7
+      );
       const matchesStatus = status === 'all' || warranty.status === status;
       const matchesKeyword =
         !keyword ||
@@ -519,13 +534,13 @@ export default function Warranty() {
           .filter(Boolean)
           .some((value) => value.toLowerCase().includes(keyword));
 
-      return matchesStatus && matchesKeyword;
+      return matchesExpiringAlert && matchesStatus && matchesKeyword;
     });
-  }, [enrichedWarranties, search, status]);
+  }, [enrichedWarranties, expiringOnly, search, status]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, status, period]);
+  }, [expiringOnly, search, status, period]);
 
   const summary = useMemo(() => {
     return filteredWarranties.reduce(
@@ -627,6 +642,18 @@ export default function Warranty() {
         userName={currentStaffName}
       />
 
+      {expiringOnly && (
+        <section className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-amber-900">
+          <div>
+            <p className="font-extrabold">Phiếu bảo hành sắp đến hạn: {filteredWarranties.length.toLocaleString('vi-VN')}</p>
+            <p className="mt-0.5 text-xs font-medium">Các phiếu còn hiệu lực và sẽ hết hạn trong 7 ngày tới.</p>
+          </div>
+          <button type="button" onClick={() => setSearchParams({})} className="inline-flex h-9 items-center gap-2 rounded-md border border-amber-300 bg-white px-3 text-sm font-bold transition hover:bg-amber-100">
+            <ChevronsLeft size={16} /> Tất cả phiếu
+          </button>
+        </section>
+      )}
+
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {summaryCards.map((card) => (
           <SummaryCard key={card.key} {...card} />
@@ -685,11 +712,8 @@ export default function Warranty() {
       </section>
 
       <section className="overflow-hidden rounded-lg border border-gray-300 bg-white shadow-sm shadow-gray-100">
-        <div className="flex items-center justify-between border-b border-gray-300 px-5 py-4">
+        <div className="border-b border-gray-300 px-5 py-4">
           <h2 className="text-sm font-semibold text-gray-950">Phiếu bảo hành từ hóa đơn</h2>
-          <span className="rounded bg-gray-100 px-2.5 py-1 text-xs font-bold text-gray-800">
-            {filteredWarranties.length.toLocaleString('vi-VN')} dòng
-          </span>
         </div>
 
         <div className="overflow-x-auto">

@@ -86,7 +86,7 @@ export async function getEmployeeRevenue(req, res) {
          o.payment_method,
          o.total,
          o.created_at,
-         COALESCE(c.name, 'Khách lẻ') AS customer_name
+         COALESCE(c.name, 'Khách thường') AS customer_name
        FROM orders o
        LEFT JOIN customers c ON o.customer_id = c.id
        WHERE o.user_id = ?

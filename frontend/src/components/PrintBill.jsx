@@ -60,7 +60,7 @@ export default function PrintBill({ receipt, onPrint = () => window.print(), sho
           <div><strong>Mã đơn</strong><span>:</span><p>{receipt.orderNumber}</p></div>
           <div><strong>Ngày giờ</strong><span>:</span><p>{dateTime(receipt.createdAt)}</p></div>
           <div><strong>Thu ngân</strong><span>:</span><p>{receipt.cashierName || 'Nhân viên'}</p></div>
-          <div><strong>Khách hàng</strong><span>:</span><p>{receipt.customerName || 'Khách lẻ'}</p></div>
+          <div><strong>Khách hàng</strong><span>:</span><p>{receipt.customerName || 'Khách thường'}</p></div>
           <div><strong>Phương thức</strong><span>:</span><p>{paymentLabels[receipt.paymentMethod] || receipt.paymentMethod || 'Chưa xác định'}</p></div>
         </section>
 

@@ -197,14 +197,11 @@ export default function ActivityLogs() {
       </section>
 
       <section className="rounded-lg border border-[#d8eef4] bg-white shadow-sm">
-        <div className="flex items-center justify-between border-b border-[#edf7f9] px-5 py-4">
+        <div className="border-b border-[#edf7f9] px-5 py-4">
           <div>
             <h2 className="text-base font-extrabold text-[#111827]">Dòng hoạt động</h2>
             <p className="mt-1 text-xs font-semibold text-[#667085]">Hiển thị tối đa 180 hoạt động gần nhất theo bộ lọc.</p>
           </div>
-          <span className="rounded-full bg-[#e8f9fc] px-3 py-1 text-xs font-extrabold text-[#0f3b46]">
-            {logs.length} dòng
-          </span>
         </div>
 
         <div className="divide-y divide-[#edf7f9]">

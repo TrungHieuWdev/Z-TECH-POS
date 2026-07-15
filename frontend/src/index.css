@@ -104,6 +104,16 @@ textarea {
   to { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes ai-chart-reveal {
+  from { opacity: 0; transform: translateY(18px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes ai-score-ring-draw {
+  from { stroke-dashoffset: var(--score-circumference); }
+  to { stroke-dashoffset: var(--score-offset); }
+}
+
 .payment-donut-reveal {
   animation: payment-donut-reveal 850ms cubic-bezier(0.22, 1, 0.36, 1) both;
   transform: rotate(-90deg);
@@ -113,6 +123,16 @@ textarea {
 
 .payment-chart-details {
   animation: payment-chart-details-in 350ms ease-out 600ms both;
+}
+
+.ai-chart-reveal {
+  animation: ai-chart-reveal 650ms cubic-bezier(0.22, 1, 0.36, 1) var(--ai-chart-delay, 0ms) both;
+  will-change: opacity, transform;
+}
+
+.ai-score-ring {
+  animation: ai-score-ring-draw 1400ms cubic-bezier(0.22, 1, 0.36, 1) 120ms both;
+  will-change: stroke-dashoffset;
 }
 
 @media (prefers-reduced-motion: reduce) {

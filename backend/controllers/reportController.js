@@ -137,7 +137,7 @@ export async function getSalesReport(req, res) {
            o.status,
            o.payment_method,
            o.created_at,
-           COALESCE(c.name, 'Khách lẻ') AS customer_name,
+           COALESCE(c.name, 'Khách thường') AS customer_name,
            u.name AS cashier_name,
            COALESCE((
              SELECT SUM(

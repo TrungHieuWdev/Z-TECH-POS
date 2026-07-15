@@ -73,3 +73,17 @@ export function fillDailySeries(rows, from, to) {
   }
   return result;
 }
+
+export function fillHourlySeries(rows = [], endHour = 23) {
+  const lastHour = Math.max(0, Math.min(23, Number(endHour) || 0));
+  const byHour = new Map(rows.map((row) => [Number(row.hour), row]));
+
+  return Array.from({ length: lastHour + 1 }, (_, hour) => {
+    const row = byHour.get(hour) || {};
+    return {
+      label: `${String(hour).padStart(2, '0')}:00`,
+      netRevenue: money(row.netRevenue ?? row.net_revenue),
+      grossProfit: money(row.grossProfit ?? row.gross_profit)
+    };
+  });
+}

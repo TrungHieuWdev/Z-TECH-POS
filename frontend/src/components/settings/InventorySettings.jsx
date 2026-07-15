@@ -33,10 +33,7 @@ export default function InventorySettings({ value, onSave, isSaving }) {
         />
       </label>
 
-      <div className="grid gap-3 md:grid-cols-2">
-        <Toggle label="Cho phép bán khi hết hàng" checked={form.allowOutOfStockSale} onChange={(checked) => updateField('allowOutOfStockSale', checked)} />
-        <Toggle label="Bật gợi ý nhập hàng" checked={form.restockSuggestions} onChange={(checked) => updateField('restockSuggestions', checked)} />
-      </div>
+      <Toggle label="Cho phép bán khi hết hàng" checked={form.allowOutOfStockSale} onChange={(checked) => updateField('allowOutOfStockSale', checked)} />
 
       <SaveButton isSaving={isSaving} label="Lưu cài đặt kho" />
     </form>

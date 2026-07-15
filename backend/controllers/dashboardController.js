@@ -1,4 +1,5 @@
 import { query } from '../config/db.js';
+import { listWarranties } from './warrantyController.js';
 
 const toNumber = (value) => Number(value || 0);
 
@@ -23,6 +24,14 @@ function getSelectedDate(value) {
 
   const parsed = new Date(`${date}T00:00:00Z`);
   return Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date ? '' : date;
+}
+
+function getDaysUntil(dateValue) {
+  const today = new Date();
+  const target = new Date(dateValue);
+  today.setHours(0, 0, 0, 0);
+  target.setHours(0, 0, 0, 0);
+  return Math.ceil((target - today) / 86400000);
 }
 
 function getCategoryShareDateFilter(period = 'today') {
@@ -298,7 +307,7 @@ export async function getRecentOrders(req, res) {
          o.status,
          o.payment_method,
          o.created_at,
-         COALESCE(c.name, 'Khách lẻ') AS customer_name,
+         COALESCE(c.name, 'Khách thường') AS customer_name,
          u.name AS cashier_name
        FROM orders o
        LEFT JOIN customers c ON o.customer_id = c.id
@@ -319,17 +328,18 @@ export async function getRecentOrders(req, res) {
 
 export async function getOperationalAlerts(req, res) {
   try {
-    const [lowStockRows, overduePaymentRows, slowMovingRows, expiringWarrantyRows] = await Promise.all([
+    const [lowStockRows, outOfStockRows, slowMovingRows, warranties] = await Promise.all([
       query(
         `SELECT COUNT(*) AS value
          FROM products
-         WHERE is_active = 1 AND stock_quantity <= min_stock`
+         WHERE is_active = 1
+           AND stock_quantity > 0
+           AND stock_quantity <= min_stock`
       ),
       query(
         `SELECT COUNT(*) AS value
-         FROM payments
-         WHERE status = 'pending'
-           AND created_at < DATE_SUB(NOW(), INTERVAL 24 HOUR)`
+         FROM products
+         WHERE is_active = 1 AND stock_quantity <= 0`
       ),
       query(
         `SELECT COUNT(*) AS value
@@ -352,21 +362,20 @@ export async function getOperationalAlerts(req, res) {
                AND recent_order.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
            )`
       ),
-      query(
-        `SELECT COUNT(*) AS value
-         FROM warranties
-         WHERE status = 'active'
-           AND warranty_end BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)`
-      )
+      listWarranties()
     ]);
+
+    const expiringWarranties = warranties.filter((warranty) => {
+      const daysLeft = getDaysUntil(warranty.expiresAt);
+      return warranty.warrantyEnabled && warranty.status === 'active' && daysLeft >= 0 && daysLeft <= 7;
+    });
 
     res.json({
       lowStockProducts: toNumber(lowStockRows[0].value),
-      overduePendingPayments: toNumber(overduePaymentRows[0].value),
+      outOfStockProducts: toNumber(outOfStockRows[0].value),
       slowMovingProducts: toNumber(slowMovingRows[0].value),
-      expiringWarranties: toNumber(expiringWarrantyRows[0].value),
+      expiringWarranties: expiringWarranties.length,
       rules: {
-        overduePaymentHours: 24,
         slowMovingDays: 30,
         warrantyDueDays: 7
       }

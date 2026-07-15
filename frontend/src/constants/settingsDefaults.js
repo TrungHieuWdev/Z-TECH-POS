@@ -54,8 +54,7 @@ export const DEFAULT_SETTINGS = {
   },
   inventory: {
     lowStockThreshold: 5,
-    allowOutOfStockSale: false,
-    restockSuggestions: true
+    allowOutOfStockSale: false
   }
 };
 

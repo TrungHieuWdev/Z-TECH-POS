@@ -2,7 +2,7 @@ import express from 'express';
 import auth, { requireFullAccess } from '../middleware/auth.js';
 import { getSalesReport } from '../controllers/reportController.js';
 import {
-  getAiAnalysis, getCategories, getHourly, getPaymentMethods, getProducts,
+  getAiAnalysis, getCategories, getHourly, getPaymentMethods, getProducts, getStockAlerts,
   getSummary, getTrend, exportRevenue
 } from '../controllers/revenueReportController.js';
 
@@ -14,6 +14,7 @@ router.get('/revenue/trend', auth, requireFullAccess, getTrend);
 router.get('/revenue/categories', auth, requireFullAccess, getCategories);
 router.get('/revenue/payment-methods', auth, requireFullAccess, getPaymentMethods);
 router.get('/revenue/hourly', auth, requireFullAccess, getHourly);
+router.get('/revenue/stock-alerts', auth, requireFullAccess, getStockAlerts);
 router.get('/revenue/products', auth, requireFullAccess, getProducts);
 router.get('/revenue/ai-analysis', auth, requireFullAccess, getAiAnalysis);
 router.get('/revenue/export', auth, requireFullAccess, exportRevenue);

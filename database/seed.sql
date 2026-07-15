@@ -122,7 +122,7 @@ CROSS JOIN product_templates pt
 ORDER BY dm.family, dm.id, pt.id;
 
 INSERT INTO customers (id, name, phone, email, address) VALUES
-(1, 'Khách lẻ', '0900000000', NULL, NULL),
+(1, 'Khách thường', '0900000000', NULL, NULL),
 (2, 'Nguyễn Văn An', '0901000001', 'an.nguyen@example.com', 'TP.HCM'),
 (3, 'Trần Thị Bích', '0901000002', 'bich.tran@example.com', 'TP.HCM'),
 (4, 'Lê Hoàng Nam', '0901000003', 'nam.le@example.com', 'TP.HCM'),

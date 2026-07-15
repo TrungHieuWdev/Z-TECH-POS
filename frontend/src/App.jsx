@@ -23,6 +23,7 @@ const ActivityLogs = lazy(() => import('./pages/ActivityLogs'));
 const Warranty = lazy(() => import('./pages/Warranty'));
 const WarrantyLookupPublic = lazy(() => import('./pages/WarrantyLookupPublic'));
 const SettingsPage = lazy(() => import('./components/settings/SettingsPage'));
+const NotFound = lazy(() => import('./pages/NotFound'));
 
 function PageLoader() {
   return <main className="grid min-h-screen place-items-center bg-slate-50 text-sm font-medium text-slate-600">Đang tải Z-TECH POS...</main>;
@@ -63,24 +64,34 @@ export default function App() {
             <Route element={<PermissionRoute />}>
             <Route path="/" element={<HomePage />} />
             <Route path="/pos" element={<POS />} />
-            <Route path="/products/*" element={<ProductManagement />} />
+            <Route path="/products" element={<ProductManagement />} />
+            <Route path="/products/promotions" element={<ProductManagement />} />
             <Route path="/categories" element={<Categories />} />
             <Route path="/customers" element={<Customers />} />
             <Route path="/suppliers" element={<Suppliers />} />
             <Route path="/purchase-orders" element={<PurchaseOrders />} />
-            <Route path="/employees/*" element={<Employees />} />
+            <Route path="/employees" element={<Employees />} />
+            <Route path="/employees/revenue" element={<Employees />} />
+            <Route path="/employees/shifts" element={<Employees />} />
             <Route path="/shifts" element={<Navigate to="/employees/shifts" replace />} />
             <Route path="/promotions" element={<Navigate to="/products/promotions" replace />} />
             <Route path="/orders" element={<Orders />} />
             <Route path="/warranties" element={<Warranty />} />
-            <Route path="/inventory/*" element={<Inventory />} />
+            <Route path="/inventory" element={<Inventory />} />
+            <Route path="/inventory/purchase-orders" element={<Inventory />} />
+            <Route path="/inventory/history" element={<Inventory />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/activity-logs" element={<ActivityLogs />} />
-            <Route path="/settings/*" element={<SettingsPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/settings/print" element={<SettingsPage />} />
+            <Route path="/settings/payment" element={<SettingsPage />} />
+            <Route path="/settings/inventory" element={<SettingsPage />} />
+            <Route path="/settings/security" element={<SettingsPage />} />
             </Route>
+            <Route path="*" element={<NotFound />} />
           </Route>
         </Route>
-        <Route path="*" element={<Navigate to={getToken() ? "/" : "/login"} replace />} />
+        <Route path="*" element={<NotFound />} />
        </Routes>
       </Suspense>
     </BrowserRouter>

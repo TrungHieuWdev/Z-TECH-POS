@@ -1,10 +1,11 @@
 import * as repository from '../repositories/revenueReportRepository.js';
-import { calculateRevenueMetrics, fillDailySeries, money, percentChange, previousPeriod } from '../utils/revenueReportMath.js';
+import { calculateRevenueMetrics, fillDailySeries, fillHourlySeries, money, percentChange, previousPeriod } from '../utils/revenueReportMath.js';
 import { analyzePosWithGemini } from './geminiRevenueAnalysisService.js';
+import { getRestockSnapshot } from './restockForecastService.js';
 
 function metricChanges(current, previous) {
   return Object.fromEntries(
-    ['netRevenue', 'grossProfit', 'completedOrders', 'averageOrderValue', 'discount', 'refunds']
+    ['netRevenue', 'cost', 'grossProfit', 'completedOrders', 'averageOrderValue', 'discount', 'refunds']
       .map((key) => [key, percentChange(current[key], previous[key])])
   );
 }
@@ -52,12 +53,26 @@ function groupTrend(rows, from, to) {
   return { grouping, points: [...groups.values()] };
 }
 
+function getBusinessDateTime() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', hourCycle: 'h23'
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return {
+    date: `${values.year}-${values.month}-${values.day}`,
+    hour: Number(values.hour)
+  };
+}
+
 export async function getSummary(filters) {
   const previous = previousPeriod(filters.from, filters.to);
-  const [currentRow, previousRow, filterOptions] = await Promise.all([
+  const [currentRow, previousRow, filterOptions, availability] = await Promise.all([
     repository.getAggregate(filters),
     filters.compare ? repository.getAggregate(filters, previous) : Promise.resolve({}),
-    repository.getFilterOptions()
+    repository.getFilterOptions(),
+    repository.getDataAvailability()
   ]);
   const current = calculateRevenueMetrics(currentRow);
   const previousMetrics = calculateRevenueMetrics(previousRow);
@@ -66,6 +81,10 @@ export async function getSummary(filters) {
     metrics: { ...current, changes: filters.compare ? metricChanges(current, previousMetrics) : {} },
     comparison: filters.compare ? previousMetrics : null,
     filterOptions,
+    dataAvailability: {
+      availableFrom: availability.available_from || null,
+      availableTo: availability.available_to || null
+    },
     notes: {
       tax: 'Doanh thu báo cáo không bao gồm VAT vì schema lưu VAT riêng trong vat_amount.',
       cost: 'Giá vốn dùng cost_price hiện tại do order_items chưa lưu snapshot giá vốn lúc bán.',
@@ -75,6 +94,15 @@ export async function getSummary(filters) {
 }
 
 export async function getTrend(filters) {
+  if (filters.from === filters.to) {
+    const businessNow = getBusinessDateTime();
+    const endHour = filters.to === businessNow.date ? businessNow.hour : 23;
+    return {
+      grouping: 'hour',
+      points: fillHourlySeries(await repository.getHourlyTrend(filters), endHour)
+    };
+  }
+
   const rows = await repository.getDaily(filters);
   return groupTrend(rows, filters.from, filters.to);
 }
@@ -85,18 +113,23 @@ export async function getCategories(filters) {
 
 export async function getPaymentMethods(filters) {
   const rows = await repository.getPaymentMethods(filters);
-  const total = rows.reduce((sum, row) => sum + money(row.amount), 0);
+  const totalTransactions = rows.reduce((sum, row) => sum + Number(row.transaction_count || 0), 0);
   return { items: rows.map((row) => ({
     paymentMethod: row.payment_method,
     amount: money(row.amount),
-    percentage: total > 0 ? Number((money(row.amount) / total * 100).toFixed(1)) : 0
-  })).filter((item) => item.amount > 0) };
+    transactionCount: Number(row.transaction_count || 0),
+    percentage: totalTransactions > 0 ? Number((Number(row.transaction_count || 0) / totalTransactions * 100).toFixed(1)) : 0
+  })).filter((item) => item.transactionCount > 0) };
 }
 
 export async function getHourly(filters) {
   const items = normalizeHourly(await repository.getHourly(filters));
   const peak = [...items].sort((a, b) => b.netRevenue - a.netRevenue)[0] || null;
   return { items, peakHour: peak?.netRevenue > 0 ? peak.hour : null };
+}
+
+export async function getStockAlerts(filters) {
+  return getRestockSnapshot({ categoryId: filters.categoryId, targetDays: 30, limit: 8 });
 }
 
 function normalizeProduct(row) {
@@ -107,6 +140,49 @@ function normalizeProduct(row) {
     cost: money(row.cost), grossProfit: money(row.gross_profit),
     margin: Number(Number(row.margin || 0).toFixed(1)), returnedQuantity: Number(row.returned_quantity || 0)
   };
+}
+
+function buildAiCharts({ trend, categories, topProducts, includeRevenueTrend = true }) {
+  const charts = [];
+  if (includeRevenueTrend && (trend?.points || []).some((item) => item.netRevenue || item.grossProfit)) {
+    charts.push({
+      id: 'ai_business_trend',
+      title: 'Diễn biến doanh thu và lợi nhuận',
+      type: 'line',
+      valueFormat: 'currency',
+      labels: trend.points.map((item) => item.label),
+      datasets: [
+        { label: 'Doanh thu thuần', data: trend.points.map((item) => item.netRevenue), color: '#74B8E0' },
+        { label: 'Lợi nhuận gộp', data: trend.points.map((item) => item.grossProfit), color: '#14a88f' }
+      ]
+    });
+  }
+
+  const categoryItems = (categories || []).filter((item) => item.netRevenue > 0).slice(0, 6);
+  if (categoryItems.length) {
+    charts.push({
+      id: 'ai_category_mix',
+      title: 'Tỷ trọng doanh thu theo danh mục',
+      type: 'doughnut',
+      valueFormat: 'currency',
+      labels: categoryItems.map((item) => item.name),
+      datasets: [{ label: 'Doanh thu', data: categoryItems.map((item) => item.netRevenue) }]
+    });
+  }
+
+  const productItems = (topProducts || []).filter((item) => item.netRevenue > 0).slice(0, 5);
+  if (productItems.length) {
+    charts.push({
+      id: 'ai_top_products',
+      title: 'Sản phẩm tạo doanh thu cao nhất',
+      type: 'bar',
+      orientation: 'horizontal',
+      valueFormat: 'currency',
+      labels: productItems.map((item) => item.name),
+      datasets: [{ label: 'Doanh thu thuần', data: productItems.map((item) => item.netRevenue), color: '#8255e8' }]
+    });
+  }
+  return charts;
 }
 
 export async function getProducts(filters, options) {
@@ -133,6 +209,7 @@ export async function getAiAnalysis(filters) {
   const categories = normalizeCategories(categoryRows);
   const previousCategories = normalizeCategories(previousCategoryRows);
   const hourly = normalizeHourly(hourlyRows);
+  const analysisTrend = groupTrend(selectedDailyRows, filters.from, filters.to);
   const paymentTotal = paymentRows.reduce((sum, row) => sum + money(row.amount), 0);
   const payments = paymentRows.map((row) => ({
     paymentMethod: row.payment_method,
@@ -140,17 +217,23 @@ export async function getAiAnalysis(filters) {
     percentage: paymentTotal > 0 ? Number((money(row.amount) / paymentTotal * 100).toFixed(1)) : 0
   })).filter((item) => item.amount > 0);
   const snapshot = {
-    range: { from: filters.from, to: filters.to, previousFrom: previous.from, previousTo: previous.to },
+    range: {
+      from: filters.from,
+      to: filters.to,
+      previousFrom: filters.compare ? previous.from : null,
+      previousTo: filters.compare ? previous.to : null
+    },
     activeFilters: {
       categoryId: filters.categoryId, employeeId: filters.employeeId,
-      paymentMethod: filters.paymentMethod || null, orderStatus: filters.orderStatus
+      paymentMethod: filters.paymentMethod || null, orderStatus: filters.orderStatus,
+      comparePreviousPeriod: filters.compare
     },
-    summary: { ...current, changes: metricChanges(current, previousMetrics) },
-    previousSummary: previousMetrics,
+    summary: filters.compare ? { ...current, changes: metricChanges(current, previousMetrics) } : current,
+    previousSummary: filters.compare ? previousMetrics : null,
     selectedTrend: fillDailySeries(selectedDailyRows, filters.from, filters.to),
     dailyHistory: historyRows.map((row) => ({ date: row.date, netRevenue: money(row.net_revenue), grossProfit: money(row.gross_profit) })),
     categories,
-    previousCategories,
+    previousCategories: filters.compare ? previousCategories : [],
     paymentMethods: payments,
     hourly,
     topProducts: productResult.rows.slice(0, 20).map(normalizeProduct),
@@ -159,6 +242,25 @@ export async function getAiAnalysis(filters) {
       inventoryRisks: posOverview.inventoryRisks.map((item) => ({
         productId: item.product_id, productName: item.name, stock: Number(item.stock_quantity || 0),
         minimumStock: Number(item.min_stock || 0), soldInPeriod: Number(item.sold_quantity || 0)
+      })),
+      restockCandidates: posOverview.inventoryRisks
+        .filter((item) => Number(item.stock_quantity || 0) <= Number(item.min_stock || 0))
+        .map((item) => ({
+          productId: item.product_id, productName: item.name,
+          stock: Number(item.stock_quantity || 0), minimumStock: Number(item.min_stock || 0),
+          soldInPeriod: Number(item.sold_quantity || 0)
+        })),
+      slowMovingProducts: posOverview.slowMovingProducts.map((item) => ({
+        productId: item.product_id, productName: item.name,
+        stock: Number(item.stock_quantity || 0), minimumStock: Number(item.min_stock || 0),
+        lastSoldAt: item.last_sold_at
+      })),
+      slowMovingCount: Number(posOverview.slowMovingCount || 0),
+      crossSellWindowDays: 90,
+      crossSellPairs: posOverview.crossSellPairs.map((item) => ({
+        firstProductId: item.first_product_id, firstProductName: item.first_product_name,
+        secondProductId: item.second_product_id, secondProductName: item.second_product_name,
+        pairedOrders: Number(item.paired_orders || 0)
       })),
       employeePerformance: posOverview.employees.map((item) => ({
         employee: `NV-${item.user_id}`, completedOrders: Number(item.completed_orders || 0), netRevenue: money(item.net_revenue)
@@ -175,7 +277,16 @@ export async function getAiAnalysis(filters) {
     ]
   };
   const analysis = await analyzePosWithGemini(snapshot);
-  return { ...analysis, snapshotScope: 'aggregated-and-anonymized' };
+  return {
+    ...analysis,
+    charts: buildAiCharts({
+      trend: analysisTrend,
+      categories,
+      topProducts: snapshot.topProducts,
+      includeRevenueTrend: filters.from !== filters.to
+    }),
+    snapshotScope: 'aggregated-and-anonymized'
+  };
 }
 
 export async function getExportRows(filters) {

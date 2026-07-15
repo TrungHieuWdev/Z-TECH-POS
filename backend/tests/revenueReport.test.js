@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { aggregateOrderFixtures, fillDailySeries, groupTransactionsByHour, percentChange, previousPeriod } from '../utils/revenueReportMath.js';
+import { aggregateOrderFixtures, fillDailySeries, fillHourlySeries, groupTransactionsByHour, percentChange, previousPeriod } from '../utils/revenueReportMath.js';
 import { validateRevenueReportQuery } from '../validation/revenueReportValidation.js';
 import { requireFullAccess } from '../middleware/auth.js';
 
@@ -34,6 +34,18 @@ test('điền nhóm ngày thiếu và nhóm doanh thu theo giờ', () => {
   assert.deepEqual(daily.map((item) => item.netRevenue), [100, 0, 0]);
   assert.deepEqual(groupTransactionsByHour([{ hour: 9, netRevenue: 10 }, { hour: 9, netRevenue: 20 }, { hour: 10, netRevenue: 5 }]), [
     { hour: 9, netRevenue: 30 }, { hour: 10, netRevenue: 5 }
+  ]);
+});
+
+test('biểu đồ trong ngày tăng khi có dữ liệu và trở về 0 ở giờ không có dữ liệu', () => {
+  const hourly = fillHourlySeries([
+    { hour: 14, net_revenue: 1200000, gross_profit: 850000 }
+  ], 15);
+
+  assert.deepEqual(hourly.slice(13), [
+    { label: '13:00', netRevenue: 0, grossProfit: 0 },
+    { label: '14:00', netRevenue: 1200000, grossProfit: 850000 },
+    { label: '15:00', netRevenue: 0, grossProfit: 0 }
   ]);
 });
 

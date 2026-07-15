@@ -1,7 +1,5 @@
 import { query } from '../config/db.js';
-import { generateRestockReasons } from './geminiRestockService.js';
 import { calculateRestockForecast, classifyRestockPriority } from '../utils/restockForecast.js';
-import { randomUUID } from 'node:crypto';
 
 const DEFAULT_OPTIONS = {
   leadTimeDays: 7,
@@ -36,74 +34,8 @@ function normalizeOptions(input = {}) {
     targetDays: clampInteger(input.targetDays, DEFAULT_OPTIONS.targetDays, 7, 180),
     limit: clampInteger(input.limit, DEFAULT_OPTIONS.limit, 1, 200),
     categoryId: input.categoryId ? Number(input.categoryId) : null,
-    deviceFamily: input.deviceFamily ? String(input.deviceFamily) : '',
-    userId: input.userId ? Number(input.userId) : null
+    deviceFamily: input.deviceFamily ? String(input.deviceFamily) : ''
   };
-}
-
-async function ensureSuggestionLogTable() {
-  await query(`
-    CREATE TABLE IF NOT EXISTS ai_restock_suggestion_logs (
-      id INT AUTO_INCREMENT PRIMARY KEY,
-      analysis_run_id VARCHAR(36) NOT NULL,
-      user_id INT NULL,
-      product_id INT NOT NULL,
-      product_name VARCHAR(255) NOT NULL,
-      sku VARCHAR(100) NULL,
-      current_stock INT NOT NULL DEFAULT 0,
-      sold_7_days INT NOT NULL DEFAULT 0,
-      sold_30_days INT NOT NULL DEFAULT 0,
-      sold_90_days INT NOT NULL DEFAULT 0,
-      forecast_qty_target INT NOT NULL DEFAULT 0,
-      reorder_point INT NOT NULL DEFAULT 0,
-      suggested_quantity INT NOT NULL DEFAULT 0,
-      estimated_cost DECIMAL(15,0) NULL,
-      priority VARCHAR(30) NULL,
-      reason TEXT NULL,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      INDEX idx_ai_restock_logs_run (analysis_run_id),
-      INDEX idx_ai_restock_logs_product (product_id),
-      INDEX idx_ai_restock_logs_created_at (created_at),
-      CONSTRAINT fk_ai_restock_logs_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
-      CONSTRAINT fk_ai_restock_logs_product FOREIGN KEY (product_id) REFERENCES products(id)
-    )
-  `);
-}
-
-async function saveSuggestionLogs(suggestions, options) {
-  const rows = suggestions.filter((item) => Number(item.suggestedQuantity || 0) > 0);
-  if (!rows.length) return null;
-
-  await ensureSuggestionLogTable();
-
-  const analysisRunId = randomUUID();
-  for (const item of rows) {
-    await query(
-      `INSERT INTO ai_restock_suggestion_logs
-       (analysis_run_id, user_id, product_id, product_name, sku, current_stock, sold_7_days, sold_30_days, sold_90_days,
-        forecast_qty_target, reorder_point, suggested_quantity, estimated_cost, priority, reason)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        analysisRunId,
-        options.userId,
-        item.productId,
-        item.productName,
-        item.sku || item.barcode || null,
-        item.currentStock,
-        item.sold7Days,
-        item.sold30Days,
-        item.sold90Days,
-        item.forecastQtyTarget,
-        item.reorderPoint,
-        item.suggestedQuantity,
-        item.estimatedCost,
-        item.priority,
-        item.reason
-      ]
-    );
-  }
-
-  return { analysisRunId, savedItems: rows.length };
 }
 
 async function fetchProductSales(options) {
@@ -198,7 +130,7 @@ function buildSuggestion(row, options) {
   return { ...item, reason: getDefaultReason(item), reasonSource: 'formula' };
 }
 
-export async function getRestockSuggestions(input = {}) {
+export async function getRestockSnapshot(input = {}) {
   const options = normalizeOptions(input);
   const rows = await fetchProductSales(options);
   const suggestions = rows
@@ -212,30 +144,6 @@ export async function getRestockSuggestions(input = {}) {
     })
     .slice(0, options.limit);
 
-  let aiMeta = { configured: false, used: false, error: '' };
-
-  try {
-    const ai = await generateRestockReasons(suggestions);
-    aiMeta = { configured: ai.configured, used: ai.reasonsByProductId.size > 0, model: ai.model || null, error: '' };
-
-    for (const item of suggestions) {
-      const reason = ai.reasonsByProductId.get(item.productId);
-      if (reason) {
-        item.reason = reason;
-        item.reasonSource = 'gemini';
-      }
-    }
-  } catch (error) {
-    aiMeta = { configured: true, used: false, model: null, error: error.message };
-  }
-
-  let savedLog = null;
-  try {
-    savedLog = await saveSuggestionLogs(suggestions, options);
-  } catch (error) {
-    savedLog = { error: error.message };
-  }
-
   return {
     suggestions,
     meta: {
@@ -248,9 +156,7 @@ export async function getRestockSuggestions(input = {}) {
         reorderPoint: 'Dự báo/ngày × Ngày chờ nhập + Tồn kho an toàn',
         safetyStock: 'Dự báo/ngày × Ngày tồn an toàn',
         suggestedQuantity: 'max(0, Dự báo/ngày × Mục tiêu đủ bán + Tồn kho an toàn - Tồn kho hiện tại)'
-      },
-      ai: aiMeta,
-      savedLog
+      }
     }
   };
 }

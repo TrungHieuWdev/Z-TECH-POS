@@ -56,7 +56,7 @@ function getSalesType(order) {
 }
 
 function getCustomerName(order) {
-  return order.customer_name || 'Khách lẻ';
+  return order.customer_name || 'Khách thường';
 }
 
 function SummaryCard({ icon: Icon, label, value, toneClassName, onClick }) {
@@ -540,7 +540,7 @@ export default function Orders() {
               </div>
               <div>
                 <span className="font-medium text-gray-700">Khách hàng</span>
-                <div className="font-semibold text-gray-950">{selectedOrder.customer_name || 'Khách lẻ'}</div>
+                <div className="font-semibold text-gray-950">{selectedOrder.customer_name || 'Khách thường'}</div>
               </div>
               <div>
                 <span className="font-medium text-gray-700">Thu ngân</span>

@@ -15,6 +15,7 @@ export const getTrend = handler(service.getTrend);
 export const getCategories = handler(service.getCategories);
 export const getPaymentMethods = handler(service.getPaymentMethods);
 export const getHourly = handler(service.getHourly);
+export const getStockAlerts = handler(service.getStockAlerts);
 export const getProducts = handler(service.getProducts);
 export const getAiAnalysis = handler(service.getAiAnalysis);
 
@@ -36,4 +37,3 @@ export async function exportRevenue(req, res) {
     res.status(error.status || 500).json({ message: error.status ? error.message : 'Không thể xuất báo cáo doanh thu' });
   }
 }
-

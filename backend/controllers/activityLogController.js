@@ -56,9 +56,9 @@ const activityLogUnionSql = `
       ELSE 'Tạo đơn bán hàng'
     END AS action_label,
     CONCAT('Đơn ', o.order_number) AS title,
-    CONCAT(COALESCE(c.name, 'Khách lẻ'), ' - ', COALESCE(u.name, 'Không rõ')) AS description,
+    CONCAT(COALESCE(c.name, 'Khách thường'), ' - ', COALESCE(u.name, 'Không rõ')) AS description,
     COALESCE(u.name, 'Không rõ') AS actor_name,
-    COALESCE(c.name, 'Khách lẻ') AS target_name,
+    COALESCE(c.name, 'Khách thường') AS target_name,
     o.order_number AS reference_code,
     o.total AS amount,
     NULL AS quantity,

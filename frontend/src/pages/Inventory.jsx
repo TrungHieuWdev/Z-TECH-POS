@@ -20,7 +20,6 @@ import { formatCurrency, formatDate } from '../utils/format';
 import { getUser, isFullAccessRole } from '../utils/auth';
 import InventoryTabs from '../components/inventory/InventoryTabs';
 import PurchaseReceivingTab from '../components/inventory/PurchaseReceivingTab';
-import useRestockSuggestions from '../hooks/useRestockSuggestions';
 
 const initialForm = { product_id: '', quantity: '', reason: '', note: '' };
 const initialCurrentFilters = { category: '', model: '', stock: '', barcode: '' };
@@ -112,7 +111,6 @@ function Pagination({ page, totalItems, onChange }) {
 export default function Inventory() {
   const location = useLocation();
   const navigate = useNavigate();
-  const restockSuggestions = useRestockSuggestions();
   const hasFullAccess = isFullAccessRole(getUser()?.role);
   const [logs, setLogs] = useState([]);
   const [products, setProducts] = useState([]);
@@ -124,9 +122,6 @@ export default function Inventory() {
   const [mode, setMode] = useState('in');
   const [isOpen, setIsOpen] = useState(false);
   const [form, setForm] = useState(initialForm);
-  const [suggestedItems, setSuggestedItems] = useState(() => (
-    location.state?.source === 'restock-suggestions' ? location.state.suggestedItems : null
-  ));
 
   async function loadData() {
     const [logsRes, productsRes] = await Promise.all([
@@ -140,13 +135,6 @@ export default function Inventory() {
   useEffect(() => {
     loadData();
   }, []);
-
-  useEffect(() => {
-    if (location.state?.source === 'restock-suggestions') {
-      setSuggestedItems(location.state.suggestedItems || null);
-      navigate('/inventory/purchase-orders', { replace: true });
-    }
-  }, [location.state, navigate]);
 
   const stats = useMemo(() => {
     const activeProducts = products.filter((product) => Number(product.is_active) !== 0);
@@ -339,7 +327,7 @@ export default function Inventory() {
         </div></div>}
         {activeTab === 'receiving' ? (
           <div className="bg-gray-50/40 p-4">
-            <PurchaseReceivingTab restockSuggestions={restockSuggestions} suggestedItems={suggestedItems} preferredSupplierId={location.state?.source === 'supplier' ? location.state.supplierId : null} canManage={hasFullAccess} onCreated={loadData} onSuggestedItemsConsumed={() => setSuggestedItems(null)} />
+            <PurchaseReceivingTab preferredSupplierId={location.state?.source === 'supplier' ? location.state.supplierId : null} canManage={hasFullAccess} onCreated={loadData} />
           </div>
         ) : activeTab === 'adjustment' ? (
           hasFullAccess ? (

@@ -1,30 +1,24 @@
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { BrainCircuit, ClipboardList, Eye, Plus, Save, Trash2 } from 'lucide-react';
+import { Eye, Plus, Save, Trash2, X } from 'lucide-react';
 import api from '../../api/axios';
 import Modal from '../Modal';
 import { formatCurrency } from '../../utils/format';
-import RestockSuggestionTab from './restock/RestockSuggestionTab';
 
 const emptyItem = { product_id: '', quantity: 1, import_price: 0 };
-
-function createInitialItems(suggestedItems) {
-  return suggestedItems?.length ? suggestedItems : [{ ...emptyItem }];
-}
 
 function formatDateTime(value) {
   return value ? new Date(value).toLocaleString('vi-VN') : '-';
 }
 
-export default function PurchaseReceivingTab({ restockSuggestions, suggestedItems = null, preferredSupplierId = null, canManage = false, onCreated, onSuggestedItemsConsumed }) {
+export default function PurchaseReceivingTab({ preferredSupplierId = null, canManage = false, onCreated }) {
   const [orders, setOrders] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [products, setProducts] = useState([]);
   const [supplierId, setSupplierId] = useState('');
-  const [items, setItems] = useState(() => createInitialItems(suggestedItems));
-  const [note, setNote] = useState(suggestedItems?.length ? 'Tạo từ AI gợi ý nhập hàng' : '');
-  const [isFormOpen, setIsFormOpen] = useState(Boolean(suggestedItems?.length));
-  const [activeSection, setActiveSection] = useState('orders');
+  const [items, setItems] = useState([{ ...emptyItem }]);
+  const [note, setNote] = useState('');
+  const [isFormOpen, setIsFormOpen] = useState(false);
   const [detailOrder, setDetailOrder] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -45,19 +39,9 @@ export default function PurchaseReceivingTab({ restockSuggestions, suggestedItem
   }, []);
 
   useEffect(() => {
-    if (!suggestedItems?.length) return;
-    setItems(createInitialItems(suggestedItems));
-    setNote('Tạo từ AI gợi ý nhập hàng');
-    setIsFormOpen(true);
-    setActiveSection('orders');
-    onSuggestedItemsConsumed?.();
-  }, [suggestedItems, onSuggestedItemsConsumed]);
-
-  useEffect(() => {
     if (!preferredSupplierId) return;
     setSupplierId(String(preferredSupplierId));
     setIsFormOpen(true);
-    setActiveSection('orders');
   }, [preferredSupplierId]);
 
   const selectedSupplier = suppliers.find((item) => String(item.id) === String(supplierId));
@@ -65,11 +49,6 @@ export default function PurchaseReceivingTab({ restockSuggestions, suggestedItem
   const total = useMemo(
     () => items.reduce((sum, item) => sum + Number(item.quantity || 0) * Number(item.import_price || 0), 0),
     [items]
-  );
-
-  const totalAmount = useMemo(
-    () => orders.reduce((sum, order) => sum + Number(order.total_amount || 0), 0),
-    [orders]
   );
 
   const updateItem = (index, field, value) => {
@@ -195,48 +174,20 @@ export default function PurchaseReceivingTab({ restockSuggestions, suggestedItem
 
   return (
     <div className="space-y-4">
-      {suggestedItems?.length > 0 && (
-        <div className="border-l-4 border-sky-500 bg-sky-50 px-4 py-3 text-sm text-sky-900">
-          Đã thêm {suggestedItems.length} sản phẩm từ gợi ý nhập hàng. Hãy chọn nhà cung cấp, kiểm tra số lượng và bổ sung giá nhập còn thiếu trước khi tạo phiếu.
-        </div>
-      )}
-
       <section className="border border-gray-200 bg-white shadow-sm">
-        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 px-4 py-3">
-          <div className="inline-flex border border-gray-200 bg-gray-50 p-1">
-            <button type="button" onClick={() => setActiveSection('orders')} className={`inline-flex h-9 items-center gap-2 px-3 text-sm font-bold ${activeSection === 'orders' ? 'bg-white text-sky-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}>
-              <ClipboardList size={16} /> Phiếu nhập
-            </button>
-            <button type="button" onClick={() => setActiveSection('ai')} className={`inline-flex h-9 items-center gap-2 px-3 text-sm font-bold ${activeSection === 'ai' ? 'bg-white text-sky-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}>
-              <BrainCircuit size={16} /> AI gợi ý
-            </button>
+        <header className="flex flex-wrap items-start justify-between gap-3 border-b border-gray-200 px-4 py-4">
+          <div>
+            <h2 className="text-lg font-extrabold text-gray-950">Lịch sử nhập hàng</h2>
+            <p className="mt-1 text-sm text-gray-500">Theo dõi các phiếu nhập đã tạo và lượng hàng đã bổ sung vào kho.</p>
           </div>
-
-          {activeSection === 'orders' && canManage && (
+          {canManage && (
             <button type="button" onClick={() => setIsFormOpen(true)} className="inline-flex h-10 items-center gap-2 bg-[#69afd6] px-4 text-sm font-bold text-white hover:bg-[#579fc8]">
               <Plus size={17} /> Tạo phiếu nhập mới
             </button>
           )}
         </header>
 
-        {activeSection === 'orders' ? (
-          <>
-            <div className="grid gap-3 px-4 py-4 lg:grid-cols-[minmax(260px,1fr)_180px_220px]">
-              <div>
-                <h2 className="text-lg font-extrabold text-gray-950">Phiếu nhập hàng</h2>
-                <p className="mt-1 text-sm text-gray-500">Theo dõi lịch sử nhập và tạo phiếu mới khi cần bổ sung tồn kho.</p>
-              </div>
-              <div className="border border-gray-200 bg-gray-50 px-3 py-2">
-                <p className="text-xs font-bold uppercase text-gray-500">Tổng phiếu</p>
-                <p className="mt-1 text-xl font-extrabold text-gray-950">{orders.length.toLocaleString('vi-VN')}</p>
-              </div>
-              <div className="border border-gray-200 bg-gray-50 px-3 py-2">
-                <p className="text-xs font-bold uppercase text-gray-500">Giá trị đã nhập</p>
-                <p className="mt-1 text-xl font-extrabold text-gray-950">{formatCurrency(totalAmount)}</p>
-              </div>
-            </div>
-
-            <div className="overflow-x-auto border-t border-gray-100">
+        <div className="overflow-x-auto">
               <table className="w-full min-w-[940px] text-left text-sm">
                 <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
                   <tr>
@@ -265,25 +216,25 @@ export default function PurchaseReceivingTab({ restockSuggestions, suggestedItem
                   ))}
                 </tbody>
               </table>
-            </div>
-            {orders.length === 0 && <div className="px-4 py-10 text-center text-sm text-gray-500">Chưa có phiếu nhập nào.</div>}
-          </>
-        ) : canManage ? (
-          <div className="border-t border-gray-100">
-            <RestockSuggestionTab analysis={restockSuggestions} />
-          </div>
-        ) : (
-          <div className="border-t border-gray-100 px-4 py-6 text-sm text-gray-500">
-            Tài khoản hiện tại chỉ có quyền xem lịch sử phiếu nhập.
-          </div>
-        )}
+        </div>
+        {orders.length === 0 && <div className="px-4 py-10 text-center text-sm text-gray-500">Chưa có phiếu nhập nào.</div>}
       </section>
 
       <Modal isOpen={isFormOpen} onClose={closeForm} title="Tạo phiếu nhập mới" maxWidth="max-w-5xl">
         {form}
       </Modal>
 
-      <Modal isOpen={Boolean(detailOrder)} onClose={() => setDetailOrder(null)} title="Chi tiết phiếu nhập" maxWidth="max-w-5xl">
+      <Modal
+        isOpen={Boolean(detailOrder)}
+        onClose={() => setDetailOrder(null)}
+        title="Chi tiết phiếu nhập"
+        maxWidth="max-w-5xl"
+        headerActions={(
+          <button type="button" onClick={() => setDetailOrder(null)} aria-label="Đóng chi tiết phiếu nhập" title="Đóng" className="grid h-9 w-9 place-items-center text-gray-500 hover:bg-gray-100 hover:text-gray-900">
+            <X size={20} />
+          </button>
+        )}
+      >
         {detailOrder && (
           <div className="space-y-5">
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -347,6 +298,11 @@ export default function PurchaseReceivingTab({ restockSuggestions, suggestedItem
                   )}
                 </tbody>
               </table>
+            </div>
+            <div className="flex justify-end border-t border-gray-200 pt-4">
+              <button type="button" onClick={() => setDetailOrder(null)} className="h-10 border border-gray-300 bg-white px-5 text-sm font-bold text-gray-700 hover:bg-gray-50">
+                Đóng
+              </button>
             </div>
           </div>
         )}

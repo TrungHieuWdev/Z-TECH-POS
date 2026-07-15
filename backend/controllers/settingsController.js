@@ -23,8 +23,7 @@ const SETTING_KEYS = [
   'vat_enabled',
   'vat_rate',
   'inventory_low_stock_threshold',
-  'inventory_allow_out_of_stock_sale',
-  'inventory_restock_suggestions'
+  'inventory_allow_out_of_stock_sale'
 ];
 
 const DEFAULT_SETTINGS = {
@@ -64,8 +63,7 @@ const DEFAULT_SETTINGS = {
   },
   inventory: {
     lowStockThreshold: 5,
-    allowOutOfStockSale: false,
-    restockSuggestions: true
+    allowOutOfStockSale: false
   }
 };
 
@@ -134,8 +132,7 @@ function normalizeSettings(rows = []) {
     },
     inventory: {
       lowStockThreshold: clampInteger(values.inventory_low_stock_threshold, DEFAULT_SETTINGS.inventory.lowStockThreshold, 0, 999),
-      allowOutOfStockSale: boolFromSetting(values.inventory_allow_out_of_stock_sale, DEFAULT_SETTINGS.inventory.allowOutOfStockSale),
-      restockSuggestions: boolFromSetting(values.inventory_restock_suggestions, DEFAULT_SETTINGS.inventory.restockSuggestions)
+      allowOutOfStockSale: boolFromSetting(values.inventory_allow_out_of_stock_sale, DEFAULT_SETTINGS.inventory.allowOutOfStockSale)
     }
   };
 }
@@ -175,8 +172,7 @@ function flattenSettings(settings) {
     vat_enabled: payment.vat.enabled ? '1' : '0',
     vat_rate: String(Math.max(0, Math.min(100, Number(payment.vat.rate) || 0))),
     inventory_low_stock_threshold: String(clampInteger(inventory.lowStockThreshold, DEFAULT_SETTINGS.inventory.lowStockThreshold, 0, 999)),
-    inventory_allow_out_of_stock_sale: inventory.allowOutOfStockSale ? '1' : '0',
-    inventory_restock_suggestions: inventory.restockSuggestions ? '1' : '0'
+    inventory_allow_out_of_stock_sale: inventory.allowOutOfStockSale ? '1' : '0'
   };
 }
 
