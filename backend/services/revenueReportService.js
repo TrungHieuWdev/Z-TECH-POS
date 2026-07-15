@@ -2,6 +2,7 @@ import * as repository from '../repositories/revenueReportRepository.js';
 import { calculateRevenueMetrics, fillDailySeries, fillHourlySeries, money, percentChange, previousPeriod } from '../utils/revenueReportMath.js';
 import { analyzePosWithGemini } from './geminiRevenueAnalysisService.js';
 import { getRestockSnapshot } from './restockForecastService.js';
+import { saveAiReportAnalysis } from '../repositories/aiReportAnalysisRepository.js';
 
 function metricChanges(current, previous) {
   return Object.fromEntries(
@@ -193,7 +194,7 @@ export async function getProducts(filters, options) {
   };
 }
 
-export async function getAiAnalysis(filters) {
+export async function getAiAnalysis(filters, { requestedBy = null } = {}) {
   const previous = previousPeriod(filters.from, filters.to);
   const historyFrom = new Date(`${filters.to}T00:00:00Z`);
   historyFrom.setUTCDate(historyFrom.getUTCDate() - 364);
@@ -277,7 +278,7 @@ export async function getAiAnalysis(filters) {
     ]
   };
   const analysis = await analyzePosWithGemini(snapshot);
-  return {
+  const result = {
     ...analysis,
     charts: buildAiCharts({
       trend: analysisTrend,
@@ -287,6 +288,8 @@ export async function getAiAnalysis(filters) {
     }),
     snapshotScope: 'aggregated-and-anonymized'
   };
+  await saveAiReportAnalysis({ requestedBy, filters, result });
+  return result;
 }
 
 export async function getExportRows(filters) {

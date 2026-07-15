@@ -24,12 +24,25 @@ test('auth token round-trip keeps the authenticated user identity', () => {
 });
 
 test('business migration created all required tables and columns', async () => {
-  const required = ['roles','brands','suppliers','purchase_orders','purchase_order_items','payments','warranties','warranty_claims','promotions','promotion_products','promotion_categories','shift_store','system_activity_logs'];
+  const required = ['roles','brands','suppliers','purchase_orders','purchase_order_items','payments','warranties','warranty_claims','promotions','promotion_products','promotion_categories','shift_store','system_activity_logs','ai_report_analysis_results'];
   const [tables] = await connection.query('SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE()');
   const names = new Set(tables.map((row) => row.TABLE_NAME));
   assert.deepEqual(required.filter((name) => !names.has(name)), []);
   const [typeRows] = await connection.query("SHOW COLUMNS FROM inventory_logs LIKE 'type'");
   assert.match(typeRows[0].Type, /IMPORT.*SALE.*ADJUSTMENT.*RETURN.*WARRANTY.*CANCEL_ORDER/);
+});
+
+test('old AI restock log table was replaced by AI report result storage', async () => {
+  const [oldTables] = await connection.query(
+    "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='ai_restock_suggestion_logs'"
+  );
+  assert.equal(oldTables.length, 0);
+
+  const [columns] = await connection.query('SHOW COLUMNS FROM ai_report_analysis_results');
+  const names = new Set(columns.map((column) => column.Field));
+  for (const required of ['analysis_key', 'filters_json', 'result_json', 'executive_summary', 'health_score', 'provider', 'model', 'analyzed_at']) {
+    assert.ok(names.has(required), `missing ${required}`);
+  }
 });
 
 test('order sale inventory and payment changes roll back atomically', async () => {

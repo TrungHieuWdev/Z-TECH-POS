@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
+import { useLocation } from 'react-router-dom';
 import { BrainCircuit, Calculator, CircleDollarSign, Download, LoaderCircle, Minus, ReceiptText, RotateCcw, SlidersHorizontal, TrendingDown, TrendingUp } from 'lucide-react';
 import { formatCurrency } from '../utils/format';
 import { exportRevenueReport, loadRevenueDashboard, runAiRevenueAnalysis } from '../services/revenueReportService';
@@ -200,7 +201,7 @@ function FilterSelect({ label, value, onChange, children }) {
   );
 }
 
-function ReportFilterMenu({ period, draft, appliedFilters, options, onChoosePeriod, onChange, onApply, onReset }) {
+function ReportFilterMenu({ period, draft, options, onChoosePeriod, onChange, onApply, onReset }) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef(null);
 
@@ -220,12 +221,10 @@ function ReportFilterMenu({ period, draft, appliedFilters, options, onChoosePeri
   }, [isOpen]);
 
   const periods = [['today', 'Hôm nay'], ['7days', '7 ngày'], ['30days', '30 ngày'], ['60days', '60 ngày'], ['90days', '90 ngày']];
-  const extraFilterCount = [appliedFilters.categoryId, appliedFilters.paymentMethod, appliedFilters.orderStatus !== 'all'].filter(Boolean).length;
-
   return (
     <div ref={containerRef} className="relative w-fit">
-      <button type="button" aria-haspopup="dialog" aria-expanded={isOpen} onClick={() => setIsOpen((value) => !value)} className={`inline-flex h-10 shrink-0 items-center gap-2 border px-3 text-sm font-bold transition-colors ${isOpen ? 'border-cyan-700 bg-cyan-50 text-cyan-800' : 'border-slate-300 text-slate-700 hover:bg-slate-50'}`}>
-        <SlidersHorizontal size={18} /> Bộ lọc{extraFilterCount > 0 ? ` (${extraFilterCount})` : ''}
+      <button type="button" aria-label="Mở bộ lọc báo cáo" title="Bộ lọc" aria-haspopup="dialog" aria-expanded={isOpen} onClick={() => setIsOpen((value) => !value)} className={`grid h-10 w-10 shrink-0 place-items-center border transition-colors ${isOpen ? 'border-cyan-700 bg-cyan-50 text-cyan-800' : 'border-slate-300 text-slate-700 hover:bg-slate-50'}`}>
+        <SlidersHorizontal size={18} />
       </button>
 
       {isOpen && (
@@ -301,6 +300,8 @@ function AiPanel({ data, isLoading, error }) {
 }
 
 export default function Reports() {
+  const location = useLocation();
+  const chartVisitKey = location.key || 'reports';
   const startingFilters = useMemo(initialFilters, []);
   const [filters, setFilters] = useState(startingFilters);
   const [draft, setDraft] = useState(startingFilters);
@@ -434,7 +435,7 @@ export default function Reports() {
       </header>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <ReportFilterMenu period={period} draft={draft} appliedFilters={filters} options={options} onChoosePeriod={choosePeriod} onChange={({ period: nextPeriod, ...changes }) => { if (nextPeriod) setPeriod(nextPeriod); setDraft((current) => ({ ...current, ...changes })); }} onApply={applyFilters} onReset={resetFilters} />
+        <ReportFilterMenu period={period} draft={draft} options={options} onChoosePeriod={choosePeriod} onChange={({ period: nextPeriod, ...changes }) => { if (nextPeriod) setPeriod(nextPeriod); setDraft((current) => ({ ...current, ...changes })); }} onApply={applyFilters} onReset={resetFilters} />
         <button type="button" onClick={showAiAnalysis} disabled={aiLoading} className="inline-flex h-11 items-center justify-center gap-2 bg-[#74B8E0] px-5 text-sm font-extrabold text-white hover:bg-[#5FA9D4] disabled:cursor-wait disabled:opacity-60">
           {aiLoading ? <LoaderCircle className="animate-spin" size={18} /> : <BrainCircuit size={18} />}
           {aiLoading ? 'Đang phân tích kho...' : 'AI phân tích kho'}
@@ -467,12 +468,12 @@ export default function Reports() {
       <div className="grid gap-5 xl:grid-cols-2">
         {loading ? <Skeleton className="h-80" /> : (
           <Panel title="CƠ CẤU DOANH THU THEO DANH MỤC" empty={!categoryItems.length}>
-            <div className="h-64"><CategoryRevenueChart items={categoryItems} /></div>
+            <div className="h-64"><CategoryRevenueChart key={`category-${chartVisitKey}`} items={categoryItems} /></div>
           </Panel>
         )}
         {loading ? <Skeleton className="h-80" /> : (
           <Panel title={`BIẾN ĐỘNG DOANH THU THEO ${trendUnit}`} empty={!hasTrendData}>
-            <div className="h-64"><DailyRevenueChart trend={dashboard?.trend} /></div>
+            <div className="h-64"><DailyRevenueChart key={`revenue-${chartVisitKey}`} trend={dashboard?.trend} /></div>
           </Panel>
         )}
       </div>
@@ -480,17 +481,17 @@ export default function Reports() {
       <div className="grid gap-5 xl:grid-cols-3">
         {loading ? <Skeleton className="h-80" /> : (
           <Panel title={`LỢI NHUẬN GỘP THEO ${trendUnit}`} empty={!hasTrendData}>
-            <div className="h-64"><GrossProfitChart trend={dashboard?.trend} /></div>
+            <div className="h-64"><GrossProfitChart key={`profit-${chartVisitKey}`} trend={dashboard?.trend} /></div>
           </Panel>
         )}
         {loading ? <Skeleton className="h-80" /> : (
           <Panel title="TOP 5 SẢN PHẨM THEO DOANH THU" empty={!dashboard?.topProducts?.items?.length}>
-            <div className="h-64"><TopProductsChart items={dashboard?.topProducts?.items} /></div>
+            <div className="h-64"><TopProductsChart key={`products-${chartVisitKey}`} items={dashboard?.topProducts?.items} /></div>
           </Panel>
         )}
         {loading ? <Skeleton className="h-80" /> : (
           <Panel title="CƠ CẤU PHƯƠNG THỨC THANH TOÁN" empty={!dashboard?.payments?.items?.length}>
-            <div className="h-64"><PaymentChart items={dashboard?.payments?.items} labels={paymentLabels} /></div>
+            <div className="h-64"><PaymentChart key={`payments-${chartVisitKey}`} items={dashboard?.payments?.items} labels={paymentLabels} /></div>
           </Panel>
         )}
       </div>

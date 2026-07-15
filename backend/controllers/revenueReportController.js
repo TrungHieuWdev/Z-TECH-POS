@@ -17,7 +17,14 @@ export const getPaymentMethods = handler(service.getPaymentMethods);
 export const getHourly = handler(service.getHourly);
 export const getStockAlerts = handler(service.getStockAlerts);
 export const getProducts = handler(service.getProducts);
-export const getAiAnalysis = handler(service.getAiAnalysis);
+export async function getAiAnalysis(req, res) {
+  try {
+    const filters = validateRevenueReportQuery(req.query);
+    res.json(await service.getAiAnalysis(filters, { requestedBy: req.user?.id }));
+  } catch (error) {
+    res.status(error.status || 500).json({ message: error.status ? error.message : 'KhÃ´ng thá»ƒ táº£i bÃ¡o cÃ¡o doanh thu', ...(process.env.NODE_ENV === 'development' ? { error: error.message } : {}) });
+  }
+}
 
 function csvCell(value) {
   return `"${String(value ?? '').replace(/"/g, '""')}"`;

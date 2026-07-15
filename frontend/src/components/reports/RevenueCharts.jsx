@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import {
   BarElement, CategoryScale, Chart as ChartJS, Filler, Legend, LinearScale,
   LineElement, PointElement, Title, Tooltip, ArcElement
@@ -144,6 +145,63 @@ const baseOptions = {
   }
 };
 
+function withMotion(animation) {
+  if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return false;
+  return animation;
+}
+
+function AnimatedDoughnut({ data, options }) {
+  const chartRef = useRef(null);
+
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart || chart.options.animation === false) return undefined;
+    chart.stop();
+    chart.reset();
+    const frame = window.requestAnimationFrame(() => chart.update());
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
+  return <Doughnut ref={chartRef} data={data} options={options} />;
+}
+
+function growFromZero(axis, entranceDelay, itemDelay = 90) {
+  return withMotion({
+    [axis]: {
+      type: 'number',
+      duration: 900,
+      easing: 'easeOutQuart',
+      from: (context) => context.chart.scales[axis].getPixelForValue(0),
+      delay: (context) => entranceDelay + context.dataIndex * itemDelay
+    }
+  });
+}
+
+function drawLineProgressively(pointCount, entranceDelay) {
+  const pointDelay = Math.max(45, Math.min(110, Math.round(1050 / Math.max(1, pointCount))));
+  const previousPointY = (context) => {
+    if (context.index === 0) return context.chart.scales.y.getPixelForValue(0);
+    const previousPoint = context.chart.getDatasetMeta(context.datasetIndex).data[context.index - 1];
+    return previousPoint?.getProps(['y'], true).y ?? context.chart.scales.y.getPixelForValue(0);
+  };
+  return withMotion({
+    x: {
+      type: 'number',
+      duration: pointDelay,
+      easing: 'linear',
+      from: Number.NaN,
+      delay: (context) => entranceDelay + context.index * pointDelay
+    },
+    y: {
+      type: 'number',
+      duration: pointDelay * 1.8,
+      easing: 'easeOutCubic',
+      from: previousPointY,
+      delay: (context) => entranceDelay + context.index * pointDelay
+    }
+  });
+}
+
 function compactDateLabel(label) {
   const parts = String(label || '').split('-');
   if (parts.length === 3) return `${parts[2]}/${parts[1]}`;
@@ -169,6 +227,8 @@ export function DailyRevenueChart({ trend }) {
   };
   return <Bar data={data} options={{
     ...baseOptions,
+    animation: withMotion({ duration: 950, easing: 'easeOutQuart', delay: 180 }),
+    animations: growFromZero('y', 180, 75),
     plugins: { ...baseOptions.plugins, legend: { display: false } }
   }} />;
 }
@@ -197,6 +257,8 @@ export function GrossProfitChart({ trend }) {
   };
   return <Line data={data} options={{
     ...baseOptions,
+    animation: withMotion({ duration: 1050, easing: 'easeOutCubic', delay: 300 }),
+    animations: drawLineProgressively(labels.length, 300),
     plugins: { ...baseOptions.plugins, legend: { display: false } }
   }} />;
 }
@@ -221,10 +283,16 @@ export function CategoryRevenueChart({ items = [] }) {
   return (
     <div className="grid h-full grid-cols-[minmax(0,1.08fr)_minmax(145px,0.72fr)] items-center gap-2">
       <div className="h-full min-h-0 min-w-0">
-        <Doughnut data={data} options={{
+        <AnimatedDoughnut data={data} options={{
           responsive: true,
           maintainAspectRatio: false,
-          animation: { duration: 450, easing: 'easeOutQuart' },
+          animation: withMotion({
+            duration: 1100,
+            easing: 'easeOutQuart',
+            delay: (context) => context.type === 'data' ? 80 + context.dataIndex * 70 : 80,
+            animateRotate: true,
+            animateScale: false
+          }),
           cutout: '64%',
           radius: '88%',
           layout: { padding: 4 },
@@ -269,6 +337,8 @@ export function TopProductsChart({ items = [] }) {
   };
   return <Bar data={data} options={{
     ...baseOptions,
+    animation: withMotion({ duration: 950, easing: 'easeOutQuart', delay: 440 }),
+    animations: growFromZero('x', 440, 110),
     indexAxis: 'y',
     interaction: { mode: 'nearest', axis: 'y', intersect: false },
     plugins: {
@@ -347,7 +417,15 @@ export function PaymentChart({ items = [], labels = {} }) {
     }]
   };
   const options = {
-    responsive: true, maintainAspectRatio: false, animation: { duration: 450, easing: 'easeOutQuart' },
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: withMotion({
+      duration: 1200,
+      easing: 'easeOutExpo',
+      delay: (context) => context.type === 'data' ? 560 + context.dataIndex * 130 : 560,
+      animateRotate: true,
+      animateScale: false
+    }),
     cutout: '64%', radius: '76%', layout: { padding: { top: 20, right: 34, bottom: 20, left: 34 } },
     plugins: {
       legend: { display: false },
@@ -357,7 +435,7 @@ export function PaymentChart({ items = [], labels = {} }) {
       } } }
     }
   };
-  return <Doughnut data={data} options={options} />;
+  return <AnimatedDoughnut data={data} options={options} />;
 }
 
 export function HourlyChart({ items = [], peakHour }) {
@@ -447,7 +525,7 @@ export function AiReportChart({ spec, revealIndex = 0 }) {
         outsideLabels: isCategoryRevenue
       }))
     };
-    return <Doughnut data={doughnutData} options={{
+    return <AnimatedDoughnut data={doughnutData} options={{
       responsive: true,
       maintainAspectRatio: false,
       animation: revealAnimation && {
@@ -457,7 +535,7 @@ export function AiReportChart({ spec, revealIndex = 0 }) {
           ? entranceDelay + context.dataIndex * 85
           : entranceDelay,
         animateRotate: true,
-        animateScale: true
+        animateScale: false
       },
       cutout: isCategoryRevenue ? '58%' : '60%',
       radius: isCategoryRevenue ? '72%' : '90%',

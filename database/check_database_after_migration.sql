@@ -12,6 +12,7 @@ DESCRIBE warranties;
 DESCRIBE warranty_claims;
 DESCRIBE roles;
 DESCRIBE brands;
+DESCRIBE ai_report_analysis_results;
 
 SELECT type, COUNT(*) AS total_logs
 FROM inventory_logs
