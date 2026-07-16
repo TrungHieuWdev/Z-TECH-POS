@@ -2,7 +2,12 @@ import * as repository from '../repositories/revenueReportRepository.js';
 import { calculateRevenueMetrics, fillDailySeries, fillHourlySeries, money, percentChange, previousPeriod } from '../utils/revenueReportMath.js';
 import { analyzePosWithGemini } from './geminiRevenueAnalysisService.js';
 import { getRestockSnapshot } from './restockForecastService.js';
-import { saveAiReportAnalysis } from '../repositories/aiReportAnalysisRepository.js';
+import {
+  deleteAiReportAnalysisById,
+  getAiReportAnalysisById,
+  listAiReportAnalyses,
+  saveAiReportAnalysis
+} from '../repositories/aiReportAnalysisRepository.js';
 
 function metricChanges(current, previous) {
   return Object.fromEntries(
@@ -290,6 +295,55 @@ export async function getAiAnalysis(filters, { requestedBy = null } = {}) {
   };
   await saveAiReportAnalysis({ requestedBy, filters, result });
   return result;
+}
+
+export async function getAiAnalysisHistory({ page, limit, search }) {
+  const history = await listAiReportAnalyses({ page, limit, search });
+  return {
+    items: history.items,
+    pagination: {
+      page,
+      limit,
+      total: history.total,
+      totalPages: Math.max(1, Math.ceil(history.total / limit))
+    }
+  };
+}
+
+export async function getAiAnalysisHistoryItem(id) {
+  const item = await getAiReportAnalysisById(id);
+  if (!item) {
+    throw Object.assign(new Error('Không tìm thấy lịch sử phân tích AI'), { status: 404 });
+  }
+  return item;
+}
+
+export async function deleteAiAnalysisHistoryItem(id) {
+  const affectedRows = await deleteAiReportAnalysisById(id);
+  if (!affectedRows) {
+    throw Object.assign(new Error('Không tìm thấy lịch sử phân tích AI'), { status: 404 });
+  }
+  return { message: 'Đã xóa lịch sử phân tích AI' };
+}
+
+export async function getExcelExportData(filters) {
+  const [summary, trend, categories, payments, products, stockAlerts] = await Promise.all([
+    getSummary(filters),
+    getTrend(filters),
+    getCategories(filters),
+    getPaymentMethods(filters),
+    getProducts(filters, { exportAll: true }),
+    getRestockSnapshot({ categoryId: filters.categoryId, targetDays: 30, limit: 100 })
+  ]);
+
+  return {
+    summary,
+    trend,
+    categories: categories.items,
+    payments: payments.items,
+    products: products.items,
+    stockAlerts: stockAlerts.suggestions
+  };
 }
 
 export async function getExportRows(filters) {

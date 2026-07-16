@@ -14,13 +14,25 @@ import {
   Users
 } from 'lucide-react';
 import api from '../api/axios';
+import KpiCard from '../components/KpiCard';
 import Modal from '../components/Modal';
 import { getUser, isFullAccessRole } from '../utils/auth';
 import { readLocalJson } from '../utils/storage';
 import { formatCurrency } from '../utils/format';
 
 const STORAGE_KEY = 'ztech-shifts';
-const TODAY = new Date().toISOString().slice(0, 10);
+const VIETNAM_TIME_ZONE = 'Asia/Ho_Chi_Minh';
+
+function getVietnamDate() {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: VIETNAM_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(new Date());
+}
+
+const TODAY = getVietnamDate();
 
 const periodOptions = [
   { value: 'today', label: 'Hôm nay' },
@@ -45,6 +57,23 @@ const timeOptions24h = Array.from({ length: 48 }, (_, index) => {
   const minutes = index % 2 === 0 ? '00' : '30';
   return `${hours}:${minutes}`;
 });
+
+function getVietnamDayPeriod(hour) {
+  if (hour >= 5 && hour < 12) return 'Sáng';
+  if (hour >= 12 && hour < 13) return 'Trưa';
+  if (hour >= 13 && hour < 18) return 'Chiều';
+  if (hour >= 18 && hour < 23) return 'Tối';
+  return 'Đêm';
+}
+
+function formatVietnamShiftTime(value) {
+  const [hourText = '0', minuteText = '00'] = String(value || '').split(':');
+  const hour = Number(hourText);
+  if (!Number.isInteger(hour) || hour < 0 || hour > 23) return value || '';
+  const suffix = hour < 12 ? 'AM' : 'PM';
+  const hour12 = hour % 12 || 12;
+  return `${String(hour12).padStart(2, '0')}:${minuteText} ${suffix} (${getVietnamDayPeriod(hour)})`;
+}
 
 const initialShifts = [
   {
@@ -97,7 +126,7 @@ const initialShifts = [
 // unavailable. This must be declared before emptyForm is initialized.
 const employeeOptions = Array.from(
   new Set(initialShifts.map((shift) => shift.employee).filter(Boolean))
-);
+).map((name) => ({ name, code: '' }));
 
 function sanitizeShifts(value, fallback = []) {
   if (!Array.isArray(value)) return fallback;
@@ -106,7 +135,8 @@ function sanitizeShifts(value, fallback = []) {
 
 const emptyForm = {
   name: shiftNameOptions[0],
-  employee: employeeOptions[0],
+  employee: employeeOptions[0]?.name || '',
+  employeeCode: employeeOptions[0]?.code || '',
   startTime: '08:00',
   endTime: '12:00',
   workDate: TODAY,
@@ -169,7 +199,14 @@ function formatDate(value) {
 }
 
 function getCurrentTime() {
-  return new Date().toTimeString().slice(0, 5);
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: VIETNAM_TIME_ZONE,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23'
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.hour}:${values.minute}`;
 }
 
 function getDateRange(period) {
@@ -178,11 +215,25 @@ function getDateRange(period) {
   }
 
   if (period === 'week') {
-    return { from: '2026-06-08', to: '2026-06-14' };
+    const current = new Date(`${TODAY}T00:00:00Z`);
+    const day = current.getUTCDay() || 7;
+    const monday = new Date(current);
+    monday.setUTCDate(current.getUTCDate() - day + 1);
+    const sunday = new Date(monday);
+    sunday.setUTCDate(monday.getUTCDate() + 6);
+    return {
+      from: monday.toISOString().slice(0, 10),
+      to: sunday.toISOString().slice(0, 10)
+    };
   }
 
   if (period === 'month') {
-    return { from: '2026-06-01', to: '2026-06-30' };
+    const [year, month] = TODAY.split('-').map(Number);
+    const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    return {
+      from: `${year}-${String(month).padStart(2, '0')}-01`,
+      to: `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+    };
   }
 
   return null;
@@ -212,6 +263,7 @@ export default function Shifts({ embedded = false }) {
   const user = getUser();
   const hasFullAccess = isFullAccessRole(user?.role);
   const currentEmployeeName = user?.name || 'Nhân viên';
+  const currentEmployeeCode = String(user?.employeeCode || '').trim().toUpperCase();
   const [shifts, setShifts] = useState(() => {
     return sanitizeShifts(readLocalJson(STORAGE_KEY, initialShifts, Array.isArray), initialShifts);
   });
@@ -253,15 +305,32 @@ export default function Shifts({ embedded = false }) {
       .get('/employees')
       .then((response) => {
         const employees = Array.isArray(response.data) ? response.data : [];
-        const activeNames = employees
+        const activeEmployees = employees
           .filter((employee) => employee.status === 'active')
-          .map((employee) => employee.name)
-          .filter(Boolean);
-        const names = activeNames.length
-          ? activeNames
-          : employees.map((employee) => employee.name).filter(Boolean);
+          .filter((employee) => employee.name)
+          .map((employee) => ({ name: employee.name, code: employee.code || employee.employeeCode || '' }));
+        const availableEmployees = activeEmployees.length
+          ? activeEmployees
+          : employees
+            .filter((employee) => employee.name)
+            .map((employee) => ({ name: employee.name, code: employee.code || employee.employeeCode || '' }));
+        const uniqueEmployees = Array.from(
+          new Map(availableEmployees.map((employee) => [employee.name, employee])).values()
+        );
 
-        setEmployeeChoices(names.length ? Array.from(new Set(names)) : employeeOptions);
+        const nextChoices = uniqueEmployees.length ? uniqueEmployees : employeeOptions;
+        setEmployeeChoices(nextChoices);
+        setShifts((current) => {
+          let changed = false;
+          const nextShifts = current.map((shift) => {
+            if (shift.employeeCode) return shift;
+            const employeeCode = nextChoices.find((employee) => employee.name === shift.employee)?.code;
+            if (!employeeCode) return shift;
+            changed = true;
+            return { ...shift, employeeCode };
+          });
+          return changed ? nextShifts : current;
+        });
       })
       .catch(() => {
         setEmployeeChoices(employeeOptions);
@@ -269,31 +338,58 @@ export default function Shifts({ embedded = false }) {
   }, [hasFullAccess]);
 
   useEffect(() => {
-    if (!isFormOpen || !employeeChoices.length || employeeChoices.includes(form.employee)) {
+    if (!isFormOpen || !employeeChoices.length || employeeChoices.some((employee) => employee.name === form.employee)) {
       return;
     }
 
-    setForm((current) => ({ ...current, employee: employeeChoices[0] }));
+    setForm((current) => ({
+      ...current,
+      employee: employeeChoices[0].name,
+      employeeCode: employeeChoices[0].code
+    }));
   }, [employeeChoices, form.employee, isFormOpen]);
 
-  const stats = useMemo(() => getShiftStats(shifts), [shifts]);
+  useEffect(() => {
+    if (!shiftStoreReady || !employeeChoices.length) return;
+    setShifts((current) => {
+      let changed = false;
+      const nextShifts = current.map((shift) => {
+        if (shift.employeeCode) return shift;
+        const employeeCode = employeeChoices.find((employee) => employee.name === shift.employee)?.code;
+        if (!employeeCode) return shift;
+        changed = true;
+        return { ...shift, employeeCode };
+      });
+      return changed ? nextShifts : current;
+    });
+  }, [employeeChoices, shiftStoreReady]);
+
+  const visibleShifts = useMemo(() => {
+    if (hasFullAccess) return shifts;
+    return shifts.filter((shift) => {
+      const shiftEmployeeCode = String(shift.employeeCode || '').trim().toUpperCase();
+      if (currentEmployeeCode && shiftEmployeeCode) return currentEmployeeCode === shiftEmployeeCode;
+      return shift.employee === currentEmployeeName;
+    });
+  }, [shifts, hasFullAccess, currentEmployeeCode, currentEmployeeName]);
+
+  const stats = useMemo(() => getShiftStats(visibleShifts), [visibleShifts]);
 
   const filteredShifts = useMemo(() => {
     const keyword = search.trim().toLowerCase();
     const dateRange = getDateRange(period);
 
-    return shifts.filter((shift) => {
+    return visibleShifts.filter((shift) => {
       if (!shift || typeof shift !== 'object') return false;
-      const matchesEmployee = hasFullAccess || shift.employee === currentEmployeeName;
       const matchesPeriod = isDateInRange(shift.workDate, dateRange);
       const matchesStatus = statusFilter === 'all' || shift.status === statusFilter;
-      const matchesKeyword = [shift.code, shift.name, shift.employee, shift.note]
+      const matchesKeyword = [shift.code, shift.name, shift.employee, shift.employeeCode, shift.note]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(keyword));
 
-      return matchesEmployee && matchesPeriod && matchesStatus && matchesKeyword;
+      return matchesPeriod && matchesStatus && matchesKeyword;
     });
-  }, [shifts, search, period, statusFilter, hasFullAccess, currentEmployeeName]);
+  }, [visibleShifts, search, period, statusFilter]);
 
   const openCreate = () => {
     if (!hasFullAccess) {
@@ -302,7 +398,11 @@ export default function Shifts({ embedded = false }) {
     }
 
     setEditingShift(null);
-    setForm({ ...emptyForm, employee: employeeChoices[0] || emptyForm.employee });
+    setForm({
+      ...emptyForm,
+      employee: employeeChoices[0]?.name || emptyForm.employee,
+      employeeCode: employeeChoices[0]?.code || ''
+    });
     setIsFormOpen(true);
   };
 
@@ -316,6 +416,7 @@ export default function Shifts({ embedded = false }) {
     setForm({
       name: shift.name,
       employee: shift.employee,
+      employeeCode: shift.employeeCode || employeeChoices.find((employee) => employee.name === shift.employee)?.code || '',
       startTime: shift.startTime,
       endTime: shift.endTime,
       workDate: shift.workDate,
@@ -407,53 +508,26 @@ export default function Shifts({ embedded = false }) {
     <div className="space-y-6">
       {!embedded && <section>
         <div>
-          <h1 className="text-2xl font-extrabold text-gray-950">Quản lý ca làm</h1>
+          <h1 className="text-2xl font-extrabold text-gray-950">{hasFullAccess ? 'Quản lý ca làm' : 'Ca làm của tôi'}</h1>
           <p className="mt-1 text-sm font-medium text-gray-500">
-            Sắp xếp lịch làm việc, phân công nhân viên và theo dõi trạng thái từng ca bán hàng.
+            {hasFullAccess
+              ? 'Sắp xếp lịch làm việc, phân công nhân viên và theo dõi trạng thái từng ca bán hàng.'
+              : 'Xem lịch được phân công, trạng thái và số liệu đối soát các ca làm của bạn.'}
           </p>
         </div>
       </section>}
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="flex items-center gap-4 rounded-lg border border-[#d7eef3] bg-white p-5 shadow-sm">
-          <div className="grid h-12 w-12 place-items-center rounded-lg bg-[#c0edf7] text-[#0f3b46]">
-            <CalendarDays size={24} />
-          </div>
-          <div>
-            <p className="text-sm text-gray-500">Tổng ca hôm nay</p>
-            <p className="text-3xl font-bold text-gray-950">{stats.todayTotal}</p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-4 rounded-lg border border-[#d7eef3] bg-white p-5 shadow-sm">
-          <div className="grid h-12 w-12 place-items-center rounded-lg bg-emerald-50 text-emerald-600">
-            <PlayCircle size={24} />
-          </div>
-          <div>
-            <p className="text-sm text-gray-500">Đang làm</p>
-            <p className="text-3xl font-bold text-gray-950">{stats.active}</p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-4 rounded-lg border border-[#d7eef3] bg-white p-5 shadow-sm">
-          <div className="grid h-12 w-12 place-items-center rounded-lg bg-[#f4fcfe] text-[#0f3b46]">
-            <CheckCircle2 size={24} />
-          </div>
-          <div>
-            <p className="text-sm text-gray-500">Đã kết thúc</p>
-            <p className="text-3xl font-bold text-gray-950">{stats.completed}</p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-4 rounded-lg border border-[#d7eef3] bg-white p-5 shadow-sm">
-          <div className="grid h-12 w-12 place-items-center rounded-lg bg-blue-50 text-blue-600">
-            <BadgeCheck size={24} />
-          </div>
-          <div>
-            <p className="text-sm text-gray-500">Nhân viên trong ca</p>
-            <p className="text-3xl font-bold text-gray-950">{stats.employees}</p>
-          </div>
-        </div>
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <KpiCard icon={CalendarDays} label={hasFullAccess ? 'Tổng ca hôm nay' : 'Ca của tôi hôm nay'} value={stats.todayTotal.toLocaleString('vi-VN')} detail="Ca làm được xếp trong ngày" toneClassName="bg-sky-50 text-sky-700" />
+        <KpiCard icon={PlayCircle} label="Đang làm" value={stats.active.toLocaleString('vi-VN')} detail="Ca đang hoạt động" toneClassName="bg-emerald-50 text-emerald-700" />
+        <KpiCard icon={CheckCircle2} label="Đã kết thúc" value={stats.completed.toLocaleString('vi-VN')} detail="Ca đã chốt hoàn tất" toneClassName="bg-cyan-50 text-cyan-700" />
+        <KpiCard
+          icon={BadgeCheck}
+          label={hasFullAccess ? 'Nhân viên trong ca' : 'Tổng ca được phân công'}
+          value={(hasFullAccess ? stats.employees : visibleShifts.length).toLocaleString('vi-VN')}
+          detail={hasFullAccess ? 'Nhân sự được phân công' : 'Tất cả ca của riêng bạn'}
+          toneClassName="bg-violet-50 text-violet-700"
+        />
       </section>
 
       <section className="flex flex-col justify-between gap-4 rounded-lg border border-[#d7eef3] bg-white p-4 shadow-sm xl:flex-row xl:items-center">
@@ -464,7 +538,7 @@ export default function Shifts({ embedded = false }) {
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               className="h-11 w-full rounded-lg border border-[#d7eef3] bg-white pl-10 pr-4 outline-none focus:border-[#7ed5e6] focus:ring-2 focus:ring-[#c0edf7]"
-              placeholder="Tìm kiếm ca làm hoặc nhân viên..."
+              placeholder={hasFullAccess ? 'Tìm kiếm ca làm hoặc nhân viên...' : 'Tìm kiếm ca làm của bạn...'}
             />
           </div>
           <select
@@ -535,13 +609,16 @@ export default function Shifts({ embedded = false }) {
                         <div className="grid h-8 w-8 place-items-center rounded-full bg-[#c0edf7] text-xs font-bold text-[#0f3b46]">
                           {getInitials(shift.employee)}
                         </div>
-                        <span className="font-medium text-gray-800">{shift.employee}</span>
+                        <div className="min-w-0">
+                          <p className="font-medium text-gray-800">{shift.employee}</p>
+                          {shift.employeeCode && <p className="mt-0.5 text-xs font-semibold text-gray-500">Mã NV: {shift.employeeCode}</p>}
+                        </div>
                       </div>
                     </td>
                     <td className="px-5 py-4 text-gray-700">
                       <div className="flex items-center gap-2">
                         <Clock3 size={15} className="text-gray-400" />
-                        <span>{shift.startTime} - {shift.endTime}</span>
+                        <span>{formatVietnamShiftTime(shift.startTime)} – {formatVietnamShiftTime(shift.endTime)}</span>
                       </div>
                     </td>
                     <td className="px-5 py-4 text-gray-700">{formatDate(shift.workDate)}</td>
@@ -639,15 +716,23 @@ export default function Shifts({ embedded = false }) {
             <span className="mb-1 block text-sm font-medium text-gray-700">Nhân viên phụ trách</span>
             <select
               value={form.employee}
-              onChange={(event) => setForm({ ...form, employee: event.target.value })}
+              onChange={(event) => {
+                const selectedEmployee = employeeChoices.find((employee) => employee.name === event.target.value);
+                setForm({
+                  ...form,
+                  employee: event.target.value,
+                  employeeCode: selectedEmployee?.code || ''
+                });
+              }}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-[#7ed5e6] focus:ring-2 focus:ring-[#c0edf7]"
             >
               {employeeChoices.map((employee) => (
-                <option key={employee} value={employee}>
-                  {employee}
+                <option key={`${employee.code}-${employee.name}`} value={employee.name}>
+                  {employee.code ? `${employee.code} – ${employee.name}` : employee.name}
                 </option>
               ))}
             </select>
+            {form.employeeCode && <p className="mt-1 text-xs font-semibold text-gray-500">Mã nhân viên: {form.employeeCode}</p>}
           </label>
           <label>
             <span className="mb-1 block text-sm font-medium text-gray-700">Giờ bắt đầu</span>
@@ -659,10 +744,11 @@ export default function Shifts({ embedded = false }) {
             >
               {timeOptions24h.map((time) => (
                 <option key={time} value={time}>
-                  {time}
+                  {formatVietnamShiftTime(time)}
                 </option>
               ))}
             </select>
+            <p className="mt-1 text-xs text-gray-500">Múi giờ Việt Nam (UTC+7)</p>
           </label>
           <label>
             <span className="mb-1 block text-sm font-medium text-gray-700">Giờ kết thúc</span>
@@ -674,10 +760,11 @@ export default function Shifts({ embedded = false }) {
             >
               {timeOptions24h.map((time) => (
                 <option key={time} value={time}>
-                  {time}
+                  {formatVietnamShiftTime(time)}
                 </option>
               ))}
             </select>
+            <p className="mt-1 text-xs text-gray-500">Múi giờ Việt Nam (UTC+7)</p>
           </label>
           <label>
             <span className="mb-1 block text-sm font-medium text-gray-700">Ngày làm</span>
@@ -729,10 +816,12 @@ export default function Shifts({ embedded = false }) {
               <div>
                 <span className="text-gray-500">Nhân viên phụ trách</span>
                 <p className="font-semibold text-gray-950">{viewingShift.employee}</p>
+                {viewingShift.employeeCode && <p className="text-xs font-semibold text-gray-500">Mã NV: {viewingShift.employeeCode}</p>}
               </div>
               <div>
                 <span className="text-gray-500">Thời gian</span>
-                <p className="font-semibold text-gray-950">{viewingShift.startTime} - {viewingShift.endTime}</p>
+                <p className="font-semibold text-gray-950">{formatVietnamShiftTime(viewingShift.startTime)} – {formatVietnamShiftTime(viewingShift.endTime)}</p>
+                <p className="text-xs text-gray-500">Múi giờ Việt Nam (UTC+7)</p>
               </div>
               <div>
                 <span className="text-gray-500">Ngày làm</span>

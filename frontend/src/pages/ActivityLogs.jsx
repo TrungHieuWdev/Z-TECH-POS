@@ -11,6 +11,8 @@ import {
   UserRound
 } from 'lucide-react';
 import api from '../api/axios';
+import KpiCard from '../components/KpiCard';
+import TablePagination from '../components/TablePagination';
 import { formatCurrency, formatDate, formatTime } from '../utils/format';
 
 const PAGE_SIZE = 5;
@@ -119,9 +121,6 @@ export default function ActivityLogs() {
     return logs.slice(startIndex, startIndex + PAGE_SIZE);
   }, [logs, safePage]);
 
-  const goToPreviousPage = () => setCurrentPage((page) => Math.max(1, page - 1));
-  const goToNextPage = () => setCurrentPage((page) => Math.min(totalPages, page + 1));
-
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -142,11 +141,11 @@ export default function ActivityLogs() {
         </button>
       </div>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard icon={Clock3} label="Tổng hoạt động" value={summary.total} />
-        <SummaryCard icon={ShoppingCart} label="Bán hàng" value={summary.orders} />
-        <SummaryCard icon={Boxes} label="Kho hàng" value={summary.inventory} />
-        <SummaryCard icon={CalendarDays} label="Hôm nay" value={summary.today} />
+      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <KpiCard icon={Clock3} label="Tổng hoạt động" value={summary.total.toLocaleString('vi-VN')} detail="Tất cả hoạt động đã ghi nhận" toneClassName="bg-sky-50 text-sky-700" />
+        <KpiCard icon={ShoppingCart} label="Bán hàng" value={summary.orders.toLocaleString('vi-VN')} detail="Thao tác liên quan hóa đơn" toneClassName="bg-emerald-50 text-emerald-700" />
+        <KpiCard icon={Boxes} label="Kho hàng" value={summary.inventory.toLocaleString('vi-VN')} detail="Nhập, xuất và điều chỉnh kho" toneClassName="bg-amber-50 text-amber-700" />
+        <KpiCard icon={CalendarDays} label="Hôm nay" value={summary.today.toLocaleString('vi-VN')} detail="Hoạt động phát sinh hôm nay" toneClassName="bg-violet-50 text-violet-700" />
       </section>
 
       <section className="rounded-lg border border-[#d8eef4] bg-white p-4 shadow-sm">
@@ -204,7 +203,7 @@ export default function ActivityLogs() {
           </div>
         </div>
 
-        <div className="divide-y divide-[#edf7f9]">
+        <div className="min-h-[430px] divide-y divide-[#edf7f9]">
           {isLoading ? (
             <div className="px-5 py-10 text-center text-sm font-semibold text-[#667085]">Đang tải nhật ký...</div>
           ) : logs.length === 0 ? (
@@ -216,48 +215,8 @@ export default function ActivityLogs() {
           )}
         </div>
 
-        {!isLoading && logs.length > 0 && (
-          <div className="flex items-center justify-center gap-4 border-t border-[#edf7f9] px-5 py-4">
-            <button
-              type="button"
-              onClick={goToPreviousPage}
-              disabled={safePage === 1}
-              className="grid h-9 w-9 place-items-center rounded-lg border border-[#d8eef4] bg-white text-lg font-extrabold text-[#0f3b46] transition hover:bg-[#f8fdfe] disabled:cursor-not-allowed disabled:opacity-40"
-              aria-label="Trang trước"
-            >
-              {'<'}
-            </button>
-            <span className="min-w-20 rounded-lg bg-[#e8f9fc] px-4 py-2 text-center text-sm font-extrabold text-[#0f3b46]">
-              {safePage}/{totalPages}
-            </span>
-            <button
-              type="button"
-              onClick={goToNextPage}
-              disabled={safePage === totalPages}
-              className="grid h-9 w-9 place-items-center rounded-lg border border-[#d8eef4] bg-white text-lg font-extrabold text-[#0f3b46] transition hover:bg-[#f8fdfe] disabled:cursor-not-allowed disabled:opacity-40"
-              aria-label="Trang sau"
-            >
-              {'>'}
-            </button>
-          </div>
-        )}
+        {!isLoading && <TablePagination currentPage={safePage} totalItems={logs.length} pageSize={PAGE_SIZE} onPageChange={setCurrentPage} itemLabel="hoạt động" ariaLabel="Phân trang nhật ký hoạt động" />}
       </section>
-    </div>
-  );
-}
-
-function SummaryCard({ icon: Icon, label, value }) {
-  return (
-    <div className="rounded-lg border border-[#d8eef4] bg-white p-5 shadow-sm">
-      <div className="flex items-center gap-3">
-        <div className="grid h-11 w-11 place-items-center rounded-lg bg-[#c0edf7] text-[#0f3b46]">
-          <Icon size={21} />
-        </div>
-        <div>
-          <p className="text-sm font-semibold text-[#667085]">{label}</p>
-          <p className="mt-1 text-2xl font-extrabold text-[#111827]">{Number(value || 0).toLocaleString('vi-VN')}</p>
-        </div>
-      </div>
     </div>
   );
 }
@@ -267,7 +226,7 @@ function ActivityLogRow({ log }) {
   const Icon = tone.icon;
 
   return (
-    <article className="grid gap-4 px-5 py-4 transition hover:bg-[#f8fdfe] lg:grid-cols-[minmax(0,1fr)_190px_170px] lg:items-center">
+    <article className="grid min-h-[86px] gap-4 px-5 py-4 transition hover:bg-[#f8fdfe] lg:grid-cols-[minmax(0,1fr)_190px_170px] lg:items-center">
       <div className="flex min-w-0 gap-4">
         <div className={`grid h-11 w-11 shrink-0 place-items-center rounded-lg ${tone.iconClass}`}>
           <Icon size={20} />

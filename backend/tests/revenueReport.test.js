@@ -1,7 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { aggregateOrderFixtures, fillDailySeries, fillHourlySeries, groupTransactionsByHour, percentChange, previousPeriod } from '../utils/revenueReportMath.js';
-import { validateRevenueReportQuery } from '../validation/revenueReportValidation.js';
+import {
+  validateAiReportHistoryId,
+  validateAiReportHistoryQuery,
+  validateRevenueReportQuery
+} from '../validation/revenueReportValidation.js';
 import { requireFullAccess } from '../middleware/auth.js';
 
 test('loại hóa đơn cancelled và tính doanh thu/lợi nhuận đúng', () => {
@@ -52,6 +56,17 @@ test('biểu đồ trong ngày tăng khi có dữ liệu và trở về 0 ở gi
 test('validation từ chối query không hợp lệ', () => {
   assert.throws(() => validateRevenueReportQuery({ from: '2026-02-30', to: '2026-03-01' }), /không hợp lệ/);
   assert.throws(() => validateRevenueReportQuery({ from: '2026-01-01', to: '2026-01-02', sortBy: 'DROP TABLE' }), /sắp xếp/);
+});
+
+test('validation lịch sử AI chuẩn hóa phân trang và mã kết quả', () => {
+  assert.deepEqual(validateAiReportHistoryQuery({ page: '2', limit: '5', search: ' Gemini ' }), {
+    page: 2,
+    limit: 5,
+    search: 'Gemini'
+  });
+  assert.equal(validateAiReportHistoryId('12'), 12);
+  assert.throws(() => validateAiReportHistoryQuery({ limit: 51 }), /Số dòng/);
+  assert.throws(() => validateAiReportHistoryId('abc'), /Mã lịch sử/);
 });
 
 test('middleware từ chối người không có quyền báo cáo', () => {

@@ -6,6 +6,7 @@ import {
   Boxes,
   BrainCircuit,
   ChartNoAxesCombined,
+  Clock3,
   History,
   LayoutDashboard,
   LogOut,
@@ -27,14 +28,15 @@ const primaryItems = [
   { to: '/inventory', label: 'Kho hàng', icon: Boxes },
   { to: '/customers', label: 'Khách hàng', icon: Users },
   { to: '/orders', label: 'Hóa đơn', icon: ReceiptText },
+  { to: '/warranties', label: 'Bảo hành', icon: BadgeCheck },
   { to: '/reports', label: 'Báo cáo', icon: ChartNoAxesCombined }
 ];
 
 const extraItems = [
+  { to: '/shifts', label: 'Ca làm', icon: Clock3, staffOnly: true },
   { to: '/categories', label: 'Danh mục', icon: Tags },
   { to: '/suppliers', label: 'Nhà cung cấp', icon: Truck },
   { to: '/employees', label: 'Nhân viên', icon: ContactRound },
-  { to: '/warranties', label: 'Bảo hành', icon: BadgeCheck },
   { to: '/activity-logs', label: 'Nhật ký hoạt động', icon: History },
   { to: '/settings', label: 'Cài đặt', icon: Settings },
 ];
@@ -42,6 +44,7 @@ const extraItems = [
 const employeeAllowedPaths = new Set(['/', '/pos', '/orders', '/products', '/inventory', '/customers', '/shifts', '/promotions', '/warranties']);
 
 function isAllowed(item, hasFullAccess) {
+  if (item.staffOnly) return !hasFullAccess;
   return hasFullAccess || (item.to && employeeAllowedPaths.has(item.to)) || item.label.includes('AI');
 }
 

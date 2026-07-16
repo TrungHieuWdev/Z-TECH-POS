@@ -62,10 +62,34 @@ export async function getAllEmployees(req, res) {
 export async function getEmployeeRevenue(req, res) {
   try {
     const employeeId = Number(req.query.employeeId);
-    const saleDate = String(req.query.date || new Date().toISOString().slice(0, 10)).slice(0, 10);
+    const today = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).format(new Date());
+    const legacyDate = String(req.query.date || '').slice(0, 10);
+    const from = String(req.query.from || legacyDate || today).slice(0, 10);
+    const to = String(req.query.to || legacyDate || today).slice(0, 10);
+    const status = String(req.query.status || 'all');
+    const paymentMethod = String(req.query.paymentMethod || 'all');
+    const search = String(req.query.search || '').trim().slice(0, 100);
+    const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, Number.parseInt(req.query.limit, 10) || 10));
+    const offset = (page - 1) * limit;
+    const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 
     if (!employeeId) {
       return res.status(400).json({ message: 'Vui lòng chọn nhân viên' });
+    }
+    if (!datePattern.test(from) || !datePattern.test(to) || from > to) {
+      return res.status(400).json({ message: 'Khoảng ngày bán không hợp lệ' });
+    }
+    if (!['all', 'completed', 'cancelled'].includes(status)) {
+      return res.status(400).json({ message: 'Trạng thái hóa đơn không hợp lệ' });
+    }
+    if (!['all', 'cash', 'card', 'transfer'].includes(paymentMethod)) {
+      return res.status(400).json({ message: 'Phương thức thanh toán không hợp lệ' });
     }
 
     const [employee] = await query(
@@ -79,39 +103,103 @@ export async function getEmployeeRevenue(req, res) {
       return res.status(404).json({ message: 'Không tìm thấy nhân viên' });
     }
 
-    const orders = await query(
+    const where = [
+      'o.user_id = ?',
+      'DATE(o.created_at) >= ?',
+      'DATE(o.created_at) <= ?'
+    ];
+    const params = [employeeId, from, to];
+
+    if (status !== 'all') {
+      where.push('o.status = ?');
+      params.push(status);
+    }
+    if (paymentMethod !== 'all') {
+      where.push('o.payment_method = ?');
+      params.push(paymentMethod);
+    }
+    if (search) {
+      const pattern = `%${search}%`;
+      where.push(`(
+        o.order_number LIKE ?
+        OR COALESCE(c.name, '') LIKE ?
+        OR EXISTS (
+          SELECT 1
+          FROM order_items search_item
+          JOIN products search_product ON search_product.id = search_item.product_id
+          WHERE search_item.order_id = o.id AND search_product.name LIKE ?
+        )
+      )`);
+      params.push(pattern, pattern, pattern);
+    }
+
+    const whereSql = where.join(' AND ');
+    const [summaryRows, countRows, orders, products] = await Promise.all([
+      query(
+        `SELECT
+           COALESCE(SUM(CASE WHEN o.status = 'completed' THEN o.total ELSE 0 END), 0) AS revenue,
+           SUM(CASE WHEN o.status = 'completed' THEN 1 ELSE 0 END) AS completed_orders,
+           SUM(CASE WHEN o.status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled_orders,
+           COALESCE(SUM(CASE WHEN o.status = 'completed' THEN (
+             SELECT COALESCE(SUM(summary_item.quantity), 0)
+             FROM order_items summary_item
+             WHERE summary_item.order_id = o.id
+           ) ELSE 0 END), 0) AS products_sold,
+           COALESCE(AVG(CASE WHEN o.status = 'completed' THEN o.total END), 0) AS average_order_value
+         FROM orders o
+         LEFT JOIN customers c ON o.customer_id = c.id
+         WHERE ${whereSql}`,
+        params
+      ),
+      query(
+        `SELECT COUNT(*) AS total
+         FROM orders o
+         LEFT JOIN customers c ON o.customer_id = c.id
+         WHERE ${whereSql}`,
+        params
+      ),
+      query(
       `SELECT
          o.id,
          o.order_number,
          o.payment_method,
+         o.status,
+         o.subtotal,
+         o.discount,
+         o.vat_amount,
          o.total,
-         o.created_at,
-         COALESCE(c.name, 'Khách thường') AS customer_name
+         o.note,
+         DATE_FORMAT(o.created_at, '%Y-%m-%d %H:%i:%s') AS created_at,
+         COALESCE(c.name, 'Khách thường') AS customer_name,
+         (SELECT COALESCE(SUM(list_item.quantity), 0) FROM order_items list_item WHERE list_item.order_id = o.id) AS item_quantity
        FROM orders o
        LEFT JOIN customers c ON o.customer_id = c.id
-       WHERE o.user_id = ?
-         AND o.status = 'completed'
-         AND DATE(o.created_at) = ?
-       ORDER BY o.created_at DESC`,
-      [employeeId, saleDate]
-    );
-
-    const products = await query(
+       WHERE ${whereSql}
+       ORDER BY o.created_at DESC, o.id DESC
+       LIMIT ${limit} OFFSET ${offset}`,
+        params
+      ),
+      query(
       `SELECT
          p.id,
+         p.sku,
          p.name,
          SUM(oi.quantity) AS quantity,
          COALESCE(SUM(oi.subtotal), 0) AS revenue
        FROM order_items oi
        JOIN orders o ON oi.order_id = o.id
+       LEFT JOIN customers c ON o.customer_id = c.id
        JOIN products p ON oi.product_id = p.id
-       WHERE o.user_id = ?
+       WHERE ${whereSql}
          AND o.status = 'completed'
-         AND DATE(o.created_at) = ?
-       GROUP BY p.id, p.name
+       GROUP BY p.id, p.sku, p.name
        ORDER BY revenue DESC, quantity DESC`,
-      [employeeId, saleDate]
-    );
+        params
+      )
+    ]);
+
+    const summary = summaryRows[0] || {};
+    const total = Number(countRows[0]?.total || 0);
 
     res.json({
       employee: {
@@ -119,18 +207,36 @@ export async function getEmployeeRevenue(req, res) {
         code: employee.employee_code,
         name: employee.name
       },
-      date: saleDate,
+      date: from === to ? from : null,
+      range: { from, to },
+      filters: { status, paymentMethod, search },
       summary: {
-        revenue: orders.reduce((sum, order) => sum + Number(order.total || 0), 0),
-        orders: orders.length,
-        productsSold: products.reduce((sum, product) => sum + Number(product.quantity || 0), 0)
+        revenue: Number(summary.revenue || 0),
+        orders: Number(summary.completed_orders || 0),
+        completedOrders: Number(summary.completed_orders || 0),
+        cancelledOrders: Number(summary.cancelled_orders || 0),
+        productsSold: Number(summary.products_sold || 0),
+        averageOrderValue: Number(summary.average_order_value || 0)
       },
-      orders: orders.map((order) => ({ ...order, total: Number(order.total || 0) })),
+      orders: orders.map((order) => ({
+        ...order,
+        subtotal: Number(order.subtotal || 0),
+        discount: Number(order.discount || 0),
+        vat_amount: Number(order.vat_amount || 0),
+        total: Number(order.total || 0),
+        item_quantity: Number(order.item_quantity || 0)
+      })),
       products: products.map((product) => ({
         ...product,
         quantity: Number(product.quantity || 0),
         revenue: Number(product.revenue || 0)
-      }))
+      })),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / limit))
+      }
     });
   } catch (error) {
     res.status(500).json({ message: 'Không thể lấy doanh thu nhân viên', error: error.message });

@@ -270,7 +270,7 @@ export async function getById(req, res) {
     }
 
     const items = await query(
-      `SELECT oi.*, p.name AS product_name
+      `SELECT oi.*, p.sku, p.name AS product_name
        FROM order_items oi
        JOIN products p ON oi.product_id = p.id
        WHERE oi.order_id = ?`,

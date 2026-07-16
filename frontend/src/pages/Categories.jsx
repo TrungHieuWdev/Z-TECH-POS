@@ -2,8 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
-  ChevronLeft,
-  ChevronRight,
   Edit,
   Eye,
   EyeOff,
@@ -15,7 +13,9 @@ import {
   Trash2
 } from 'lucide-react';
 import api from '../api/axios';
+import KpiCard from '../components/KpiCard';
 import Modal from '../components/Modal';
+import TablePagination from '../components/TablePagination';
 import { formatDate } from '../utils/format';
 
 const initialForm = { name: '', description: '' };
@@ -113,11 +113,6 @@ export default function Categories() {
     const start = (currentPage - 1) * PAGE_SIZE;
     return filteredCategories.slice(start, start + PAGE_SIZE);
   }, [currentPage, filteredCategories]);
-  const visiblePages = useMemo(() => (
-    Array.from({ length: totalPages }, (_, index) => index + 1)
-      .filter((page) => page === 1 || page === totalPages || Math.abs(page - currentPage) <= 1)
-  ), [currentPage, totalPages]);
-
   useEffect(() => {
     setCurrentPage(1);
   }, [search, statusFilter]);
@@ -219,17 +214,16 @@ export default function Categories() {
         </div>
       </div>
 
-      <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {summaryCards.map((card) => (
-          <article key={card.label} className="flex min-w-0 items-center gap-3 border border-gray-200 bg-white px-4 py-3 shadow-sm">
-            <div className={`grid h-10 w-10 shrink-0 place-items-center ${card.tone}`}>
-              <card.icon size={19} />
-            </div>
-            <div className="min-w-0">
-              <p className="truncate text-xs font-bold uppercase tracking-wide text-gray-500">{card.label}</p>
-              <p className="mt-0.5 text-xl font-extrabold text-gray-950">{card.value}</p>
-            </div>
-          </article>
+          <KpiCard
+            key={card.label}
+            icon={card.icon}
+            label={card.label}
+            value={Number(card.value || 0).toLocaleString('vi-VN')}
+            detail={card.label === 'Tổng danh mục' ? 'Nhóm sản phẩm đã tạo' : card.label === 'Đang sử dụng' ? 'Danh mục có sản phẩm' : card.label === 'Chưa có sản phẩm' ? 'Danh mục đang trống' : 'Danh mục không hiển thị'}
+            toneClassName={card.tone}
+          />
         ))}
       </section>
 
@@ -272,7 +266,7 @@ export default function Categories() {
       </section>
 
       <section className="border border-gray-200 bg-white shadow-sm">
-        <div className="overflow-x-auto">
+        <div className="min-h-[500px] overflow-x-auto">
           <table className="w-full min-w-[1040px] table-fixed text-left text-sm">
             <colgroup>
               <col className="w-[22%]" />
@@ -298,7 +292,7 @@ export default function Categories() {
                 const canDelete = Number(category.productCount || 0) === 0;
 
                 return (
-                  <tr key={category.id} className="hover:bg-brand-surface/50">
+                  <tr key={category.id} className="h-[76px] hover:bg-brand-surface/50">
                     <td className="px-4 py-3">
                       <p className="truncate font-bold text-gray-950">{category.name}</p>
                     </td>
@@ -377,52 +371,7 @@ export default function Categories() {
             </tbody>
           </table>
         </div>
-        {filteredCategories.length > 0 && (
-          <div className="flex flex-col gap-3 border-t border-gray-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm font-medium text-gray-500">
-              Hiển thị {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filteredCategories.length)} trong {filteredCategories.length} danh mục
-            </p>
-            <nav className="flex items-center justify-center gap-1" aria-label="Phân trang danh mục">
-              <button
-                type="button"
-                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-                disabled={currentPage === 1}
-                className="grid h-9 w-9 place-items-center border border-gray-200 text-gray-600 transition hover:border-brand hover:text-brand-strong disabled:cursor-not-allowed disabled:opacity-40"
-                aria-label="Trang trước"
-              >
-                <ChevronLeft size={17} />
-              </button>
-              {visiblePages.map((page, index) => (
-                <span key={page} className="contents">
-                  {index > 0 && page - visiblePages[index - 1] > 1 && (
-                    <span className="px-1 text-gray-400">…</span>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setCurrentPage(page)}
-                    className={`h-9 min-w-9 border px-2 text-sm font-bold transition ${
-                      currentPage === page
-                        ? 'border-brand bg-brand text-white'
-                        : 'border-gray-200 text-gray-600 hover:border-brand hover:text-brand-strong'
-                    }`}
-                    aria-current={currentPage === page ? 'page' : undefined}
-                  >
-                    {page}
-                  </button>
-                </span>
-              ))}
-              <button
-                type="button"
-                onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
-                disabled={currentPage === totalPages}
-                className="grid h-9 w-9 place-items-center border border-gray-200 text-gray-600 transition hover:border-brand hover:text-brand-strong disabled:cursor-not-allowed disabled:opacity-40"
-                aria-label="Trang sau"
-              >
-                <ChevronRight size={17} />
-              </button>
-            </nav>
-          </div>
-        )}
+        <TablePagination currentPage={currentPage} totalItems={filteredCategories.length} pageSize={PAGE_SIZE} onPageChange={setCurrentPage} itemLabel="danh mục" ariaLabel="Phân trang danh mục" />
       </section>
 
       <Modal isOpen={isOpen} onClose={closeModal} title={editingCategory ? 'Sửa danh mục' : 'Thêm danh mục'} headerActions={<><button type="button" onClick={closeModal} className="h-11 border border-[#69afd6] bg-white px-5 text-base font-bold text-[#398fbd] hover:bg-sky-50">Hủy</button><button type="submit" form="category-form" className="h-11 bg-[#69afd6] px-5 text-base font-bold text-white hover:bg-[#579fc8]">Lưu</button></>}>

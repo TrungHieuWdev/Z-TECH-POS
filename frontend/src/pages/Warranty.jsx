@@ -4,7 +4,6 @@ import { useSearchParams } from 'react-router-dom';
 import {
   CalendarDays,
   ChevronsLeft,
-  ChevronsRight,
   FileBadge,
   PackageCheck,
   RefreshCw,
@@ -16,7 +15,9 @@ import {
   XCircle
 } from 'lucide-react';
 import api from '../api/axios';
+import KpiCard from '../components/KpiCard';
 import Modal from '../components/Modal';
+import TablePagination from '../components/TablePagination';
 import WarrantySettingsModal from '../components/WarrantySettingsModal';
 import WarrantyQr from '../components/WarrantyQr';
 import { getWarrantySettings } from '../services/warrantySettingsService';
@@ -160,20 +161,6 @@ function buildHistoryItem(action, staff, note) {
   };
 }
 
-function SummaryCard({ icon: Icon, label, value, toneClassName }) {
-  return (
-    <article className="flex h-[92px] items-center gap-4 rounded-lg border border-gray-300 bg-white px-5 shadow-sm shadow-gray-100">
-      <div className={`grid h-11 w-11 shrink-0 place-items-center rounded-md ${toneClassName}`}>
-        <Icon size={20} />
-      </div>
-      <div className="min-w-0">
-        <p className="truncate text-sm font-medium text-gray-700">{label}</p>
-        <p className="mt-1 text-2xl font-bold leading-none text-gray-950">{value}</p>
-      </div>
-    </article>
-  );
-}
-
 function StatusBadge({ status }) {
   const meta = statusMeta[status] || statusMeta.active;
 
@@ -215,7 +202,7 @@ function WarrantyRow({ warranty, onView, onAction }) {
       : `Còn ${daysLeft.toLocaleString('vi-VN')} ngày`;
 
   return (
-    <tr className="border-b border-gray-200 transition hover:bg-[#f8fdfe] last:border-b-0">
+    <tr className="h-[82px] border-b border-gray-200 transition hover:bg-[#f8fdfe] last:border-b-0">
       <td className="px-4 py-4 align-top">
         <div className="font-bold text-brand-deep">{warranty.code}</div>
         <div className="mt-1 text-xs text-gray-600">
@@ -266,39 +253,6 @@ function WarrantyRow({ warranty, onView, onAction }) {
         </div>
       </td>
     </tr>
-  );
-}
-
-function Pagination({ currentPage, totalPages, setCurrentPage }) {
-  return (
-    <div className="flex items-center justify-between border-t border-gray-200 bg-gray-50 px-5 py-4">
-      <span className="text-xs font-medium text-gray-600">
-        Trang {currentPage.toLocaleString('vi-VN')} / {totalPages.toLocaleString('vi-VN')}
-      </span>
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          disabled={currentPage === 1}
-          onClick={() => setCurrentPage((page) => Math.max(page - 1, 1))}
-          className="grid h-8 w-8 place-items-center border border-gray-300 bg-white text-gray-600 disabled:opacity-40"
-          aria-label="Trang trước"
-        >
-          <ChevronsLeft size={15} />
-        </button>
-        <button className="h-8 min-w-8 border border-brand-strong bg-brand-strong px-3 text-sm font-semibold text-white">
-          {currentPage}
-        </button>
-        <button
-          type="button"
-          disabled={currentPage === totalPages}
-          onClick={() => setCurrentPage((page) => Math.min(page + 1, totalPages))}
-          className="grid h-8 w-8 place-items-center border border-gray-300 bg-white text-gray-600 disabled:opacity-40"
-          aria-label="Trang sau"
-        >
-          <ChevronsRight size={15} />
-        </button>
-      </div>
-    </div>
   );
 }
 
@@ -573,11 +527,16 @@ export default function Warranty() {
   const totalPages = Math.max(Math.ceil(filteredWarranties.length / PAGE_SIZE), 1);
   const visibleWarranties = filteredWarranties.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
+  useEffect(() => {
+    setCurrentPage((page) => Math.min(page, totalPages));
+  }, [totalPages]);
+
   const summaryCards = [
     {
       key: 'total',
       label: 'Tổng phiếu bảo hành',
       value: summary.total.toLocaleString('vi-VN'),
+      detail: 'Theo bộ lọc đang áp dụng',
       icon: FileBadge,
       toneClassName: 'bg-brand-surface text-brand-deep'
     },
@@ -585,6 +544,7 @@ export default function Warranty() {
       key: 'processing',
       label: 'Đang xử lý',
       value: summary.processing.toLocaleString('vi-VN'),
+      detail: 'Phiếu đang tiếp nhận xử lý',
       icon: TimerReset,
       toneClassName: 'bg-yellow-100 text-yellow-800'
     },
@@ -592,6 +552,7 @@ export default function Warranty() {
       key: 'expiring',
       label: 'Sắp hết hạn',
       value: summary.expiringSoon.toLocaleString('vi-VN'),
+      detail: 'Hết hạn trong 7 ngày tới',
       icon: CalendarDays,
       toneClassName: 'bg-red-100 text-red-700'
     },
@@ -599,6 +560,7 @@ export default function Warranty() {
       key: 'replaced',
       label: 'Đã đổi mới',
       value: summary.replaced.toLocaleString('vi-VN'),
+      detail: 'Sản phẩm đã được đổi',
       icon: PackageCheck,
       toneClassName: 'bg-blue-100 text-blue-700'
     }
@@ -654,9 +616,9 @@ export default function Warranty() {
         </section>
       )}
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {summaryCards.map((card) => (
-          <SummaryCard key={card.key} {...card} />
+          <KpiCard key={card.key} {...card} />
         ))}
       </section>
 
@@ -716,8 +678,8 @@ export default function Warranty() {
           <h2 className="text-sm font-semibold text-gray-950">Phiếu bảo hành từ hóa đơn</h2>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1240px] text-left text-sm">
+        <div className="min-h-[620px] overflow-x-auto">
+          <table className="w-full min-w-[1240px] table-fixed text-left text-sm">
             <thead>
               <tr className="border-b border-gray-200 bg-gray-50 text-[11px] font-bold uppercase text-gray-500">
                 <th className="px-4 py-3">Mã BH</th>
@@ -750,7 +712,7 @@ export default function Warranty() {
           )}
         </div>
 
-        <Pagination currentPage={currentPage} totalPages={totalPages} setCurrentPage={setCurrentPage} />
+        <TablePagination currentPage={currentPage} totalItems={filteredWarranties.length} pageSize={PAGE_SIZE} onPageChange={setCurrentPage} itemLabel="phiếu bảo hành" ariaLabel="Phân trang bảo hành" />
       </section>
 
       <Modal

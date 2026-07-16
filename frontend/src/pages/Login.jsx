@@ -12,7 +12,7 @@ import {
 import api from '../api/axios';
 import loginVisual from '../assets/images/login11.png';
 import ztechLogo from '../assets/images/1111.png';
-import { isFullAccessRole, saveAuth } from '../utils/auth';
+import { saveAuth } from '../utils/auth';
 
 const initialForm = { employeeCode: '', password: '' };
 
@@ -179,7 +179,7 @@ export default function Login() {
 
       saveAuth(user, response.data.token, remember);
       toast.success('Đăng nhập thành công');
-      navigate(isFullAccessRole(user?.role) ? '/' : '/pos');
+      navigate('/');
     } catch (error) {
       const message = error.response?.status === 401
         ? 'Mật khẩu hoặc mã đăng nhập bạn nhập bị sai'

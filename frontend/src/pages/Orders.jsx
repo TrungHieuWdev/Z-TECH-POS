@@ -4,18 +4,18 @@ import {
   CalendarCheck,
   CheckCircle2,
   ChevronDown,
-  ChevronsLeft,
-  ChevronsRight,
-  Edit,
-  Eye,
+  CircleX,
   ReceiptText,
   RefreshCw,
   Search,
+  TriangleAlert,
   User,
   Wallet
 } from 'lucide-react';
 import api from '../api/axios';
+import KpiCard from '../components/KpiCard';
 import Modal from '../components/Modal';
+import TablePagination from '../components/TablePagination';
 import { formatCurrency, formatDate, formatTime } from '../utils/format';
 import { getUser, isFullAccessRole } from '../utils/auth';
 
@@ -40,6 +40,15 @@ const filterOptions = [
   { value: 'transfer', label: 'Chuyển khoản' }
 ];
 
+const cancellationReasons = [
+  { value: 'customer_changed_mind', label: 'Khách hàng đổi ý' },
+  { value: 'incorrect_order', label: 'Nhập sai sản phẩm hoặc số lượng' },
+  { value: 'payment_failed', label: 'Thanh toán không thành công' },
+  { value: 'out_of_stock', label: 'Sản phẩm hết hàng hoặc bị lỗi' },
+  { value: 'duplicate_order', label: 'Tạo trùng hóa đơn' },
+  { value: 'other', label: 'Lý do khác' }
+];
+
 const paymentBadgeClasses = {
   cash: 'bg-brand-soft text-brand-ink',
   card: 'bg-violet-100 text-violet-700',
@@ -57,28 +66,6 @@ function getSalesType(order) {
 
 function getCustomerName(order) {
   return order.customer_name || 'Khách thường';
-}
-
-function SummaryCard({ icon: Icon, label, value, toneClassName, onClick }) {
-  const Wrapper = onClick ? 'button' : 'article';
-
-  return (
-    <Wrapper
-      type={onClick ? 'button' : undefined}
-      onClick={onClick}
-      className={`flex h-[92px] w-full items-center gap-4 rounded-lg border border-gray-300 bg-white px-5 text-left shadow-sm shadow-gray-100 ${
-        onClick ? 'transition hover:border-brand-strong hover:bg-brand-surface focus:outline-none focus:ring-2 focus:ring-brand-soft' : ''
-      }`}
-    >
-      <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-md ${toneClassName}`}>
-        <Icon size={19} />
-      </div>
-      <div className="min-w-0">
-        <p className="truncate text-sm font-medium text-gray-700">{label}</p>
-        <p className="mt-1 text-2xl font-bold leading-none text-gray-950">{value}</p>
-      </div>
-    </Wrapper>
-  );
 }
 
 function formatDateInput(date) {
@@ -172,7 +159,7 @@ function InvoiceRow({ order, onView }) {
 
   return (
     <article
-      className="grid min-h-[92px] min-w-[980px] cursor-pointer grid-cols-[minmax(320px,1.35fr)_minmax(170px,0.75fr)_minmax(170px,0.7fr)_150px] items-center gap-5 border-b border-gray-200 px-5 py-4 transition hover:bg-[#f8fdfe] last:border-b-0"
+      className="grid h-[92px] min-w-[980px] cursor-pointer grid-cols-[minmax(320px,1.35fr)_minmax(170px,0.75fr)_minmax(170px,0.7fr)_150px] items-center gap-5 border-b border-gray-200 px-5 py-4 transition hover:bg-[#f8fdfe] last:border-b-0"
       onClick={() => onView(order)}
     >
       <div className="flex min-w-0 items-center gap-4">
@@ -216,67 +203,6 @@ function InvoiceRow({ order, onView }) {
   );
 }
 
-function Pagination({ currentPage, totalPages, setCurrentPage }) {
-  const pages = [1, 2, 3].filter((page) => page <= totalPages);
-  const showLastPage = totalPages > 3;
-
-  return (
-    <div className="flex items-center gap-2 border-t border-gray-200 bg-gray-50 px-5 py-4">
-      <button
-        type="button"
-        disabled={currentPage === 1}
-        onClick={() => setCurrentPage((page) => Math.max(page - 1, 1))}
-        className="grid h-8 w-8 place-items-center border border-gray-300 bg-white text-gray-600 disabled:opacity-40"
-        aria-label="Trang trước"
-      >
-        <ChevronsLeft size={15} />
-      </button>
-
-      {pages.map((page) => (
-        <button
-          type="button"
-          key={page}
-          onClick={() => setCurrentPage(page)}
-          className={`h-8 min-w-8 border px-3 text-sm font-semibold ${
-            currentPage === page
-              ? 'border-brand-strong bg-brand-strong text-white'
-              : 'border-gray-300 bg-white text-gray-700 hover:bg-brand-surface'
-          }`}
-        >
-          {page}
-        </button>
-      ))}
-
-      {showLastPage && (
-        <>
-          <span className="px-1 text-sm text-gray-500">...</span>
-          <button
-            type="button"
-            onClick={() => setCurrentPage(totalPages)}
-            className={`h-8 min-w-8 border px-3 text-sm font-semibold ${
-              currentPage === totalPages
-                ? 'border-brand-strong bg-brand-strong text-white'
-                : 'border-gray-300 bg-white text-gray-700 hover:bg-brand-surface'
-            }`}
-          >
-            {totalPages}
-          </button>
-        </>
-      )}
-
-      <button
-        type="button"
-        disabled={currentPage === totalPages}
-        onClick={() => setCurrentPage((page) => Math.min(page + 1, totalPages))}
-        className="grid h-8 w-8 place-items-center border border-gray-300 bg-white text-gray-600 disabled:opacity-40"
-        aria-label="Trang sau"
-      >
-        <ChevronsRight size={15} />
-      </button>
-    </div>
-  );
-}
-
 export default function Orders() {
   const hasFullAccess = isFullAccessRole(getUser()?.role);
   const [orders, setOrders] = useState([]);
@@ -287,6 +213,10 @@ export default function Orders() {
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [editingOrder, setEditingOrder] = useState(null);
+  const [cancelTarget, setCancelTarget] = useState(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelDetails, setCancelDetails] = useState('');
+  const [isCancelling, setIsCancelling] = useState(false);
   const [form, setForm] = useState({ status: 'completed', payment_method: 'cash', note: '' });
 
   async function loadOrders() {
@@ -364,11 +294,16 @@ export default function Orders() {
   const totalPages = Math.max(Math.ceil(filteredOrders.length / PAGE_SIZE), 1);
   const visibleOrders = filteredOrders.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
+  useEffect(() => {
+    setCurrentPage((page) => Math.min(page, totalPages));
+  }, [totalPages]);
+
   const summaryCards = [
     {
       key: 'total',
       label: 'Tổng hóa đơn',
       value: summary.total.toLocaleString('vi-VN'),
+      detail: 'Theo bộ lọc đang áp dụng',
       icon: ReceiptText,
       toneClassName: 'bg-brand-surface text-brand-deep'
     },
@@ -376,6 +311,7 @@ export default function Orders() {
       key: 'cash',
       label: 'Thanh toán bằng tiền mặt',
       value: summary.cash.toLocaleString('vi-VN'),
+      detail: 'Hóa đơn thanh toán tiền mặt',
       icon: CheckCircle2,
       toneClassName: 'bg-emerald-100 text-emerald-700'
     },
@@ -383,13 +319,27 @@ export default function Orders() {
       key: 'transfer',
       label: 'Thanh toán bằng chuyển khoản',
       value: summary.transfer.toLocaleString('vi-VN'),
+      detail: 'Hóa đơn thanh toán chuyển khoản',
       icon: Wallet,
       toneClassName: 'bg-orange-100 text-orange-700'
+    },
+    {
+      key: 'cancelled',
+      label: 'Đơn đã hủy',
+      value: summary.cancelled.toLocaleString('vi-VN'),
+      detail: 'Không tính vào doanh thu',
+      icon: CircleX,
+      toneClassName: 'bg-red-100 text-red-700',
+      onClick: () => {
+        setSearch('');
+        setFilterType('cancelled');
+      }
     },
     {
       key: 'today',
       label: 'Hóa đơn hôm nay',
       value: summary.today.toLocaleString('vi-VN'),
+      detail: 'Phát sinh trong ngày hiện tại',
       icon: CalendarCheck,
       toneClassName: 'bg-sky-100 text-sky-700',
       onClick: () => {
@@ -445,17 +395,56 @@ export default function Orders() {
     }
   };
 
-  const cancelOrder = async (order) => {
-    if (!window.confirm(`Hủy đơn "${order.order_number}"?`)) {
+  const openCancelOrder = (order) => {
+    setCancelTarget(order);
+    setCancelReason('');
+    setCancelDetails('');
+    setSelectedOrder(null);
+  };
+
+  const closeCancelOrder = () => {
+    if (isCancelling) return;
+    setCancelTarget(null);
+    setCancelReason('');
+    setCancelDetails('');
+  };
+
+  const cancelOrder = async (event) => {
+    event.preventDefault();
+
+    if (!cancelReason) {
+      toast.error('Vui lòng chọn lý do hủy hóa đơn');
       return;
     }
 
+    if (cancelReason === 'other' && !cancelDetails.trim()) {
+      toast.error('Vui lòng nhập chi tiết lý do hủy');
+      return;
+    }
+
+    const reasonLabel = cancellationReasons.find((reason) => reason.value === cancelReason)?.label;
+    const cancellationNote = [
+      `Lý do hủy: ${reasonLabel}`,
+      cancelDetails.trim() ? `Chi tiết: ${cancelDetails.trim()}` : '',
+      cancelTarget.note ? `Ghi chú trước đó: ${cancelTarget.note}` : ''
+    ].filter(Boolean).join('\n');
+
     try {
-      await api.delete(`/orders/${order.id}`);
-      toast.success('Đã hủy đơn hàng');
+      setIsCancelling(true);
+      await api.put(`/orders/${cancelTarget.id}`, {
+        status: 'cancelled',
+        payment_method: cancelTarget.payment_method,
+        note: cancellationNote
+      });
+      toast.success(`Đã hủy hóa đơn ${cancelTarget.order_number}`);
+      setCancelTarget(null);
+      setCancelReason('');
+      setCancelDetails('');
       await loadOrders();
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Không thể hủy đơn hàng');
+      toast.error(error.response?.data?.message || 'Không thể hủy hóa đơn');
+    } finally {
+      setIsCancelling(false);
     }
   };
 
@@ -476,9 +465,9 @@ export default function Orders() {
         </button>
       </div>
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {summaryCards.map((card) => (
-          <SummaryCard key={card.key} {...card} />
+          <KpiCard key={card.key} {...card} />
         ))}
       </section>
 
@@ -502,7 +491,7 @@ export default function Orders() {
           </span>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="min-h-[502px] overflow-x-auto">
           <div className="grid min-w-[980px] grid-cols-[minmax(320px,1.35fr)_minmax(170px,0.75fr)_minmax(170px,0.7fr)_150px] gap-5 border-b border-gray-200 bg-gray-50 px-5 py-3 text-[11px] font-bold uppercase text-gray-500">
             <span>Hóa đơn</span>
             <span>Thu ngân</span>
@@ -513,10 +502,7 @@ export default function Orders() {
             <InvoiceRow
               key={order.id}
               order={order}
-              hasFullAccess={hasFullAccess}
               onView={viewOrder}
-              onEdit={openEdit}
-              onCancel={cancelOrder}
             />
           ))}
 
@@ -527,7 +513,7 @@ export default function Orders() {
           )}
         </div>
 
-        <Pagination currentPage={currentPage} totalPages={totalPages} setCurrentPage={setCurrentPage} />
+        <TablePagination currentPage={currentPage} totalItems={filteredOrders.length} pageSize={PAGE_SIZE} onPageChange={setCurrentPage} itemLabel="hóa đơn" ariaLabel="Phân trang hóa đơn" />
       </section>
 
       <Modal isOpen={Boolean(selectedOrder)} onClose={() => setSelectedOrder(null)} title="Chi tiết đơn hàng">
@@ -551,11 +537,23 @@ export default function Orders() {
                 <div className="font-semibold text-gray-950">{formatDate(selectedOrder.created_at)}</div>
               </div>
               <div className="md:col-span-2">
-                <span className="font-medium text-gray-700">Phương thức thanh toán</span>
-                <div className="mt-1">
-                  <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${paymentBadgeClasses[selectedOrder.payment_method] || 'bg-gray-100 text-gray-700'}`}>
-                    {paymentLabels[selectedOrder.payment_method] || selectedOrder.payment_method || 'Chưa xác định'}
-                  </span>
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                  <div>
+                    <span className="font-medium text-gray-700">Phương thức thanh toán</span>
+                    <div className="mt-1">
+                      <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${paymentBadgeClasses[selectedOrder.payment_method] || 'bg-gray-100 text-gray-700'}`}>
+                        {paymentLabels[selectedOrder.payment_method] || selectedOrder.payment_method || 'Chưa xác định'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="text-left md:text-right">
+                    <span className="font-medium text-gray-700">Trạng thái</span>
+                    <div className="mt-1">
+                      <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${statusBadgeClasses[selectedOrder.status] || 'bg-gray-100 text-gray-700'}`}>
+                        {statusLabels[selectedOrder.status] || selectedOrder.status}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -595,7 +593,106 @@ export default function Orders() {
                 <span>{formatCurrency(selectedOrder.total)}</span>
               </div>
             </div>
+
+            {selectedOrder.note && (
+              <div className="rounded-lg border border-gray-200 p-4 text-sm">
+                <p className="font-semibold text-gray-900">Ghi chú hóa đơn</p>
+                <p className="mt-2 whitespace-pre-line text-gray-700">{selectedOrder.note}</p>
+              </div>
+            )}
+
+            <div className="flex flex-col-reverse gap-2 border-t border-gray-200 pt-4 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setSelectedOrder(null)}
+                className="h-10 rounded-md border border-gray-300 px-4 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
+              >
+                Đóng
+              </button>
+              {hasFullAccess && selectedOrder.status === 'completed' && (
+                <button
+                  type="button"
+                  onClick={() => openCancelOrder(selectedOrder)}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-red-600 px-4 text-sm font-semibold text-white transition hover:bg-red-700"
+                >
+                  <CircleX size={16} />
+                  Hủy hóa đơn
+                </button>
+              )}
+            </div>
           </div>
+        )}
+      </Modal>
+
+      <Modal
+        isOpen={Boolean(cancelTarget)}
+        onClose={closeCancelOrder}
+        title="Xác nhận hủy hóa đơn"
+        maxWidth="max-w-lg"
+      >
+        {cancelTarget && (
+          <form onSubmit={cancelOrder} className="space-y-5">
+            <div className="flex gap-3 rounded-lg border border-red-200 bg-red-50 p-4">
+              <TriangleAlert size={21} className="mt-0.5 shrink-0 text-red-600" />
+              <div className="text-sm">
+                <p className="font-bold text-red-900">Hủy hóa đơn {cancelTarget.order_number}?</p>
+                <p className="mt-1 leading-6 text-red-800">
+                  Thao tác này sẽ hoàn lại tồn kho, chuyển thanh toán sang hoàn tiền và vô hiệu hóa bảo hành liên quan.
+                </p>
+              </div>
+            </div>
+
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-semibold text-gray-800">
+                Lý do hủy <span className="text-red-600">*</span>
+              </span>
+              <select
+                value={cancelReason}
+                onChange={(event) => setCancelReason(event.target.value)}
+                disabled={isCancelling}
+                className="h-11 w-full rounded-md border border-gray-300 bg-white px-3 text-sm outline-none transition focus:border-red-500 focus:ring-2 focus:ring-red-100 disabled:opacity-60"
+              >
+                <option value="">Chọn lý do hủy hóa đơn</option>
+                {cancellationReasons.map((reason) => (
+                  <option key={reason.value} value={reason.value}>{reason.label}</option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-semibold text-gray-800">
+                Chi tiết {cancelReason === 'other' && <span className="text-red-600">*</span>}
+              </span>
+              <textarea
+                value={cancelDetails}
+                onChange={(event) => setCancelDetails(event.target.value)}
+                disabled={isCancelling}
+                maxLength={500}
+                className="min-h-24 w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none transition placeholder:text-gray-400 focus:border-red-500 focus:ring-2 focus:ring-red-100 disabled:opacity-60"
+                placeholder="Nhập thông tin bổ sung để tiện đối soát..."
+              />
+              <span className="mt-1 block text-right text-xs text-gray-500">{cancelDetails.length}/500</span>
+            </label>
+
+            <div className="flex flex-col-reverse gap-2 border-t border-gray-200 pt-4 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={closeCancelOrder}
+                disabled={isCancelling}
+                className="h-10 rounded-md border border-gray-300 px-4 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 disabled:opacity-60"
+              >
+                Quay lại
+              </button>
+              <button
+                type="submit"
+                disabled={isCancelling}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-red-600 px-4 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <CircleX size={16} />
+                {isCancelling ? 'Đang hủy...' : 'Xác nhận hủy'}
+              </button>
+            </div>
+          </form>
         )}
       </Modal>
 

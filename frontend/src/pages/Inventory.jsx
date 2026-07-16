@@ -4,8 +4,6 @@ import toast from 'react-hot-toast';
 import {
   AlertTriangle,
   Boxes,
-  ChevronLeft,
-  ChevronRight,
   ClipboardCheck,
   History,
   MoreHorizontal,
@@ -15,7 +13,9 @@ import {
   XCircle
 } from 'lucide-react';
 import api from '../api/axios';
+import KpiCard from '../components/KpiCard';
 import Modal from '../components/Modal';
+import TablePagination from '../components/TablePagination';
 import { formatCurrency, formatDate } from '../utils/format';
 import { getUser, isFullAccessRole } from '../utils/auth';
 import InventoryTabs from '../components/inventory/InventoryTabs';
@@ -49,64 +49,6 @@ const stateMeta = {
   out: { label: 'Hết hàng', className: 'bg-red-50 text-red-700 ring-red-600/10' },
   inactive: { label: 'Ngừng kinh doanh', className: 'bg-gray-100 text-gray-600 ring-gray-500/10' }
 };
-
-function SummaryCard({ icon: Icon, label, value, note, iconColor = '#398fbd', iconBackground = '#eef8fd' }) {
-  return (
-    <article className="border border-gray-200 bg-white p-4 shadow-sm">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</p>
-          <p className="mt-2 truncate text-2xl font-bold tracking-tight text-gray-950">{value}</p>
-          <p className="mt-1 text-xs text-gray-500">{note}</p>
-        </div>
-        <span className="grid h-10 w-10 shrink-0 place-items-center" style={{ color: iconColor, backgroundColor: iconBackground }}>
-          <Icon size={20} strokeWidth={2.2} />
-        </span>
-      </div>
-    </article>
-  );
-}
-
-function Pagination({ page, totalItems, onChange }) {
-  const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
-  if (totalPages <= 1) return null;
-
-  const pages = Array.from({ length: totalPages }, (_, index) => index + 1);
-  const visiblePages = pages.filter(
-    (item) => item === 1 || item === totalPages || Math.abs(item - page) <= 1
-  );
-
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 px-4 py-3">
-      <p className="text-xs text-gray-500">
-        Hiển thị {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, totalItems)} trong {totalItems}
-      </p>
-      <div className="flex items-center gap-1">
-        <button type="button" disabled={page === 1} onClick={() => onChange(page - 1)} className="grid h-8 w-8 place-items-center border border-gray-200 text-sky-700 hover:border-sky-300 hover:bg-sky-50 disabled:cursor-not-allowed disabled:text-gray-300">
-          <ChevronLeft size={16} />
-        </button>
-        {visiblePages.map((item, index) => (
-          <div key={item} className="flex items-center gap-1">
-            {index > 0 && item - visiblePages[index - 1] > 1 && <span className="px-1 text-gray-400">…</span>}
-            <button
-              type="button"
-              onClick={() => onChange(item)}
-              className="h-8 min-w-8 border px-2 text-sm font-semibold"
-              style={page === item
-                ? { borderColor: '#69afd6', backgroundColor: '#69afd6', color: '#fff' }
-                : { borderColor: '#e5e7eb', backgroundColor: '#fff', color: '#4b5563' }}
-            >
-              {item}
-            </button>
-          </div>
-        ))}
-        <button type="button" disabled={page === totalPages} onClick={() => onChange(page + 1)} className="grid h-8 w-8 place-items-center border border-gray-200 text-sky-700 hover:border-sky-300 hover:bg-sky-50 disabled:cursor-not-allowed disabled:text-gray-300">
-          <ChevronRight size={16} />
-        </button>
-      </div>
-    </div>
-  );
-}
 
 export default function Inventory() {
   const location = useLocation();
@@ -292,11 +234,11 @@ export default function Inventory() {
 
       {activeTab === 'current' && (
         <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
-          <SummaryCard icon={Boxes} label="Tổng sản phẩm" value={stats.products.toLocaleString('vi-VN')} note="Tất cả sản phẩm trong kho" />
-          <SummaryCard icon={PackageCheck} label="Tổng số lượng tồn" value={stats.quantity.toLocaleString('vi-VN')} note="Đơn vị sản phẩm" iconColor="#1687a7" iconBackground="#e9f8fb" />
-          <SummaryCard icon={AlertTriangle} label="Sắp hết hàng" value={stats.low.toLocaleString('vi-VN')} note="Chạm mức tồn tối thiểu" iconColor="#d97706" iconBackground="#fff7e6" />
-          <SummaryCard icon={XCircle} label="Hết hàng" value={stats.out.toLocaleString('vi-VN')} note="Cần bổ sung sớm" iconColor="#dc2626" iconBackground="#fff0f0" />
-          <SummaryCard icon={WalletCards} label="Giá trị tồn kho" value={formatCurrency(stats.value)} note="Theo số lượng tồn và giá nhập" iconColor="#059669" iconBackground="#ecfdf5" />
+          <KpiCard icon={Boxes} label="Tổng sản phẩm" value={stats.products.toLocaleString('vi-VN')} detail="Tất cả sản phẩm trong kho" toneClassName="bg-sky-50 text-sky-700" />
+          <KpiCard icon={PackageCheck} label="Tổng số lượng tồn" value={stats.quantity.toLocaleString('vi-VN')} detail="Đơn vị sản phẩm" toneClassName="bg-cyan-50 text-cyan-700" />
+          <KpiCard icon={AlertTriangle} label="Sắp hết hàng" value={stats.low.toLocaleString('vi-VN')} detail="Chạm mức tồn tối thiểu" toneClassName="bg-amber-50 text-amber-700" />
+          <KpiCard icon={XCircle} label="Hết hàng" value={stats.out.toLocaleString('vi-VN')} detail="Cần bổ sung sớm" toneClassName="bg-red-50 text-red-700" />
+          <KpiCard icon={WalletCards} label="Giá trị tồn kho" value={formatCurrency(stats.value)} detail="Theo tồn kho và giá nhập" toneClassName="bg-emerald-50 text-emerald-700" />
         </section>
       )}
 
@@ -375,9 +317,9 @@ export default function Inventory() {
             </div>
         </div>}
 
-        <div className="overflow-x-auto">
+        <div className="min-h-[690px] overflow-x-auto">
           {activeTab === 'current' ? (
-            <table className="w-full min-w-[1180px] text-left text-sm">
+            <table className="w-full min-w-[1180px] table-fixed text-left text-sm">
               <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
                 <tr>
                   <th className="px-4 py-3 font-semibold">Sản phẩm</th>
@@ -397,7 +339,7 @@ export default function Inventory() {
                   const stock = Number(product.stock_quantity || 0);
                   const cost = Number(product.cost_price || 0);
                   return (
-                    <tr key={product.id} className="hover:bg-gray-50/70">
+                    <tr key={product.id} className="h-[64px] hover:bg-gray-50/70">
                       <td className="max-w-[280px] px-4 py-3"><p className="truncate font-semibold text-gray-950">{product.name}</p></td>
                       <td className="px-4 py-3 text-gray-600"><p>{product.sku || '—'}</p><p className="mt-0.5 text-xs text-gray-400">{product.barcode || 'Chưa có barcode'}</p></td>
                       <td className="px-4 py-3 text-gray-600">{product.category_name || 'Chưa phân loại'}</td>
@@ -415,7 +357,7 @@ export default function Inventory() {
               </tbody>
             </table>
           ) : (
-            <table className="w-full min-w-[1120px] text-left text-sm">
+            <table className="w-full min-w-[1120px] table-fixed text-left text-sm">
               <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
                 <tr>
                   <th className="px-4 py-3 font-semibold">Sản phẩm</th>
@@ -438,7 +380,7 @@ export default function Inventory() {
                     decrease: ['Điều chỉnh giảm', 'bg-amber-50 text-amber-700']
                   }[log.transaction];
                   return (
-                    <tr key={log.id} className="hover:bg-gray-50/70">
+                    <tr key={log.id} className="h-[64px] hover:bg-gray-50/70">
                       <td className="max-w-[260px] px-4 py-3"><p className="truncate font-semibold text-gray-950">{log.product_name}</p></td>
                       <td className="px-4 py-3 text-gray-600">{log.user_name || '—'}</td>
                       <td className="px-4 py-3"><span className={`inline-flex px-2 py-1 text-xs font-semibold ${transactionMeta[1]}`}>{transactionMeta[0]}</span></td>
@@ -457,7 +399,7 @@ export default function Inventory() {
         {(activeTab === 'current' ? filteredProducts : filteredLogs).length === 0 && (
           <div className="px-4 py-12 text-center text-sm text-gray-500">Không tìm thấy dữ liệu phù hợp.</div>
         )}
-        <Pagination page={page} totalItems={activeRows.length} onChange={setPage} />
+        <TablePagination currentPage={page} totalItems={activeRows.length} pageSize={PAGE_SIZE} onPageChange={setPage} itemLabel="dòng" ariaLabel="Phân trang kho hàng" />
         </>}
       </section>
 

@@ -86,3 +86,14 @@ export function validateRevenueReportQuery(query = {}) {
   };
 }
 
+export function validateAiReportHistoryQuery(query = {}) {
+  return {
+    page: positiveInteger(query.page ?? 1, 'Trang', { optional: false, max: 100000 }),
+    limit: positiveInteger(query.limit ?? 5, 'Số dòng mỗi trang', { optional: false, max: 50 }),
+    search: String(query.search || '').trim().slice(0, 100)
+  };
+}
+
+export function validateAiReportHistoryId(value) {
+  return positiveInteger(value, 'Mã lịch sử phân tích', { optional: false });
+}

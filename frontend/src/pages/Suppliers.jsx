@@ -20,6 +20,8 @@ import {
   X,
 } from 'lucide-react';
 import Modal from '../components/Modal';
+import KpiCard from '../components/KpiCard';
+import TablePagination from '../components/TablePagination';
 import api from '../api/axios';
 import { isVietnamPhone, normalizePhone, vietnamPhoneMessage } from '../utils/phone';
 
@@ -243,7 +245,6 @@ export default function Suppliers() {
   }, [suppliers, search, statusFilter]);
 
   const pageCount = Math.max(1, Math.ceil(filteredSuppliers.length / PAGE_SIZE));
-  const pageNumbers = useMemo(() => Array.from({ length: pageCount }, (_, index) => index + 1), [pageCount]);
   const paginatedSuppliers = useMemo(() => {
     const start = (currentPage - 1) * PAGE_SIZE;
 
@@ -253,6 +254,10 @@ export default function Suppliers() {
   useEffect(() => {
     setCurrentPage((page) => Math.min(page, pageCount));
   }, [pageCount]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, statusFilter]);
 
   const openCreate = () => {
     setEditingSupplier(null);
@@ -375,17 +380,14 @@ export default function Suppliers() {
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
-          ['Tổng nhà cung cấp', stats.total, 'Đối tác', UserRound, 'bg-[#e8f8fb] text-[#159bb5]'],
-          ['Đang hợp tác', stats.active, 'Nhà cung cấp', CircleCheck, 'bg-blue-50 text-blue-600'],
-          ['Tạm ngừng', stats.paused, 'Nhà cung cấp', CirclePause, 'bg-amber-50 text-amber-600'],
-          ['Ngừng hợp tác', stats.inactive, 'Nhà cung cấp', X, 'bg-red-50 text-red-600']
-        ].map(([label, value, unit, Icon, iconClass]) => (
-          <section key={label} className="flex min-h-24 items-center gap-4 border border-[#d7eef3] bg-white p-5 shadow-sm">
-            <div className={`grid h-12 w-12 shrink-0 place-items-center ${iconClass}`}><Icon size={24} /></div>
-            <div><p className="text-xs font-bold uppercase tracking-wide text-gray-500">{label}</p><div className="mt-1 flex items-baseline gap-2"><strong className="text-2xl text-[#0f3b46]">{value}</strong><span className="text-xs font-semibold text-gray-400">{unit}</span></div></div>
-          </section>
+          ['Tổng nhà cung cấp', stats.total, 'Đối tác đã lưu trong hệ thống', UserRound, 'bg-cyan-50 text-cyan-700'],
+          ['Đang hợp tác', stats.active, 'Nhà cung cấp đang hoạt động', CircleCheck, 'bg-blue-50 text-blue-700'],
+          ['Tạm ngừng', stats.paused, 'Nhà cung cấp tạm dừng', CirclePause, 'bg-amber-50 text-amber-700'],
+          ['Ngừng hợp tác', stats.inactive, 'Nhà cung cấp đã ngừng', X, 'bg-red-50 text-red-700']
+        ].map(([label, value, detail, icon, tone]) => (
+          <KpiCard key={label} icon={icon} label={label} value={Number(value || 0).toLocaleString('vi-VN')} detail={detail} toneClassName={tone} />
         ))}
       </div>
 
@@ -407,8 +409,8 @@ export default function Suppliers() {
             ))}
           </select>
         </div>}
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[980px] text-left text-sm">
+        <div className="min-h-[465px] overflow-x-auto">
+          <table className="w-full min-w-[980px] table-fixed text-left text-sm">
             <thead className="bg-[#f4fcfe] text-gray-500">
               <tr>
                 <th className="px-5 py-4 text-xs font-bold uppercase tracking-wide">Nhà cung cấp</th>
@@ -424,7 +426,7 @@ export default function Suppliers() {
               {paginatedSuppliers.map((supplier) => {
                 const statusMeta = getStatusMeta(supplier.status);
                 return (
-                  <tr key={supplier.id} className="transition hover:bg-[#f8fdfe]">
+                  <tr key={supplier.id} className="h-[84px] transition hover:bg-[#f8fdfe]">
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
                         <div className="grid h-11 w-11 shrink-0 place-items-center bg-[#e8f8fb] text-xs font-extrabold text-[#159bb5]">{supplier.name.split(/\s+/).slice(0, 2).map((word) => word[0]).join('').toUpperCase()}</div>
@@ -461,43 +463,7 @@ export default function Suppliers() {
           </table>
         </div>
 
-        <div className="flex items-center justify-end border-t border-[#edf7f9] px-5 py-4 text-sm text-gray-500">
-          <nav className="flex items-center gap-2" aria-label="Phan trang nha cung cap">
-            <button
-              type="button"
-              onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-              disabled={currentPage === 1}
-              className="grid h-9 w-9 place-items-center rounded-lg border border-[#d7eef3] font-bold text-[#0f3b46] transition hover:bg-[#f4fcfe] disabled:cursor-not-allowed disabled:opacity-40"
-              aria-label="Trang truoc"
-            >
-              &lt;
-            </button>
-            {pageNumbers.map((page) => (
-              <button
-                key={page}
-                type="button"
-                onClick={() => setCurrentPage(page)}
-                className={`grid h-9 w-9 place-items-center rounded-lg font-bold transition ${
-                  currentPage === page
-                    ? 'bg-[#c0edf7] text-[#0f3b46]'
-                    : 'border border-[#d7eef3] text-gray-600 hover:bg-[#f4fcfe] hover:text-[#0f3b46]'
-                }`}
-                aria-current={currentPage === page ? 'page' : undefined}
-              >
-                {page}
-              </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => setCurrentPage((page) => Math.min(pageCount, page + 1))}
-              disabled={currentPage === pageCount}
-              className="grid h-9 w-9 place-items-center rounded-lg border border-[#d7eef3] font-bold text-[#0f3b46] transition hover:bg-[#f4fcfe] disabled:cursor-not-allowed disabled:opacity-40"
-              aria-label="Trang tiep"
-            >
-              &gt;
-            </button>
-          </nav>
-        </div>
+        <TablePagination currentPage={currentPage} totalItems={filteredSuppliers.length} pageSize={PAGE_SIZE} onPageChange={setCurrentPage} itemLabel="nhà cung cấp" ariaLabel="Phân trang nhà cung cấp" />
       </section>
 
       {openMenuId && menuPosition && (() => {

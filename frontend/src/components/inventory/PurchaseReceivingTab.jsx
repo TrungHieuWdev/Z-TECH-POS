@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Eye, Plus, Save, Trash2, X } from 'lucide-react';
+import { Eye, Plus, Save, Trash2 } from 'lucide-react';
 import api from '../../api/axios';
 import Modal from '../Modal';
 import { formatCurrency } from '../../utils/format';
@@ -229,11 +229,6 @@ export default function PurchaseReceivingTab({ preferredSupplierId = null, canMa
         onClose={() => setDetailOrder(null)}
         title="Chi tiết phiếu nhập"
         maxWidth="max-w-5xl"
-        headerActions={(
-          <button type="button" onClick={() => setDetailOrder(null)} aria-label="Đóng chi tiết phiếu nhập" title="Đóng" className="grid h-9 w-9 place-items-center text-gray-500 hover:bg-gray-100 hover:text-gray-900">
-            <X size={20} />
-          </button>
-        )}
       >
         {detailOrder && (
           <div className="space-y-5">

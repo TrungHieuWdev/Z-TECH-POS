@@ -7,9 +7,11 @@ import {
   BarChart3,
   Box,
   CalendarDays,
+  CircleX,
   Download,
   Edit,
   Eye,
+  FileSpreadsheet,
   Filter,
   KeyRound,
   Lock,
@@ -28,7 +30,9 @@ import {
   Users
 } from 'lucide-react';
 import api from '../api/axios';
+import KpiCard from '../components/KpiCard';
 import Modal from '../components/Modal';
+import TablePagination from '../components/TablePagination';
 import Shifts from './Shifts';
 
 const roleOptions = [
@@ -101,6 +105,25 @@ function formatDateTime(value) {
   return `${timePart} ${day}/${month}/${year}`.trim();
 }
 
+function formatSaleDateTime(value) {
+  if (!value) return '';
+  const text = String(value);
+  if (text.includes('T') || text.endsWith('Z')) {
+    const parsed = new Date(text);
+    if (!Number.isNaN(parsed.getTime())) {
+      return new Intl.DateTimeFormat('vi-VN', {
+        timeZone: 'Asia/Ho_Chi_Minh',
+        hour: '2-digit',
+        minute: '2-digit',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      }).format(parsed);
+    }
+  }
+  return formatDateTime(text.slice(0, 19));
+}
+
 function formatCurrency(value) {
   return new Intl.NumberFormat('vi-VN', {
     style: 'currency',
@@ -112,6 +135,7 @@ function formatCurrency(value) {
 function formatPaymentMethod(value) {
   const methods = {
     cash: 'Tiền mặt',
+    card: 'Thẻ',
     transfer: 'Chuyển khoản'
   };
 
@@ -119,7 +143,94 @@ function formatPaymentMethod(value) {
 }
 
 function getTodayInputValue() {
-  return new Date().toISOString().slice(0, 10);
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(new Date());
+}
+
+function getDefaultRevenueRange() {
+  const to = getTodayInputValue();
+  const fromDate = new Date(`${to}T00:00:00+07:00`);
+  fromDate.setDate(fromDate.getDate() - 29);
+  const from = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(fromDate);
+  return { from, to };
+}
+
+function formatOrderStatus(value) {
+  return value === 'cancelled' ? 'Đã hủy' : 'Hoàn thành';
+}
+
+function orderStatusClass(value) {
+  return value === 'cancelled'
+    ? 'bg-rose-50 text-rose-700'
+    : 'bg-emerald-50 text-emerald-700';
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function styleExcelTitle(sheet, range, title, subtitle = '') {
+  sheet.mergeCells(range);
+  const cell = sheet.getCell(range.split(':')[0]);
+  cell.value = title;
+  cell.font = { bold: true, size: 18, color: { argb: 'FFFFFFFF' } };
+  cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F3B46' } };
+  cell.alignment = { horizontal: 'center', vertical: 'middle' };
+  sheet.getRow(cell.row).height = 34;
+  if (subtitle) {
+    const subtitleRow = cell.row + 1;
+    sheet.mergeCells(subtitleRow, 1, subtitleRow, sheet.getColumn(range.split(':')[1].replace(/\d/g, '')).number);
+    const subtitleCell = sheet.getCell(subtitleRow, 1);
+    subtitleCell.value = subtitle;
+    subtitleCell.font = { italic: true, color: { argb: 'FF475569' } };
+    subtitleCell.alignment = { horizontal: 'center' };
+  }
+}
+
+function styleExcelHeader(row, color = 'FF0891B2') {
+  row.height = 24;
+  row.eachCell((cell) => {
+    cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: color } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    cell.border = {
+      top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+      left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+      bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+      right: { style: 'thin', color: { argb: 'FFCBD5E1' } }
+    };
+  });
+}
+
+function styleExcelBody(sheet, startRow, endRow, moneyColumns = []) {
+  for (let rowNumber = startRow; rowNumber <= endRow; rowNumber += 1) {
+    const row = sheet.getRow(rowNumber);
+    row.height = 22;
+    row.eachCell((cell) => {
+      cell.alignment = { vertical: 'middle', wrapText: true };
+      cell.border = { bottom: { style: 'hair', color: { argb: 'FFCBD5E1' } } };
+      if (rowNumber % 2 === 0) {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+      }
+    });
+  }
+  moneyColumns.forEach((column) => { sheet.getColumn(column).numFmt = '#,##0 "đ"'; });
 }
 
 function getEmployeeStats(employees) {
@@ -166,9 +277,26 @@ export default function Employees() {
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedRevenueEmployeeId, setSelectedRevenueEmployeeId] = useState('');
-  const [revenueDate, setRevenueDate] = useState(getTodayInputValue());
+  const initialRevenueRange = useMemo(getDefaultRevenueRange, []);
+  const [revenueFilterDraft, setRevenueFilterDraft] = useState({
+    ...initialRevenueRange,
+    status: 'all',
+    paymentMethod: 'all',
+    search: ''
+  });
+  const [revenueFilters, setRevenueFilters] = useState({
+    ...initialRevenueRange,
+    status: 'all',
+    paymentMethod: 'all',
+    search: ''
+  });
+  const [revenuePage, setRevenuePage] = useState(1);
+  const [revenueProductPage, setRevenueProductPage] = useState(1);
   const [employeeRevenue, setEmployeeRevenue] = useState(null);
   const [loadingRevenue, setLoadingRevenue] = useState(false);
+  const [selectedRevenueOrder, setSelectedRevenueOrder] = useState(null);
+  const [loadingRevenueOrder, setLoadingRevenueOrder] = useState(false);
+  const [exportingRevenue, setExportingRevenue] = useState('');
   const [form, setForm] = useState(emptyForm);
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [viewingEmployee, setViewingEmployee] = useState(null);
@@ -197,7 +325,7 @@ export default function Employees() {
     }
   }, [employees, selectedRevenueEmployeeId]);
 
-  const loadEmployeeRevenue = async () => {
+  const loadEmployeeRevenue = async ({ page = revenuePage, filters = revenueFilters, limit = 10 } = {}) => {
     if (!selectedRevenueEmployeeId) return;
 
     setLoadingRevenue(true);
@@ -205,7 +333,9 @@ export default function Employees() {
       const response = await api.get('/employees/revenue', {
         params: {
           employeeId: selectedRevenueEmployeeId,
-          date: revenueDate
+          ...filters,
+          page,
+          limit
         }
       });
       setEmployeeRevenue(response.data);
@@ -221,9 +351,14 @@ export default function Employees() {
     if (activeTab === 'revenue') {
       loadEmployeeRevenue();
     }
-  }, [activeTab, selectedRevenueEmployeeId, revenueDate]);
+  }, [activeTab, selectedRevenueEmployeeId, revenueFilters, revenuePage]);
 
   const stats = useMemo(() => getEmployeeStats(employees), [employees]);
+  const revenueProducts = employeeRevenue?.products || [];
+  const visibleRevenueProducts = useMemo(
+    () => revenueProducts.slice((revenueProductPage - 1) * 10, revenueProductPage * 10),
+    [revenueProducts, revenueProductPage]
+  );
 
   const filteredEmployees = useMemo(() => {
     const keyword = search.trim().toLowerCase();
@@ -393,27 +528,394 @@ export default function Employees() {
     URL.revokeObjectURL(url);
   };
 
-  const exportRevenueCsv = () => {
-    if (!employeeRevenue) return;
+  const applyRevenueFilters = () => {
+    if (!revenueFilterDraft.from || !revenueFilterDraft.to || revenueFilterDraft.from > revenueFilterDraft.to) {
+      toast.error('Khoảng ngày bán không hợp lệ');
+      return;
+    }
+    const nextFilters = {
+      ...revenueFilterDraft,
+      search: revenueFilterDraft.search.trim()
+    };
+    const filtersChanged = JSON.stringify(nextFilters) !== JSON.stringify(revenueFilters);
+    setRevenuePage(1);
+    setRevenueProductPage(1);
+    setRevenueFilters(nextFilters);
+    if (!filtersChanged && revenuePage === 1) loadEmployeeRevenue({ page: 1, filters: nextFilters });
+  };
 
-    const headers = ['Ma don', 'Khach hang', 'Thanh toan', 'Tong tien', 'Thoi gian'];
-    const rows = employeeRevenue.orders.map((order) => [
-      order.order_number,
-      order.customer_name,
-      formatPaymentMethod(order.payment_method),
-      order.total,
-      formatDateTime(String(order.created_at).replace('T', ' ').slice(0, 19))
-    ]);
+  const loadAllRevenueOrders = async () => {
+    const firstResponse = await api.get('/employees/revenue', {
+      params: {
+        employeeId: selectedRevenueEmployeeId,
+        ...revenueFilters,
+        page: 1,
+        limit: 100
+      }
+    });
+    const firstData = firstResponse.data;
+    const totalPages = Number(firstData.pagination?.totalPages || 1);
+    if (totalPages <= 1) return firstData;
+
+    const remaining = await Promise.all(
+      Array.from({ length: totalPages - 1 }, (_, index) => api.get('/employees/revenue', {
+        params: {
+          employeeId: selectedRevenueEmployeeId,
+          ...revenueFilters,
+          page: index + 2,
+          limit: 100
+        }
+      }))
+    );
+    return {
+      ...firstData,
+      orders: [firstData.orders, ...remaining.map((response) => response.data.orders)].flat()
+    };
+  };
+
+  const loadRevenueOrderDetails = async (orders) => {
+    const details = [];
+    for (let index = 0; index < orders.length; index += 8) {
+      const batch = orders.slice(index, index + 8);
+      const responses = await Promise.all(batch.map((order) => api.get(`/orders/${order.id}`)));
+      details.push(...responses.map((response) => response.data));
+    }
+    return details;
+  };
+
+  const exportRevenueCsv = async () => {
+    if (!selectedRevenueEmployeeId) return;
+    try {
+      setExportingRevenue('csv');
+      const exportData = await loadAllRevenueOrders();
+      const headers = ['Mã đơn', 'Thời gian', 'Khách hàng', 'Trạng thái', 'Thanh toán', 'Số lượng SP', 'Tổng tiền'];
+      const rows = exportData.orders.map((order) => [
+        order.order_number,
+        formatSaleDateTime(order.created_at),
+        order.customer_name,
+        formatOrderStatus(order.status),
+        formatPaymentMethod(order.payment_method),
+        order.item_quantity,
+        order.total
+      ]);
     const csv = [headers, ...rows]
       .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
       .join('\n');
-    const blob = new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `doanh-thu-${employeeRevenue.employee.code}-${employeeRevenue.date}.csv`;
-    link.click();
-    URL.revokeObjectURL(url);
+      downloadBlob(
+        new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8;' }),
+        `lich-su-ban-hang-${exportData.employee.code}-${exportData.range.from}-${exportData.range.to}.csv`
+      );
+      toast.success('Đã xuất lịch sử bán hàng CSV');
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Không thể xuất lịch sử bán hàng CSV');
+    } finally {
+      setExportingRevenue('');
+    }
+  };
+
+  const exportRevenueExcel = async () => {
+    if (!selectedRevenueEmployeeId) return;
+    try {
+      setExportingRevenue('excel');
+      const exportData = await loadAllRevenueOrders();
+      const orderDetails = await loadRevenueOrderDetails(exportData.orders);
+      const { default: ExcelJS } = await import('exceljs');
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = 'Z-TECH POS';
+      workbook.created = new Date();
+      workbook.modified = new Date();
+
+      const summarySheet = workbook.addWorksheet('Tổng quan');
+      summarySheet.columns = [
+        { width: 24 }, { width: 24 }, { width: 4 },
+        { width: 24 }, { width: 24 }, { width: 24 }
+      ];
+      styleExcelTitle(
+        summarySheet,
+        'A1:F1',
+        'BÁO CÁO DOANH THU & LỊCH SỬ BÁN HÀNG',
+        `${exportData.employee.code} – ${exportData.employee.name} | ${exportData.range.from} đến ${exportData.range.to}`
+      );
+      summarySheet.addRow([]);
+      summarySheet.addRow(['THÔNG TIN BỘ LỌC', '', '', 'CHỈ SỐ KINH DOANH', '', '']);
+      summarySheet.mergeCells('A4:B4');
+      summarySheet.mergeCells('D4:F4');
+      ['A4', 'D4'].forEach((address) => {
+        summarySheet.getCell(address).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        summarySheet.getCell(address).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0891B2' } };
+        summarySheet.getCell(address).alignment = { horizontal: 'center' };
+      });
+      const paymentFilterLabels = { all: 'Tất cả phương thức', cash: 'Tiền mặt', card: 'Thẻ', transfer: 'Chuyển khoản' };
+      const statusFilterLabels = { all: 'Tất cả trạng thái', completed: 'Hoàn thành', cancelled: 'Đã hủy' };
+      const summaryRows = [
+        ['Nhân viên', `${exportData.employee.code} – ${exportData.employee.name}`, '', 'Doanh thu hoàn thành', Number(exportData.summary.revenue || 0), 'VNĐ'],
+        ['Từ ngày', exportData.range.from, '', 'Đơn hoàn thành', Number(exportData.summary.completedOrders || 0), 'đơn'],
+        ['Đến ngày', exportData.range.to, '', 'Đơn đã hủy', Number(exportData.summary.cancelledOrders || 0), 'đơn'],
+        ['Trạng thái', statusFilterLabels[revenueFilters.status] || revenueFilters.status, '', 'Sản phẩm đã bán', Number(exportData.summary.productsSold || 0), 'sản phẩm'],
+        ['Thanh toán', paymentFilterLabels[revenueFilters.paymentMethod] || revenueFilters.paymentMethod, '', 'Giá trị TB/đơn', Number(exportData.summary.averageOrderValue || 0), 'VNĐ'],
+        ['Từ khóa', revenueFilters.search || 'Không có', '', 'Tổng hóa đơn phù hợp', Number(exportData.pagination?.total || exportData.orders.length), 'hóa đơn']
+      ];
+      summaryRows.forEach((values) => summarySheet.addRow(values));
+      for (let rowNumber = 5; rowNumber <= 10; rowNumber += 1) {
+        const row = summarySheet.getRow(rowNumber);
+        row.getCell(1).font = { bold: true, color: { argb: 'FF334155' } };
+        row.getCell(4).font = { bold: true, color: { argb: 'FF334155' } };
+        row.getCell(5).font = { bold: true, color: { argb: 'FF0F3B46' } };
+        row.eachCell((cell) => {
+          cell.border = { bottom: { style: 'hair', color: { argb: 'FFCBD5E1' } } };
+          cell.alignment = { vertical: 'middle', wrapText: true };
+        });
+      }
+      summarySheet.getCell('E5').numFmt = '#,##0 "đ"';
+      summarySheet.getCell('E9').numFmt = '#,##0 "đ"';
+
+      const completedOrders = exportData.orders.filter((order) => order.status === 'completed');
+      const paymentBreakdown = ['cash', 'card', 'transfer'].map((method) => {
+        const orders = completedOrders.filter((order) => order.payment_method === method);
+        return {
+          method: formatPaymentMethod(method),
+          orders: orders.length,
+          revenue: orders.reduce((sum, order) => sum + Number(order.total || 0), 0)
+        };
+      });
+      summarySheet.addRow([]);
+      const paymentHeader = summarySheet.addRow(['PHÂN BỔ THANH TOÁN', 'Số hóa đơn', 'Doanh thu', '', 'TOP SẢN PHẨM', 'Doanh thu']);
+      styleExcelHeader(paymentHeader);
+      const topProducts = exportData.products.slice(0, Math.max(3, paymentBreakdown.length));
+      const breakdownRows = Math.max(paymentBreakdown.length, topProducts.length);
+      for (let index = 0; index < breakdownRows; index += 1) {
+        const payment = paymentBreakdown[index] || {};
+        const product = topProducts[index] || {};
+        summarySheet.addRow([
+          payment.method || '',
+          payment.orders ?? '',
+          payment.revenue ?? '',
+          '',
+          product.name || '',
+          product.revenue ?? ''
+        ]);
+      }
+      styleExcelBody(summarySheet, paymentHeader.number + 1, paymentHeader.number + breakdownRows, [3, 6]);
+
+      const orderSheet = workbook.addWorksheet('Hóa đơn', { views: [{ state: 'frozen', ySplit: 1 }] });
+      orderSheet.columns = [
+        { header: 'Mã đơn', key: 'orderNumber', width: 24 },
+        { header: 'Thời gian', key: 'createdAt', width: 22 },
+        { header: 'Khách hàng', key: 'customerName', width: 26 },
+        { header: 'Trạng thái', key: 'status', width: 16 },
+        { header: 'Thanh toán', key: 'paymentMethod', width: 18 },
+        { header: 'Số lượng SP', key: 'itemQuantity', width: 15 },
+        { header: 'Tạm tính', key: 'subtotal', width: 18 },
+        { header: 'Giảm giá', key: 'discount', width: 18 },
+        { header: 'VAT', key: 'vatAmount', width: 16 },
+        { header: 'Tổng tiền', key: 'total', width: 20 },
+        { header: 'Ghi chú', key: 'note', width: 36 }
+      ];
+      orderSheet.addRows(exportData.orders.map((order) => ({
+        orderNumber: order.order_number,
+        createdAt: formatSaleDateTime(order.created_at),
+        customerName: order.customer_name,
+        status: formatOrderStatus(order.status),
+        paymentMethod: formatPaymentMethod(order.payment_method),
+        itemQuantity: Number(order.item_quantity || 0),
+        subtotal: Number(order.subtotal || 0),
+        discount: Number(order.discount || 0),
+        vatAmount: Number(order.vat_amount || 0),
+        total: Number(order.total || 0),
+        note: order.note || ''
+      })));
+      styleExcelHeader(orderSheet.getRow(1));
+      styleExcelBody(orderSheet, 2, exportData.orders.length + 1, [7, 8, 9, 10]);
+      orderSheet.autoFilter = 'A1:K1';
+
+      const detailRows = orderDetails.flatMap((order) => (order.items || []).map((item) => ({
+        orderNumber: order.order_number,
+        createdAt: formatSaleDateTime(order.created_at),
+        employee: order.cashier_name,
+        customer: order.customer_name || 'Khách thường',
+        status: formatOrderStatus(order.status),
+        paymentMethod: formatPaymentMethod(order.payment_method),
+        sku: item.sku || '',
+        productName: item.product_name,
+        quantity: Number(item.quantity || 0),
+        unitPrice: Number(item.unit_price || 0),
+        lineTotal: Number(item.subtotal || 0)
+      })));
+      const detailSheet = workbook.addWorksheet('Chi tiết từng sản phẩm', { views: [{ state: 'frozen', ySplit: 1 }] });
+      detailSheet.columns = [
+        { header: 'Mã đơn', key: 'orderNumber', width: 24 },
+        { header: 'Thời gian', key: 'createdAt', width: 22 },
+        { header: 'Nhân viên', key: 'employee', width: 24 },
+        { header: 'Khách hàng', key: 'customer', width: 24 },
+        { header: 'Trạng thái', key: 'status', width: 15 },
+        { header: 'Thanh toán', key: 'paymentMethod', width: 18 },
+        { header: 'SKU', key: 'sku', width: 18 },
+        { header: 'Sản phẩm', key: 'productName', width: 42 },
+        { header: 'Số lượng', key: 'quantity', width: 14 },
+        { header: 'Đơn giá', key: 'unitPrice', width: 18 },
+        { header: 'Thành tiền', key: 'lineTotal', width: 20 }
+      ];
+      detailSheet.addRows(detailRows);
+      styleExcelHeader(detailSheet.getRow(1), 'FF2563EB');
+      styleExcelBody(detailSheet, 2, detailRows.length + 1, [10, 11]);
+      detailSheet.autoFilter = 'A1:K1';
+
+      const productSheet = workbook.addWorksheet('Sản phẩm đã bán', { views: [{ state: 'frozen', ySplit: 1 }] });
+      productSheet.columns = [
+        { header: 'SKU', key: 'sku', width: 20 },
+        { header: 'Tên sản phẩm', key: 'name', width: 40 },
+        { header: 'Số lượng', key: 'quantity', width: 16 },
+        { header: 'Doanh thu', key: 'revenue', width: 22 }
+      ];
+      productSheet.addRows(exportData.products);
+      styleExcelHeader(productSheet.getRow(1), 'FF7C3AED');
+      styleExcelBody(productSheet, 2, exportData.products.length + 1, [4]);
+      productSheet.autoFilter = 'A1:D1';
+
+      const paymentRows = orderDetails.flatMap((order) => (order.payments || []).map((payment) => ({
+        orderNumber: order.order_number,
+        paidAt: formatSaleDateTime(payment.paid_at || payment.created_at),
+        method: formatPaymentMethod(payment.payment_method),
+        status: payment.status,
+        amount: Number(payment.amount || 0),
+        paidAmount: Number(payment.paid_amount || 0),
+        changeAmount: Number(payment.change_amount || 0)
+      })));
+      const paymentSheet = workbook.addWorksheet('Giao dịch thanh toán', { views: [{ state: 'frozen', ySplit: 1 }] });
+      paymentSheet.columns = [
+        { header: 'Mã đơn', key: 'orderNumber', width: 24 },
+        { header: 'Thời gian', key: 'paidAt', width: 22 },
+        { header: 'Phương thức', key: 'method', width: 18 },
+        { header: 'Trạng thái', key: 'status', width: 18 },
+        { header: 'Số tiền', key: 'amount', width: 20 },
+        { header: 'Khách trả', key: 'paidAmount', width: 20 },
+        { header: 'Tiền thừa', key: 'changeAmount', width: 20 }
+      ];
+      paymentSheet.addRows(paymentRows);
+      styleExcelHeader(paymentSheet.getRow(1), 'FF059669');
+      styleExcelBody(paymentSheet, 2, paymentRows.length + 1, [5, 6, 7]);
+      paymentSheet.autoFilter = 'A1:G1';
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      downloadBlob(
+        new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+        `lich-su-ban-hang-${exportData.employee.code}-${exportData.range.from}-${exportData.range.to}.xlsx`
+      );
+      toast.success('Đã xuất lịch sử bán hàng Excel');
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Không thể xuất lịch sử bán hàng Excel');
+    } finally {
+      setExportingRevenue('');
+    }
+  };
+
+  const exportRevenueOrderExcel = async () => {
+    if (!selectedRevenueOrder) return;
+    try {
+      setExportingRevenue(`order-${selectedRevenueOrder.id}`);
+      const { default: ExcelJS } = await import('exceljs');
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = 'Z-TECH POS';
+      const sheet = workbook.addWorksheet('Chi tiết hóa đơn');
+      sheet.columns = [
+        { width: 22 }, { width: 38 }, { width: 16 },
+        { width: 20 }, { width: 20 }, { width: 20 }
+      ];
+      styleExcelTitle(
+        sheet,
+        'A1:F1',
+        `CHI TIẾT HÓA ĐƠN ${selectedRevenueOrder.order_number}`,
+        `${formatSaleDateTime(selectedRevenueOrder.created_at)} | ${formatOrderStatus(selectedRevenueOrder.status)}`
+      );
+      sheet.addRow([]);
+      sheet.addRow(['Nhân viên', selectedRevenueOrder.cashier_name, '', 'Khách hàng', selectedRevenueOrder.customer_name || 'Khách thường', '']);
+      sheet.addRow(['Thanh toán', formatPaymentMethod(selectedRevenueOrder.payment_method), '', 'Trạng thái', formatOrderStatus(selectedRevenueOrder.status), '']);
+      sheet.addRow(['Ghi chú', selectedRevenueOrder.note || 'Không có ghi chú', '', '', '', '']);
+      sheet.mergeCells('B6:F6');
+      for (let rowNumber = 4; rowNumber <= 6; rowNumber += 1) {
+        const row = sheet.getRow(rowNumber);
+        row.getCell(1).font = { bold: true };
+        row.getCell(4).font = { bold: true };
+        row.eachCell((cell) => { cell.alignment = { vertical: 'middle', wrapText: true }; });
+      }
+      sheet.addRow([]);
+      const itemHeader = sheet.addRow(['SKU', 'Sản phẩm', 'Số lượng', 'Đơn giá', 'Thành tiền', '']);
+      styleExcelHeader(itemHeader);
+      (selectedRevenueOrder.items || []).forEach((item) => {
+        sheet.addRow([
+          item.sku || '',
+          item.product_name,
+          Number(item.quantity || 0),
+          Number(item.unit_price || 0),
+          Number(item.subtotal || 0),
+          ''
+        ]);
+      });
+      const itemStart = itemHeader.number + 1;
+      const itemEnd = itemHeader.number + (selectedRevenueOrder.items || []).length;
+      styleExcelBody(sheet, itemStart, itemEnd, [4, 5]);
+      const totalStart = itemEnd + 2;
+      sheet.getCell(totalStart, 4).value = 'Tạm tính';
+      sheet.getCell(totalStart, 5).value = Number(selectedRevenueOrder.subtotal || 0);
+      sheet.getCell(totalStart + 1, 4).value = 'Giảm giá';
+      sheet.getCell(totalStart + 1, 5).value = -Number(selectedRevenueOrder.discount || 0);
+      sheet.getCell(totalStart + 2, 4).value = 'VAT';
+      sheet.getCell(totalStart + 2, 5).value = Number(selectedRevenueOrder.vat_amount || 0);
+      sheet.getCell(totalStart + 3, 4).value = 'TỔNG TIỀN';
+      sheet.getCell(totalStart + 3, 5).value = Number(selectedRevenueOrder.total || 0);
+      for (let rowNumber = totalStart; rowNumber <= totalStart + 3; rowNumber += 1) {
+        sheet.getCell(rowNumber, 4).font = { bold: true };
+        sheet.getCell(rowNumber, 5).font = { bold: true };
+        sheet.getCell(rowNumber, 5).numFmt = '#,##0 "đ"';
+      }
+      sheet.getRow(totalStart + 3).eachCell((cell) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0F2FE' } };
+        cell.font = { bold: true, color: { argb: 'FF0F3B46' } };
+      });
+
+      const paymentSheet = workbook.addWorksheet('Thanh toán');
+      paymentSheet.columns = [
+        { header: 'Phương thức', key: 'method', width: 22 },
+        { header: 'Trạng thái', key: 'status', width: 20 },
+        { header: 'Số tiền', key: 'amount', width: 20 },
+        { header: 'Khách trả', key: 'paidAmount', width: 20 },
+        { header: 'Tiền thừa', key: 'changeAmount', width: 20 },
+        { header: 'Thời gian', key: 'paidAt', width: 22 }
+      ];
+      paymentSheet.addRows((selectedRevenueOrder.payments || []).map((payment) => ({
+        method: formatPaymentMethod(payment.payment_method),
+        status: payment.status,
+        amount: Number(payment.amount || 0),
+        paidAmount: Number(payment.paid_amount || 0),
+        changeAmount: Number(payment.change_amount || 0),
+        paidAt: formatSaleDateTime(payment.paid_at || payment.created_at)
+      })));
+      styleExcelHeader(paymentSheet.getRow(1), 'FF059669');
+      styleExcelBody(paymentSheet, 2, (selectedRevenueOrder.payments || []).length + 1, [3, 4, 5]);
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      downloadBlob(
+        new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+        `hoa-don-${selectedRevenueOrder.order_number}.xlsx`
+      );
+      toast.success('Đã xuất chi tiết hóa đơn Excel');
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Không thể xuất chi tiết hóa đơn');
+    } finally {
+      setExportingRevenue('');
+    }
+  };
+
+  const openRevenueOrder = async (order) => {
+    try {
+      setLoadingRevenueOrder(true);
+      const response = await api.get(`/orders/${order.id}`);
+      setSelectedRevenueOrder(response.data);
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Không thể tải chi tiết hóa đơn');
+    } finally {
+      setLoadingRevenueOrder(false);
+    }
   };
 
   return (
@@ -442,7 +944,7 @@ export default function Employees() {
         <div className="flex gap-7">
           {[
             ['accounts', 'Tài khoản nhân viên'],
-            ['revenue', 'Doanh thu nhân viên'],
+            ['revenue', 'Doanh thu & lịch sử bán hàng'],
             ['shifts', 'Ca làm']
           ].map(([key, label]) => (
             <button
@@ -458,62 +960,11 @@ export default function Employees() {
       </div>
 
       {activeTab === 'accounts' && <>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <section className="rounded-lg border border-[#d7eef3] bg-white p-5 shadow-sm">
-          <div className="mb-4 flex items-start justify-between">
-            <p className="font-semibold text-gray-500">Tổng nhân viên</p>
-            <div className="grid h-10 w-10 place-items-center rounded-lg bg-[#c0edf7] text-[#0f3b46]">
-              <Users size={22} />
-            </div>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-bold text-gray-950">{stats.total}</span>
-            <span className="text-sm text-gray-500">nhân sự</span>
-          </div>
-        </section>
-
-        <section className="rounded-lg border border-[#d7eef3] bg-white p-5 shadow-sm">
-          <div className="mb-4 flex items-start justify-between">
-            <p className="font-semibold text-gray-500">Đang hoạt động</p>
-            <div className="grid h-10 w-10 place-items-center rounded-lg bg-emerald-50 text-emerald-600">
-              <UserCheck size={22} />
-            </div>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-bold text-gray-950">{stats.active}</span>
-            <span className="text-sm font-bold text-emerald-600">
-              {stats.total > 0 ? Math.round((stats.active / stats.total) * 100) : 0}%
-            </span>
-          </div>
-        </section>
-
-        <section className="rounded-lg border border-[#d7eef3] bg-white p-5 shadow-sm">
-          <div className="mb-4 flex items-start justify-between">
-            <p className="font-semibold text-gray-500">Ngừng hoạt động</p>
-            <div className="grid h-10 w-10 place-items-center rounded-lg bg-red-50 text-red-600">
-              <UserX size={22} />
-            </div>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-bold text-gray-950">{stats.inactive}</span>
-            <span className="text-sm font-bold text-red-600">
-              {stats.total > 0 ? Math.round((stats.inactive / stats.total) * 100) : 0}%
-            </span>
-          </div>
-        </section>
-
-        <section className="rounded-lg border border-[#d7eef3] bg-white p-5 shadow-sm">
-          <div className="mb-4 flex items-start justify-between">
-            <p className="font-semibold text-gray-500">Quản trị viên</p>
-            <div className="grid h-10 w-10 place-items-center rounded-lg bg-[#f4fcfe] text-[#0f3b46]">
-              <ShieldCheck size={22} />
-            </div>
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-bold text-gray-950">{stats.admins}</span>
-            <span className="text-sm text-gray-500">tài khoản</span>
-          </div>
-        </section>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <KpiCard icon={Users} label="Tổng nhân viên" value={stats.total.toLocaleString('vi-VN')} detail="Nhân sự đã tạo tài khoản" toneClassName="bg-sky-50 text-sky-700" />
+        <KpiCard icon={UserCheck} label="Đang hoạt động" value={stats.active.toLocaleString('vi-VN')} detail={`${stats.total > 0 ? Math.round((stats.active / stats.total) * 100) : 0}% tổng nhân sự`} toneClassName="bg-emerald-50 text-emerald-700" />
+        <KpiCard icon={UserX} label="Ngừng hoạt động" value={stats.inactive.toLocaleString('vi-VN')} detail={`${stats.total > 0 ? Math.round((stats.inactive / stats.total) * 100) : 0}% tổng nhân sự`} toneClassName="bg-red-50 text-red-700" />
+        <KpiCard icon={ShieldCheck} label="Quản trị viên" value={stats.admins.toLocaleString('vi-VN')} detail="Tài khoản có quyền quản lý" toneClassName="bg-violet-50 text-violet-700" />
       </div>
 
       <section className="flex flex-col gap-4 rounded-lg border border-[#d7eef3] bg-white p-4 shadow-sm xl:flex-row xl:items-end">
@@ -689,13 +1140,17 @@ export default function Employees() {
 
       {activeTab === 'revenue' && (
         <div className="space-y-5">
-          <section className="flex flex-col gap-4 border border-[#d7eef3] bg-white p-4 shadow-sm xl:flex-row xl:items-end xl:justify-between">
-            <div className="grid flex-1 gap-4 md:grid-cols-[minmax(260px,380px)_180px]">
+          <section className="border border-[#d7eef3] bg-white p-4 shadow-sm">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(220px,1.3fr)_150px_150px_155px_170px]">
               <label>
                 <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-gray-400">Nhân viên:</span>
                 <select
                   value={selectedRevenueEmployeeId}
-                  onChange={(event) => setSelectedRevenueEmployeeId(event.target.value)}
+                  onChange={(event) => {
+                    setSelectedRevenueEmployeeId(event.target.value);
+                    setRevenuePage(1);
+                    setRevenueProductPage(1);
+                  }}
                   className="h-11 w-full border border-[#d7eef3] bg-white px-3 text-sm font-bold uppercase text-gray-900 outline-none focus:border-[#7ed5e6] focus:ring-2 focus:ring-[#c0edf7]"
                 >
                   {employees.map((employee) => (
@@ -706,46 +1161,80 @@ export default function Employees() {
                 </select>
               </label>
               <label>
-                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-gray-400">Ngày bán:</span>
+                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-gray-400">Từ ngày:</span>
                 <div className="relative">
                   <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                   <input
                     type="date"
-                    value={revenueDate}
-                    onChange={(event) => setRevenueDate(event.target.value)}
+                    value={revenueFilterDraft.from}
+                    onChange={(event) => setRevenueFilterDraft((current) => ({ ...current, from: event.target.value }))}
                     className="h-11 w-full border border-[#d7eef3] bg-white pl-9 pr-3 text-sm font-bold text-gray-900 outline-none focus:border-[#7ed5e6] focus:ring-2 focus:ring-[#c0edf7]"
                   />
                 </div>
               </label>
+              <label>
+                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-gray-400">Đến ngày:</span>
+                <div className="relative">
+                  <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="date"
+                    value={revenueFilterDraft.to}
+                    onChange={(event) => setRevenueFilterDraft((current) => ({ ...current, to: event.target.value }))}
+                    className="h-11 w-full border border-[#d7eef3] bg-white pl-9 pr-3 text-sm font-bold text-gray-900 outline-none focus:border-[#7ed5e6] focus:ring-2 focus:ring-[#c0edf7]"
+                  />
+                </div>
+              </label>
+              <label>
+                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-gray-400">Trạng thái:</span>
+                <select value={revenueFilterDraft.status} onChange={(event) => setRevenueFilterDraft((current) => ({ ...current, status: event.target.value }))} className="h-11 w-full border border-[#d7eef3] bg-white px-3 text-sm font-bold text-gray-900 outline-none focus:border-[#7ed5e6] focus:ring-2 focus:ring-[#c0edf7]">
+                  <option value="all">Tất cả</option>
+                  <option value="completed">Hoàn thành</option>
+                  <option value="cancelled">Đã hủy</option>
+                </select>
+              </label>
+              <label>
+                <span className="mb-1 block text-xs font-extrabold uppercase tracking-wide text-gray-400">Thanh toán:</span>
+                <select value={revenueFilterDraft.paymentMethod} onChange={(event) => setRevenueFilterDraft((current) => ({ ...current, paymentMethod: event.target.value }))} className="h-11 w-full border border-[#d7eef3] bg-white px-3 text-sm font-bold text-gray-900 outline-none focus:border-[#7ed5e6] focus:ring-2 focus:ring-[#c0edf7]">
+                  <option value="all">Tất cả</option>
+                  <option value="cash">Tiền mặt</option>
+                  <option value="card">Thẻ</option>
+                  <option value="transfer">Chuyển khoản</option>
+                </select>
+              </label>
             </div>
-            <button
-              type="button"
-              onClick={loadEmployeeRevenue}
-              disabled={loadingRevenue || !selectedRevenueEmployeeId}
-              className="inline-flex h-11 items-center justify-center gap-2 bg-gray-950 px-5 text-sm font-bold text-white transition hover:bg-gray-800 disabled:opacity-60"
-            >
-              <RefreshCw size={17} className={loadingRevenue ? 'animate-spin' : ''} />
-              Tải báo cáo
-            </button>
+            <div className="mt-4 flex flex-col gap-3 border-t border-[#edf7f9] pt-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="relative min-w-0 flex-1 lg:max-w-xl">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <input
+                  value={revenueFilterDraft.search}
+                  onChange={(event) => setRevenueFilterDraft((current) => ({ ...current, search: event.target.value }))}
+                  onKeyDown={(event) => { if (event.key === 'Enter') applyRevenueFilters(); }}
+                  className="h-11 w-full border border-[#d7eef3] bg-white pl-9 pr-3 text-sm outline-none focus:border-[#7ed5e6] focus:ring-2 focus:ring-[#c0edf7]"
+                  placeholder="Tìm mã đơn, khách hàng hoặc sản phẩm..."
+                />
+              </div>
+              <div className="flex flex-wrap justify-end gap-2">
+                <button type="button" onClick={exportRevenueExcel} disabled={Boolean(exportingRevenue) || !selectedRevenueEmployeeId} className="inline-flex h-11 items-center gap-2 border border-emerald-300 px-4 text-sm font-bold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50">
+                  {exportingRevenue === 'excel' ? <RefreshCw className="animate-spin" size={17} /> : <FileSpreadsheet size={17} />} Xuất Excel
+                </button>
+                <button type="button" onClick={exportRevenueCsv} disabled={Boolean(exportingRevenue) || !selectedRevenueEmployeeId} className="inline-flex h-11 items-center gap-2 border border-sky-300 px-4 text-sm font-bold text-sky-700 hover:bg-sky-50 disabled:opacity-50">
+                  {exportingRevenue === 'csv' ? <RefreshCw className="animate-spin" size={17} /> : <Download size={17} />} Xuất CSV
+                </button>
+                <button type="button" onClick={applyRevenueFilters} disabled={loadingRevenue || !selectedRevenueEmployeeId} className="inline-flex h-11 items-center justify-center bg-[#69afd6] px-5 text-sm font-bold text-white transition hover:bg-[#579fc8] disabled:cursor-wait disabled:opacity-60">
+                  {loadingRevenue ? 'Đang áp dụng...' : 'Áp dụng'}
+                </button>
+              </div>
+            </div>
           </section>
 
-          <div className="grid gap-4 lg:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             {[
-              { label: 'Tổng doanh thu', value: formatCurrency(employeeRevenue?.summary?.revenue), icon: WalletCards, color: 'text-emerald-700', bg: 'bg-emerald-50' },
-              { label: 'Hóa đơn đã chốt', value: employeeRevenue?.summary?.orders || 0, icon: ShoppingCart, color: 'text-sky-700', bg: 'bg-sky-50' },
-              { label: 'Sản phẩm đã bán', value: employeeRevenue?.summary?.productsSold || 0, icon: Box, color: 'text-purple-700', bg: 'bg-purple-50' }
-            ].map(({ label, value, icon: Icon, color, bg }) => (
-              <section key={label} className="border border-[#d7eef3] bg-white p-5 shadow-sm">
-                <div className="flex items-center gap-4">
-                  <div className={`grid h-11 w-11 place-items-center border border-[#d7eef3] ${bg} ${color}`}>
-                    <Icon size={22} />
-                  </div>
-                  <div>
-                    <p className="text-xs font-extrabold uppercase tracking-wide text-gray-400">{label}</p>
-                    <p className="mt-1 text-2xl font-extrabold text-gray-950">{value}</p>
-                  </div>
-                </div>
-              </section>
+              { label: 'Tổng doanh thu', value: formatCurrency(employeeRevenue?.summary?.revenue), detail: `TB/đơn: ${formatCurrency(employeeRevenue?.summary?.averageOrderValue)}`, icon: WalletCards, tone: 'bg-emerald-50 text-emerald-700' },
+              { label: 'Hóa đơn hoàn thành', value: Number(employeeRevenue?.summary?.completedOrders || 0).toLocaleString('vi-VN'), detail: 'Đơn đã thanh toán thành công', icon: ShoppingCart, tone: 'bg-sky-50 text-sky-700' },
+              { label: 'Đơn đã hủy', value: Number(employeeRevenue?.summary?.cancelledOrders || 0).toLocaleString('vi-VN'), detail: 'Không được tính vào doanh thu', icon: CircleX, tone: 'bg-rose-50 text-rose-700' },
+              { label: 'Sản phẩm đã bán', value: Number(employeeRevenue?.summary?.productsSold || 0).toLocaleString('vi-VN'), detail: 'Chỉ tính đơn hoàn thành', icon: Box, tone: 'bg-purple-50 text-purple-700' }
+            ].map(({ label, value, detail, icon, tone }) => (
+              <KpiCard key={label} icon={icon} label={label} value={value} detail={detail} toneClassName={tone} />
             ))}
           </div>
 
@@ -754,42 +1243,58 @@ export default function Employees() {
               <div className="flex items-center justify-between border-b border-[#edf7f9] px-5 py-4">
                 <h2 className="flex items-center gap-2 text-sm font-extrabold uppercase tracking-wide text-gray-800">
                   <BarChart3 size={17} className="text-sky-700" />
-                  Danh sách hóa đơn đã bán
+                  Lịch sử hóa đơn
                 </h2>
-                <button type="button" onClick={exportRevenueCsv} className="grid h-9 w-9 place-items-center border border-[#d7eef3] text-gray-500 hover:bg-[#f4fcfe]">
-                  <Download size={17} />
-                </button>
+                <span className="text-xs font-bold text-gray-400">{Number(employeeRevenue?.pagination?.total || 0).toLocaleString('vi-VN')} hóa đơn</span>
               </div>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[680px] text-left text-sm">
+              <div className="min-h-[530px] overflow-x-auto">
+                <table className="w-full min-w-[1080px] text-left text-sm">
                   <thead className="bg-white text-xs font-extrabold uppercase tracking-wide text-gray-400">
                     <tr>
                       <th className="px-5 py-4">Mã đơn</th>
                       <th className="px-5 py-4">Khách hàng</th>
+                      <th className="px-5 py-4">Thời gian</th>
+                      <th className="px-5 py-4">Trạng thái</th>
                       <th className="px-5 py-4">Thanh toán</th>
+                      <th className="px-5 py-4 text-center">SL SP</th>
                       <th className="px-5 py-4 text-right">Tổng tiền</th>
                       <th className="px-5 py-4 text-center">Xem</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#edf7f9]">
                     {loadingRevenue ? (
-                      <tr><td colSpan={5} className="px-5 py-12 text-center font-semibold text-gray-500">Đang tải báo cáo...</td></tr>
+                      <tr><td colSpan={8} className="px-5 py-12 text-center font-semibold text-gray-500">Đang tải lịch sử bán hàng...</td></tr>
                     ) : employeeRevenue?.orders?.length ? (
                       employeeRevenue.orders.map((order) => (
                         <tr key={order.id} className="hover:bg-[#f8fdfe]">
                           <td className="px-5 py-4 font-bold text-[#0f3b46]">{order.order_number}</td>
                           <td className="px-5 py-4 text-gray-700">{order.customer_name}</td>
+                          <td className="px-5 py-4 text-xs font-semibold text-gray-500">{formatSaleDateTime(order.created_at)}</td>
+                          <td className="px-5 py-4"><span className={`inline-flex px-2.5 py-1 text-xs font-bold ${orderStatusClass(order.status)}`}>{formatOrderStatus(order.status)}</span></td>
                           <td className="px-5 py-4 text-gray-600">{formatPaymentMethod(order.payment_method)}</td>
-                          <td className="px-5 py-4 text-right font-bold text-gray-950">{formatCurrency(order.total)}</td>
-                          <td className="px-5 py-4 text-center text-gray-400"><Eye size={17} className="mx-auto" /></td>
+                          <td className="px-5 py-4 text-center font-bold text-gray-700">{Number(order.item_quantity || 0).toLocaleString('vi-VN')}</td>
+                          <td className={`px-5 py-4 text-right font-bold ${order.status === 'cancelled' ? 'text-gray-400 line-through' : 'text-gray-950'}`}>{formatCurrency(order.total)}</td>
+                          <td className="px-5 py-4 text-center">
+                            <button type="button" onClick={() => openRevenueOrder(order)} disabled={loadingRevenueOrder} className="grid h-9 w-9 place-items-center border border-[#d7eef3] text-gray-500 hover:bg-[#f4fcfe] hover:text-sky-700 disabled:opacity-50" title="Xem chi tiết hóa đơn">
+                              <Eye size={17} />
+                            </button>
+                          </td>
                         </tr>
                       ))
                     ) : (
-                      <tr><td colSpan={5} className="px-5 py-16 text-center font-semibold text-gray-400">Không có hóa đơn nào được bán trong ngày.</td></tr>
+                      <tr><td colSpan={8} className="px-5 py-16 text-center font-semibold text-gray-400">Không có hóa đơn phù hợp với bộ lọc.</td></tr>
                     )}
                   </tbody>
                 </table>
               </div>
+              <TablePagination
+                currentPage={employeeRevenue?.pagination?.page || revenuePage}
+                totalItems={employeeRevenue?.pagination?.total || 0}
+                pageSize={employeeRevenue?.pagination?.limit || 10}
+                onPageChange={setRevenuePage}
+                itemLabel="hóa đơn"
+                ariaLabel="Phân trang lịch sử bán hàng nhân viên"
+              />
             </section>
 
             <section className="overflow-hidden border border-[#d7eef3] bg-white shadow-sm">
@@ -799,7 +1304,7 @@ export default function Employees() {
                   Mặt hàng nhân viên đã bán
                 </h2>
               </div>
-              <div className="overflow-x-auto">
+              <div className="min-h-[530px] overflow-x-auto">
                 <table className="w-full min-w-[560px] text-left text-sm">
                   <thead className="bg-white text-xs font-extrabold uppercase tracking-wide text-gray-400">
                     <tr>
@@ -811,8 +1316,8 @@ export default function Employees() {
                   <tbody className="divide-y divide-[#edf7f9]">
                     {loadingRevenue ? (
                       <tr><td colSpan={3} className="px-5 py-12 text-center font-semibold text-gray-500">Đang tải mặt hàng...</td></tr>
-                    ) : employeeRevenue?.products?.length ? (
-                      employeeRevenue.products.map((product) => (
+                    ) : visibleRevenueProducts.length ? (
+                      visibleRevenueProducts.map((product) => (
                         <tr key={product.id} className="hover:bg-[#f8fdfe]">
                           <td className="px-5 py-4 font-semibold text-gray-900">{product.name}</td>
                           <td className="px-5 py-4 text-center font-bold text-gray-700">{product.quantity}</td>
@@ -820,17 +1325,113 @@ export default function Employees() {
                         </tr>
                       ))
                     ) : (
-                      <tr><td colSpan={3} className="px-5 py-16 text-center font-semibold text-gray-400">Chưa bán được sản phẩm nào trong ngày.</td></tr>
+                      <tr><td colSpan={3} className="px-5 py-16 text-center font-semibold text-gray-400">Chưa có sản phẩm thuộc các hóa đơn hoàn thành.</td></tr>
                     )}
                   </tbody>
                 </table>
               </div>
+              <TablePagination
+                currentPage={revenueProductPage}
+                totalItems={revenueProducts.length}
+                pageSize={10}
+                onPageChange={setRevenueProductPage}
+                itemLabel="sản phẩm"
+                ariaLabel="Phân trang sản phẩm nhân viên đã bán"
+              />
             </section>
           </div>
         </div>
       )}
 
       {activeTab === 'shifts' && <Shifts embedded />}
+
+      <Modal
+        isOpen={Boolean(selectedRevenueOrder)}
+        onClose={() => setSelectedRevenueOrder(null)}
+        title="Chi tiết hóa đơn"
+        maxWidth="max-w-5xl"
+        headerActions={(
+          <>
+            <button
+              type="button"
+              onClick={exportRevenueOrderExcel}
+              disabled={!selectedRevenueOrder || Boolean(exportingRevenue)}
+              className="inline-flex h-10 items-center gap-2 border border-emerald-300 bg-white px-4 text-sm font-bold text-emerald-700 hover:bg-emerald-50 disabled:cursor-wait disabled:opacity-50"
+            >
+              {exportingRevenue === `order-${selectedRevenueOrder?.id}` ? <RefreshCw className="animate-spin" size={16} /> : <FileSpreadsheet size={16} />}
+              {exportingRevenue === `order-${selectedRevenueOrder?.id}` ? 'Đang xuất...' : 'Xuất Excel'}
+            </button>
+            <button type="button" onClick={() => setSelectedRevenueOrder(null)} disabled={Boolean(exportingRevenue)} className="inline-flex h-10 items-center gap-2 border border-[#69afd6] bg-white px-4 text-sm font-bold text-[#398fbd] hover:bg-sky-50 disabled:opacity-50">
+              Đóng
+            </button>
+          </>
+        )}
+      >
+        {selectedRevenueOrder && (
+          <div className="space-y-5">
+            <div className="grid gap-3 border border-[#d7eef3] bg-[#f8fdfe] p-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
+              <div>
+                <p className="text-xs font-bold uppercase text-gray-400">Mã hóa đơn</p>
+                <p className="mt-1 font-extrabold text-[#0f3b46]">{selectedRevenueOrder.order_number}</p>
+              </div>
+              <div>
+                <p className="text-xs font-bold uppercase text-gray-400">Nhân viên</p>
+                <p className="mt-1 font-bold text-gray-900">{selectedRevenueOrder.cashier_name}</p>
+              </div>
+              <div>
+                <p className="text-xs font-bold uppercase text-gray-400">Khách hàng</p>
+                <p className="mt-1 font-bold text-gray-900">{selectedRevenueOrder.customer_name || 'Khách thường'}</p>
+              </div>
+              <div>
+                <p className="text-xs font-bold uppercase text-gray-400">Thời gian</p>
+                <p className="mt-1 font-bold text-gray-900">{formatSaleDateTime(selectedRevenueOrder.created_at)}</p>
+              </div>
+              <div>
+                <p className="text-xs font-bold uppercase text-gray-400">Trạng thái</p>
+                <span className={`mt-1 inline-flex px-2.5 py-1 text-xs font-bold ${orderStatusClass(selectedRevenueOrder.status)}`}>{formatOrderStatus(selectedRevenueOrder.status)}</span>
+              </div>
+              <div>
+                <p className="text-xs font-bold uppercase text-gray-400">Thanh toán</p>
+                <p className="mt-1 font-bold text-gray-900">{formatPaymentMethod(selectedRevenueOrder.payment_method)}</p>
+              </div>
+              <div className="sm:col-span-2">
+                <p className="text-xs font-bold uppercase text-gray-400">Ghi chú</p>
+                <p className="mt-1 font-semibold text-gray-700">{selectedRevenueOrder.note || 'Không có ghi chú'}</p>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto border border-[#d7eef3]">
+              <table className="w-full min-w-[680px] text-left text-sm">
+                <thead className="bg-[#f4fcfe] text-xs font-extrabold uppercase tracking-wide text-gray-500">
+                  <tr>
+                    <th className="px-4 py-3">Sản phẩm</th>
+                    <th className="px-4 py-3 text-center">Số lượng</th>
+                    <th className="px-4 py-3 text-right">Đơn giá</th>
+                    <th className="px-4 py-3 text-right">Thành tiền</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#edf7f9]">
+                  {(selectedRevenueOrder.items || []).map((item) => (
+                    <tr key={item.id}>
+                      <td className="px-4 py-3 font-semibold text-gray-900">{item.product_name}</td>
+                      <td className="px-4 py-3 text-center font-bold">{Number(item.quantity || 0).toLocaleString('vi-VN')}</td>
+                      <td className="px-4 py-3 text-right">{formatCurrency(item.unit_price)}</td>
+                      <td className="px-4 py-3 text-right font-bold">{formatCurrency(item.subtotal)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="ml-auto w-full max-w-sm space-y-2 border border-[#d7eef3] p-4 text-sm">
+              <div className="flex justify-between gap-4"><span className="text-gray-500">Tạm tính</span><strong>{formatCurrency(selectedRevenueOrder.subtotal)}</strong></div>
+              <div className="flex justify-between gap-4"><span className="text-gray-500">Giảm giá</span><strong className="text-rose-600">-{formatCurrency(selectedRevenueOrder.discount)}</strong></div>
+              <div className="flex justify-between gap-4"><span className="text-gray-500">VAT</span><strong>{formatCurrency(selectedRevenueOrder.vat_amount)}</strong></div>
+              <div className="flex justify-between gap-4 border-t border-[#edf7f9] pt-3 text-base"><span className="font-extrabold text-gray-900">Tổng tiền</span><strong className={selectedRevenueOrder.status === 'cancelled' ? 'text-gray-400 line-through' : 'text-[#0f3b46]'}>{formatCurrency(selectedRevenueOrder.total)}</strong></div>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       <Modal isOpen={isFormOpen} onClose={closeForm} title={editingEmployee ? 'Sửa nhân viên' : 'Thêm nhân viên'} headerActions={<><button type="button" onClick={closeForm} className="h-11 border border-[#69afd6] bg-white px-5 text-base font-bold text-[#398fbd] hover:bg-sky-50">Hủy</button><button type="submit" form="employee-form" className="h-11 bg-[#69afd6] px-5 text-base font-bold text-white hover:bg-[#579fc8]">Lưu</button></>}>
         <form id="employee-form" onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2">

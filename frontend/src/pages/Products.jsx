@@ -6,8 +6,6 @@ import {
   Barcode,
   Boxes,
   ArrowLeft,
-  ChevronLeft,
-  ChevronRight,
   Download,
   Edit,
   FileSpreadsheet,
@@ -20,8 +18,10 @@ import {
 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import api from '../api/axios';
+import KpiCard from '../components/KpiCard';
 import Modal from '../components/Modal';
 import ProductImage from '../components/ProductImage';
+import TablePagination from '../components/TablePagination';
 import { formatCurrency } from '../utils/format';
 import { getUser, isFullAccessRole } from '../utils/auth';
 import { getDefaultWarrantyPolicy, warrantyTypes } from '../utils/warrantyPolicy';
@@ -691,21 +691,21 @@ export default function Products({ tabNavigation = null }) {
         </section>
       )}
 
-      <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
           { label: 'Tổng sản phẩm', value: productStats.total, note: `${productStats.noCode} chưa có SKU/mã vạch`, icon: Package, tone: 'bg-brand-surface text-brand-strong' },
           { label: 'Sản phẩm đang bán', value: productStats.active, note: 'Đang hiển thị trên POS', icon: Boxes, tone: 'bg-emerald-50 text-emerald-700' },
           { label: 'Sắp hết hàng', value: productStats.low, note: 'Đã chạm mức tồn tối thiểu', icon: AlertTriangle, tone: 'bg-amber-50 text-amber-700' },
           { label: 'Hết hàng', value: productStats.out, note: 'Cần nhập thêm hàng', icon: Barcode, tone: 'bg-red-50 text-red-700' }
         ].map((card) => (
-          <article key={card.label} className="flex min-w-0 items-center gap-3 border border-gray-200 bg-white p-4 shadow-sm">
-            <div className={`grid h-11 w-11 shrink-0 place-items-center ${card.tone}`}><card.icon size={21} /></div>
-            <div className="min-w-0">
-              <p className="truncate text-xs font-bold uppercase tracking-wide text-gray-500">{card.label}</p>
-              <p className="mt-1 text-2xl font-extrabold text-gray-950">{card.value}</p>
-              <p className="mt-0.5 truncate text-xs text-gray-500">{card.note}</p>
-            </div>
-          </article>
+          <KpiCard
+            key={card.label}
+            icon={card.icon}
+            label={card.label}
+            value={Number(card.value || 0).toLocaleString('vi-VN')}
+            detail={card.note}
+            toneClassName={card.tone}
+          />
         ))}
       </section>
 
@@ -802,8 +802,8 @@ export default function Products({ tabNavigation = null }) {
       </section>
 
       <section className="border border-gray-200 bg-white shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1180px] text-left text-sm">
+        <div className="min-h-[730px] overflow-x-auto">
+          <table className="w-full min-w-[1180px] table-fixed text-left text-sm">
             <thead className="border-b border-gray-200 bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
               <tr>
                 <th className="px-4 py-3 font-bold">Sản phẩm</th><th className="px-4 py-3 font-bold">SKU / Mã vạch</th><th className="px-4 py-3 font-bold">Dòng máy</th><th className="px-4 py-3 font-bold">Danh mục</th><th className="px-4 py-3 font-bold">Giá bán</th><th className="px-4 py-3 font-bold">Tồn kho</th><th className="px-4 py-3 font-bold">Trạng thái</th><th className="px-4 py-3 text-right font-bold">Thao tác</th>
@@ -815,7 +815,7 @@ export default function Products({ tabNavigation = null }) {
                 const status = getProductStatus(product);
 
                 return (
-                  <tr key={product.id} className="hover:bg-brand-surface/50">
+                  <tr key={product.id} className="h-[85px] hover:bg-brand-surface/50">
                     <td className="px-4 py-2.5">
                       <div className="flex items-center gap-3">
                         <div className="h-16 w-12 shrink-0 overflow-hidden border border-[#d7eef3]"><ProductImage product={product} iconSize={28} compact /></div>
@@ -869,16 +869,14 @@ export default function Products({ tabNavigation = null }) {
             </tbody>
           </table>
         </div>
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 px-4 py-3">
-          <p className="text-sm text-gray-500">Hiển thị {filteredProducts.length ? (currentPage - 1) * PAGE_SIZE + 1 : 0}–{Math.min(currentPage * PAGE_SIZE, filteredProducts.length)} trong {filteredProducts.length} sản phẩm</p>
-          <div className="flex items-center gap-1">
-            <button type="button" disabled={currentPage === 1} onClick={() => setCurrentPage((page) => page - 1)} className="grid h-8 w-8 place-items-center border border-gray-200 disabled:opacity-40"><ChevronLeft size={17} /></button>
-            {Array.from({ length: totalPages }, (_, index) => index + 1).filter((page) => page === 1 || page === totalPages || Math.abs(page - currentPage) <= 1).map((page, index, pages) => (
-              <span key={page} className="contents">{index > 0 && page - pages[index - 1] > 1 && <span className="px-1 text-gray-400">…</span>}<button type="button" onClick={() => setCurrentPage(page)} className={`h-8 min-w-8 border px-2 text-sm font-bold ${currentPage === page ? 'border-brand bg-brand text-white' : 'border-gray-200 text-gray-600'}`}>{page}</button></span>
-            ))}
-            <button type="button" disabled={currentPage === totalPages} onClick={() => setCurrentPage((page) => page + 1)} className="grid h-8 w-8 place-items-center border border-gray-200 disabled:opacity-40"><ChevronRight size={17} /></button>
-          </div>
-        </div>
+        <TablePagination
+          currentPage={currentPage}
+          totalItems={filteredProducts.length}
+          pageSize={PAGE_SIZE}
+          onPageChange={setCurrentPage}
+          itemLabel="sản phẩm"
+          ariaLabel="Phân trang sản phẩm"
+        />
       </section>
 
       <Modal isOpen={isImportOpen} onClose={closeImportModal} title="Import sản phẩm từ Excel" maxWidth="max-w-6xl">

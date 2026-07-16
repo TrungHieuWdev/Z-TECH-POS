@@ -1,23 +1,96 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Banknote, ReceiptText, WalletCards } from 'lucide-react';
-import api from '../api/axios';
-import { formatCurrency } from '../utils/format';
-import { getUser } from '../utils/auth';
-import { readLocalJson } from '../utils/storage';
+import { Link } from 'react-router-dom';
+import {
+  ArrowRight,
+  BadgeCheck,
+  Clock3,
+  PackageSearch,
+  ReceiptText,
+  ShoppingCart,
+  Users
+} from 'lucide-react';
+
+const quickActions = [
+  {
+    to: '/pos',
+    label: 'Bán hàng',
+    description: 'Tạo đơn hàng, chọn khách và thực hiện thanh toán tại quầy.',
+    action: 'Mở màn hình bán hàng',
+    icon: ShoppingCart,
+    tone: 'bg-sky-50 text-sky-700'
+  },
+  {
+    to: '/shifts',
+    label: 'Ca làm của tôi',
+    description: 'Xem lịch được phân công, giờ làm và số liệu đối soát ca.',
+    action: 'Xem ca làm',
+    icon: Clock3,
+    tone: 'bg-emerald-50 text-emerald-700'
+  },
+  {
+    to: '/orders',
+    label: 'Hóa đơn của tôi',
+    description: 'Tra cứu các hóa đơn do bạn phụ trách và in lại khi cần.',
+    action: 'Xem hóa đơn',
+    icon: ReceiptText,
+    tone: 'bg-amber-50 text-amber-700'
+  },
+  {
+    to: '/products',
+    label: 'Tra cứu sản phẩm',
+    description: 'Kiểm tra giá bán, tồn kho và thông tin sản phẩm.',
+    action: 'Xem sản phẩm',
+    icon: PackageSearch,
+    tone: 'bg-violet-50 text-violet-700'
+  },
+  {
+    to: '/customers',
+    label: 'Khách hàng',
+    description: 'Tìm kiếm, thêm mới hoặc cập nhật thông tin khách hàng.',
+    action: 'Quản lý khách hàng',
+    icon: Users,
+    tone: 'bg-cyan-50 text-cyan-700'
+  },
+  {
+    to: '/warranties',
+    label: 'Bảo hành',
+    description: 'Tra cứu chính sách và tiếp nhận yêu cầu bảo hành.',
+    action: 'Mở bảo hành',
+    icon: BadgeCheck,
+    tone: 'bg-rose-50 text-rose-700'
+  }
+];
 
 export default function StaffDashboard() {
-  const [orders, setOrders] = useState([]);
-  const user = getUser();
-  useEffect(() => { api.get('/orders').then((response) => setOrders(Array.isArray(response.data) ? response.data : [])).catch(() => setOrders([])); }, []);
-  const summary = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
-    const ownToday = orders.filter((order) => String(order.created_at || '').slice(0, 10) === today && order.status !== 'cancelled');
-    const cash = ownToday.filter((order) => order.payment_method === 'cash').reduce((sum, order) => sum + Number(order.total || 0), 0);
-    const shifts = readLocalJson('ztech-shifts', [], Array.isArray);
-    const activeShift = shifts.find((shift) => shift.employee === user?.name && shift.workDate === today && shift.status === 'active');
-    const openingCash = Number(activeShift?.openingCash || 0);
-    return { count: ownToday.length, revenue: ownToday.reduce((sum, order) => sum + Number(order.total || 0), 0), cash, openingCash, expectedCash: openingCash + cash, transfer: ownToday.filter((order) => order.payment_method === 'transfer').reduce((sum, order) => sum + Number(order.total || 0), 0) };
-  }, [orders]);
-  const cards = [{label:'Đơn trong ca',value:summary.count,icon:ReceiptText},{label:'Doanh thu ca',value:formatCurrency(summary.revenue),icon:WalletCards},{label:'Tiền đầu ca',value:formatCurrency(summary.openingCash),icon:Banknote},{label:'Tiền mặt bán được',value:formatCurrency(summary.cash),icon:Banknote},{label:'Tiền mặt dự kiến cuối ca',value:formatCurrency(summary.expectedCash),icon:WalletCards},{label:'Chuyển khoản',value:formatCurrency(summary.transfer),icon:Banknote}];
-  return <div className="space-y-5"><div><h1 className="text-2xl font-extrabold text-gray-950">Tổng quan ca làm</h1><p className="mt-1 text-sm font-medium text-gray-500">Xem nhanh đơn hàng, doanh thu và số tiền trong ca làm hôm nay của bạn.</p></div><section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{cards.map(({label,value,icon:Icon})=><article key={label} className="border bg-white p-4"><div className="flex items-start justify-between"><div><p className="text-sm text-gray-500">{label}</p><p className="mt-2 text-xl font-bold">{value}</p></div><div className="grid h-9 w-9 place-items-center bg-brand-soft text-brand-strong"><Icon size={18}/></div></div></article>)}</section></div>;
+  return (
+    <div className="space-y-5">
+      <header>
+        <h1 className="text-2xl font-extrabold text-gray-950">Thao tác nhanh</h1>
+        <p className="mt-1 text-sm font-medium text-gray-500">
+          Chọn chức năng bạn cần để bắt đầu công việc trong ca hôm nay.
+        </p>
+      </header>
+
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {quickActions.map(({ to, label, description, action, icon: Icon, tone }) => (
+          <Link
+            key={to}
+            to={to}
+            className="group flex min-h-48 flex-col justify-between border border-gray-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-[#74B8E0] hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c0edf7]"
+          >
+            <div>
+              <span className={`grid h-11 w-11 place-items-center ${tone}`}>
+                <Icon size={22} strokeWidth={2} />
+              </span>
+              <h2 className="mt-4 text-lg font-extrabold text-gray-950">{label}</h2>
+              <p className="mt-2 text-sm font-medium leading-6 text-gray-500">{description}</p>
+            </div>
+            <span className="mt-5 inline-flex items-center gap-2 text-sm font-bold text-[#398fbd]">
+              {action}
+              <ArrowRight size={17} className="transition-transform group-hover:translate-x-1" />
+            </span>
+          </Link>
+        ))}
+      </section>
+    </div>
+  );
 }

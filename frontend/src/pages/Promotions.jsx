@@ -19,6 +19,7 @@ import { formatCurrency } from '../utils/format';
 import { deletePromotion, getPromotions, savePromotion } from '../services/promotionService';
 import api from '../api/axios';
 import { getUser, isFullAccessRole } from '../utils/auth';
+import KpiCard from '../components/KpiCard';
 import Modal from '../components/Modal';
 
 export const initialPromotions = [
@@ -471,21 +472,17 @@ export default function Promotions({ tabNavigation = null }) {
 
       {tabNavigation}
 
-      <section className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {stats.map((item) => {
-          const Icon = item.icon;
-
           return (
-            <article key={item.label} className="flex min-w-0 items-center gap-3 border border-gray-200 bg-white p-4 shadow-sm">
-              <div className={`grid h-11 w-11 shrink-0 place-items-center ${item.tone}`}>
-                <Icon size={21} />
-              </div>
-              <div className="min-w-0">
-                <p className="truncate text-xs font-bold uppercase tracking-wide text-gray-500">{item.label}</p>
-                <p className="mt-1 text-2xl font-extrabold text-gray-950">{item.value}</p>
-                <p className="mt-0.5 truncate text-xs text-gray-500">Chương trình khuyến mãi</p>
-              </div>
-            </article>
+            <KpiCard
+              key={item.label}
+              icon={item.icon}
+              label={item.label}
+              value={Number(item.value || 0).toLocaleString('vi-VN')}
+              detail="Chương trình khuyến mãi"
+              toneClassName={item.tone}
+            />
           );
         })}
       </section>
@@ -692,13 +689,6 @@ export default function Promotions({ tabNavigation = null }) {
                   Điền thông tin để cấu hình chương trình ưu đãi
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={closeDrawer}
-                className="grid h-9 w-9 place-items-center rounded-lg border border-[#d5dbe3] text-[#4f5965] transition hover:bg-white"
-              >
-                <X size={18} />
-              </button>
             </div>
 
             <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">

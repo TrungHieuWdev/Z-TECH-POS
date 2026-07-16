@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
-  Award, ChevronLeft, ChevronRight, Edit, Eye, History, Phone, Plus, RefreshCcw, Search,
+  Award, Edit, Eye, History, Phone, Plus, RefreshCcw, Search,
   ShoppingBag, Star, UserCheck, Users, WalletCards
 } from 'lucide-react';
 import api from '../api/axios';
+import KpiCard from '../components/KpiCard';
 import Modal from '../components/Modal';
+import TablePagination from '../components/TablePagination';
 import { formatCurrency, formatDate } from '../utils/format';
 import { isVietnamPhone, normalizePhone, vietnamPhoneMessage } from '../utils/phone';
 import { customerNameMessage, isValidCustomerName, normalizeCustomerName } from '../utils/customerName';
@@ -36,42 +38,6 @@ const isThisMonth = (value) => {
   const now = new Date();
   return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
 };
-
-function SummaryCard({ icon: Icon, label, value, note, color = '#398fbd', background = '#eef8fd' }) {
-  return (
-    <article className="border border-gray-200 bg-white p-4 shadow-sm">
-      <div className="flex items-start justify-between gap-3">
-        <div><p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</p><p className="mt-2 text-2xl font-bold text-gray-950">{value}</p><p className="mt-1 text-xs text-gray-500">{note}</p></div>
-        <span className="grid h-10 w-10 place-items-center" style={{ color, backgroundColor: background }}><Icon size={20} /></span>
-      </div>
-    </article>
-  );
-}
-
-function Pagination({ page, totalItems, onChange }) {
-  const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
-  if (totalPages <= 1) return null;
-  const visiblePages = Array.from({ length: totalPages }, (_, index) => index + 1)
-    .filter((item) => item === 1 || item === totalPages || Math.abs(item - page) <= 1);
-
-  return (
-    <div className="flex items-center justify-between gap-3 border-t border-gray-200 px-4 py-3">
-      <p className="text-xs text-gray-500">
-        Hiển thị {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, totalItems)} trong {totalItems}
-      </p>
-      <div className="flex items-center gap-1">
-        <button type="button" disabled={page === 1} onClick={() => onChange(page - 1)} className="grid h-8 w-8 place-items-center border border-gray-200 text-sky-700 disabled:text-gray-300"><ChevronLeft size={16} /></button>
-        {visiblePages.map((item, index) => (
-          <div key={item} className="flex items-center gap-1">
-            {index > 0 && item - visiblePages[index - 1] > 1 && <span className="px-1 text-gray-400">…</span>}
-            <button type="button" onClick={() => onChange(item)} className={`h-8 min-w-8 border px-2 text-sm font-semibold ${page === item ? 'border-[#69afd6] bg-[#69afd6] text-white' : 'border-gray-200 bg-white text-gray-600 hover:bg-sky-50'}`}>{item}</button>
-          </div>
-        ))}
-        <button type="button" disabled={page === totalPages} onClick={() => onChange(page + 1)} className="grid h-8 w-8 place-items-center border border-gray-200 text-sky-700 disabled:text-gray-300"><ChevronRight size={16} /></button>
-      </div>
-    </div>
-  );
-}
 
 export default function Customers() {
   const [customers, setCustomers] = useState([]);
@@ -180,10 +146,10 @@ export default function Customers() {
       </header>
 
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard icon={Users} label="Tổng khách hàng" value={stats.total.toLocaleString('vi-VN')} note="Khách hàng đã lưu" />
-        <SummaryCard icon={UserCheck} label="Khách mới tháng này" value={stats.newThisMonth.toLocaleString('vi-VN')} note="Đăng ký trong tháng" color="#1687a7" background="#e9f8fb" />
-        <SummaryCard icon={Star} label="Khách có điểm" value={stats.withPoints.toLocaleString('vi-VN')} note="Có thể áp dụng tích điểm" color="#d97706" background="#fff7e6" />
-        <SummaryCard icon={History} label="Khách quay lại" value={stats.returning.toLocaleString('vi-VN')} note="Có từ 2 đơn hàng" color="#059669" background="#ecfdf5" />
+        <KpiCard icon={Users} label="Tổng khách hàng" value={stats.total.toLocaleString('vi-VN')} detail="Khách hàng đã lưu" toneClassName="bg-sky-50 text-sky-700" />
+        <KpiCard icon={UserCheck} label="Khách mới tháng này" value={stats.newThisMonth.toLocaleString('vi-VN')} detail="Đăng ký trong tháng" toneClassName="bg-cyan-50 text-cyan-700" />
+        <KpiCard icon={Star} label="Khách có điểm" value={stats.withPoints.toLocaleString('vi-VN')} detail="Có thể áp dụng tích điểm" toneClassName="bg-amber-50 text-amber-700" />
+        <KpiCard icon={History} label="Khách quay lại" value={stats.returning.toLocaleString('vi-VN')} detail="Có từ 2 đơn hàng" toneClassName="bg-emerald-50 text-emerald-700" />
       </section>
 
       <section className="border border-gray-200 bg-white shadow-sm">
@@ -198,14 +164,14 @@ export default function Customers() {
           <button type="button" onClick={resetFilters} className="flex h-10 items-center justify-center gap-2 border border-sky-200 px-3 text-sm font-semibold text-[#398fbd] hover:bg-sky-50"><RefreshCcw size={16} /> Làm mới</button>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1250px] text-left text-sm">
+        <div className="min-h-[375px] overflow-x-auto">
+          <table className="w-full min-w-[1250px] table-fixed text-left text-sm">
             <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500"><tr><th className="px-4 py-3">Khách hàng</th><th className="px-4 py-3">Số điện thoại</th><th className="px-4 py-3">Loại khách</th><th className="px-4 py-3 text-right">Điểm hiện có</th><th className="px-4 py-3 text-right">Tổng chi tiêu</th><th className="px-4 py-3 text-right">Số đơn hàng</th><th className="px-4 py-3">Lần mua gần nhất</th><th className="px-4 py-3">Trạng thái</th><th className="px-4 py-3 text-center">Thao tác</th></tr></thead>
             <tbody className="divide-y divide-gray-100">
               {paginatedCustomers.map((customer) => {
                 const type = typeMeta[customerType(customer)];
                 const active = Number(customer.order_count || 0) > 0 || (customer.last_purchase_at && (new Date() - new Date(customer.last_purchase_at)) / 86400000 <= 180);
-                return <tr key={customer.id} className="hover:bg-gray-50/70">
+                return <tr key={customer.id} className="h-[64px] hover:bg-gray-50/70">
                   <td className="px-4 py-3"><p className="font-semibold text-gray-950">{customer.name}</p><p className="mt-0.5 text-xs text-gray-400">KH-{String(customer.id).padStart(4, '0')}</p></td>
                   <td className="px-4 py-3"><a href={`tel:${customer.phone}`} className="inline-flex items-center gap-1.5 font-medium text-gray-700 hover:text-sky-700"><Phone size={14} className="text-sky-500" />{customer.phone}</a></td>
                   <td className="px-4 py-3"><span className={`inline-flex px-2 py-1 text-xs font-semibold ${type[1]}`}>{type[0]}</span></td>
@@ -221,7 +187,7 @@ export default function Customers() {
           </table>
         </div>
         {filteredCustomers.length === 0 && <div className="py-12 text-center text-sm text-gray-500">Không tìm thấy khách hàng phù hợp.</div>}
-        <Pagination page={page} totalItems={filteredCustomers.length} onChange={setPage} />
+        <TablePagination currentPage={page} totalItems={filteredCustomers.length} pageSize={PAGE_SIZE} onPageChange={setPage} itemLabel="khách hàng" ariaLabel="Phân trang khách hàng" />
       </section>
 
       <Modal isOpen={isOpen} onClose={closeModal} title={editingCustomer ? 'Chỉnh sửa khách hàng' : 'Thêm khách hàng'} headerActions={<><button type="button" onClick={closeModal} className="h-11 border border-[#69afd6] bg-white px-5 text-base font-bold text-[#398fbd] hover:bg-sky-50">Hủy</button><button type="submit" form="customer-form" className="h-11 bg-[#69afd6] px-5 text-base font-bold text-white hover:bg-[#579fc8]">Lưu</button></>}>

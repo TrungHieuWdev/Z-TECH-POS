@@ -1,10 +1,31 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useLocation } from 'react-router-dom';
-import { BrainCircuit, Calculator, CircleDollarSign, Download, LoaderCircle, Minus, ReceiptText, RotateCcw, SlidersHorizontal, TrendingDown, TrendingUp } from 'lucide-react';
+import {
+  BrainCircuit, Calculator, CalendarDays, CircleDollarSign, Download, Eye, FileSpreadsheet,
+  History, LoaderCircle, Minus, ReceiptText, RotateCcw, SlidersHorizontal, Trash2,
+  TrendingDown, TrendingUp, UserRound, X
+} from 'lucide-react';
 import { formatCurrency } from '../utils/format';
-import { exportRevenueReport, loadRevenueDashboard, runAiRevenueAnalysis } from '../services/revenueReportService';
+import {
+  deleteAiRevenueAnalysisHistoryItem,
+  exportRevenueExcelReport,
+  exportRevenueReport,
+  loadAiRevenueAnalysisHistory,
+  loadAiRevenueAnalysisHistoryItem,
+  loadRevenueDashboard,
+  runAiRevenueAnalysis
+} from '../services/revenueReportService';
 import { AiReportChart, CategoryRevenueChart, DailyRevenueChart, GrossProfitChart, PaymentChart, TopProductsChart } from '../components/reports/RevenueCharts';
+import Modal from '../components/Modal';
+import TablePagination from '../components/TablePagination';
+
+const StableAiReportChart = memo(AiReportChart);
+const StableCategoryRevenueChart = memo(CategoryRevenueChart);
+const StableDailyRevenueChart = memo(DailyRevenueChart);
+const StableGrossProfitChart = memo(GrossProfitChart);
+const StablePaymentChart = memo(PaymentChart);
+const StableTopProductsChart = memo(TopProductsChart);
 
 const paymentLabels = { cash: 'Tiền mặt', card: 'Thẻ', transfer: 'Chuyển khoản', e_wallet: 'Ví điện tử', other: 'Khác' };
 const statusLabels = { all: 'Tất cả trạng thái', completed: 'Hoàn thành', cancelled: 'Đã hủy' };
@@ -17,6 +38,32 @@ function dateText(date) {
 function displayDate(value) {
   if (!value) return '';
   return new Intl.DateTimeFormat('vi-VN').format(new Date(`${value}T00:00:00`));
+}
+
+function displayDateTime(value) {
+  if (!value) return '';
+  const parsed = new Date(String(value).replace(' ', 'T'));
+  if (Number.isNaN(parsed.getTime())) return String(value);
+  return new Intl.DateTimeFormat('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(parsed);
+}
+
+function analysisFilterText(filters = {}, categories = []) {
+  const parts = [];
+  if (filters.categoryId) {
+    const categoryName = categories.find((item) => Number(item.id) === Number(filters.categoryId))?.name;
+    parts.push(categoryName || `Danh mục #${filters.categoryId}`);
+  }
+  if (filters.paymentMethod) parts.push(paymentLabels[filters.paymentMethod] || filters.paymentMethod);
+  if (filters.orderStatus && filters.orderStatus !== 'all') parts.push(statusLabels[filters.orderStatus] || filters.orderStatus);
+  if (filters.employeeId) parts.push(`Nhân viên #${filters.employeeId}`);
+  if (filters.compare) parts.push('So sánh kỳ trước');
+  return parts.length ? parts.join(' · ') : 'Tất cả dữ liệu';
 }
 
 function rangeFor(period) {
@@ -270,13 +317,148 @@ function ReportFilterMenu({ period, draft, options, onChoosePeriod, onChange, on
   );
 }
 
-function AiPanel({ data, isLoading, error }) {
+function AiHistoryModal({
+  isOpen,
+  onClose,
+  data,
+  isLoading,
+  error,
+  categories,
+  onPageChange,
+  onView,
+  onDelete,
+  viewingId
+}) {
+  const items = data?.items || [];
+  const pagination = data?.pagination || { page: 1, limit: 5, total: 0 };
+  const outlook = {
+    positive: { label: 'Tích cực', tone: 'bg-emerald-50 text-emerald-700' },
+    neutral: { label: 'Ổn định', tone: 'bg-cyan-50 text-cyan-700' },
+    negative: { label: 'Cần chú ý', tone: 'bg-rose-50 text-rose-700' }
+  };
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Lịch sử phân tích AI"
+      maxWidth="max-w-6xl"
+      headerActions={(
+        <button type="button" onClick={onClose} className="grid h-9 w-9 place-items-center text-slate-500 hover:bg-slate-100 hover:text-slate-900" aria-label="Đóng lịch sử">
+          <X size={19} />
+        </button>
+      )}
+    >
+      <div>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm text-slate-500">Mỗi lần phân tích thành công được lưu trực tiếp vào cơ sở dữ liệu để xem lại khi cần.</p>
+          <span className="bg-cyan-50 px-3 py-1.5 text-xs font-extrabold text-cyan-800">
+            {Number(pagination.total || 0).toLocaleString('vi-VN')} kết quả đã lưu
+          </span>
+        </div>
+
+        <div className="overflow-hidden border border-slate-200 bg-white">
+          <div className="min-h-[430px] overflow-x-auto">
+            <table className="w-full min-w-[980px] table-fixed text-left">
+              <thead className="bg-slate-50 text-[11px] font-extrabold uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th className="w-[150px] px-4 py-3">Thời gian</th>
+                  <th className="w-[150px] px-4 py-3">Kỳ dữ liệu</th>
+                  <th className="w-[150px] px-4 py-3">Người thực hiện</th>
+                  <th className="w-[190px] px-4 py-3">Bộ lọc</th>
+                  <th className="w-[110px] px-4 py-3 text-center">Đánh giá</th>
+                  <th className="px-4 py-3">Nhận định</th>
+                  <th className="w-[108px] px-4 py-3 text-right">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {isLoading && Array.from({ length: 5 }, (_, index) => (
+                  <tr key={index} className="h-[76px]">
+                    {Array.from({ length: 7 }, (__, cellIndex) => (
+                      <td key={cellIndex} className="px-4 py-3"><Skeleton className="h-4 w-full" /></td>
+                    ))}
+                  </tr>
+                ))}
+                {!isLoading && !error && items.map((item) => {
+                  const outlookMeta = outlook[item.outlook] || outlook.neutral;
+                  return (
+                    <tr key={item.id} className="h-[76px] align-middle hover:bg-slate-50/70">
+                      <td className="px-4 py-3 text-xs font-bold text-slate-700">
+                        <div className="flex items-center gap-2"><CalendarDays className="shrink-0 text-slate-400" size={15} />{displayDateTime(item.analyzedAt)}</div>
+                      </td>
+                      <td className="px-4 py-3 text-xs font-semibold text-slate-600">
+                        {displayDate(item.periodFrom)}<span className="mx-1 text-slate-400">–</span>{displayDate(item.periodTo)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-slate-100 text-slate-500"><UserRound size={15} /></span>
+                          <div className="min-w-0">
+                            <p className="truncate text-xs font-extrabold text-slate-800">{item.requestedBy?.name || 'Tài khoản đã xóa'}</p>
+                            <p className="mt-0.5 text-[11px] text-slate-500">{item.requestedBy?.employeeCode || 'Không còn mã NV'}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-xs font-semibold leading-5 text-slate-600">
+                        <p className="line-clamp-2" title={analysisFilterText(item.filters, categories)}>{analysisFilterText(item.filters, categories)}</p>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <p className="text-lg font-black text-slate-900">{item.healthScore}<span className="text-xs text-slate-400">/100</span></p>
+                        <span className={`mt-1 inline-flex px-2 py-0.5 text-[10px] font-extrabold ${outlookMeta.tone}`}>{outlookMeta.label}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <p className="line-clamp-2 text-xs font-medium leading-5 text-slate-600" title={item.executiveSummary}>{item.executiveSummary}</p>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex justify-end gap-1">
+                          <button type="button" onClick={() => onView(item)} disabled={viewingId === item.id} className="grid h-9 w-9 place-items-center border border-cyan-200 text-cyan-700 hover:bg-cyan-50 disabled:cursor-wait disabled:opacity-60" title="Xem lại kết quả">
+                            {viewingId === item.id ? <LoaderCircle className="animate-spin" size={16} /> : <Eye size={16} />}
+                          </button>
+                          <button type="button" onClick={() => onDelete(item)} className="grid h-9 w-9 place-items-center border border-rose-200 text-rose-600 hover:bg-rose-50" title="Xóa lịch sử">
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+
+            {!isLoading && error && (
+              <div className="grid min-h-[360px] place-items-center px-5 text-center text-sm font-semibold text-rose-700">{error}</div>
+            )}
+            {!isLoading && !error && !items.length && (
+              <div className="grid min-h-[360px] place-items-center px-5 text-center">
+                <div>
+                  <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-slate-100 text-slate-500"><History size={22} /></span>
+                  <p className="mt-3 text-sm font-extrabold text-slate-800">Chưa có lịch sử phân tích</p>
+                  <p className="mt-1 text-xs text-slate-500">Kết quả sẽ xuất hiện tại đây sau khi AI phân tích thành công.</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <TablePagination
+            currentPage={pagination.page || 1}
+            totalItems={pagination.total || 0}
+            pageSize={pagination.limit || 5}
+            onPageChange={onPageChange}
+            itemLabel="kết quả"
+            ariaLabel="Phân trang lịch sử phân tích AI"
+          />
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function AiPanel({ data, isLoading, error, historyEntry }) {
   const priority = { high: 'Cao', medium: 'Trung bình', low: 'Thấp' };
   const severity = { positive: 'Tích cực', info: 'Thông tin', warning: 'Cần chú ý', critical: 'Quan trọng' };
   const findingTone = { positive: 'border-emerald-300 bg-emerald-50', info: 'border-cyan-300 bg-cyan-50', warning: 'border-amber-300 bg-amber-50', critical: 'border-rose-300 bg-rose-50' };
   if (!data && !isLoading && !error) return null;
   return (
-    <section className="border border-slate-200 bg-white p-4 shadow-sm">
+    <section id="ai-analysis-panel" className="border border-slate-200 bg-white p-4 shadow-sm">
       {error && <div className="border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">{error}</div>}
       {isLoading && (
         <div className="grid min-h-72 place-items-center">
@@ -287,11 +469,17 @@ function AiPanel({ data, isLoading, error }) {
         </div>
       )}
       {data && !isLoading && <div className="space-y-5">
+        {historyEntry && (
+          <div className="flex flex-wrap items-center justify-between gap-2 border border-cyan-200 bg-cyan-50 px-4 py-3 text-xs font-semibold text-cyan-900">
+            <span>Đang xem kết quả đã lưu lúc {displayDateTime(historyEntry.analyzedAt)}</span>
+            <span>Kỳ dữ liệu: {displayDate(historyEntry.periodFrom)} – {displayDate(historyEntry.periodTo)}</span>
+          </div>
+        )}
         <div className="grid items-center gap-5 lg:grid-cols-[170px_1fr]">
           <div className="grid place-items-center"><ScoreCircle value={data.healthScore} /></div>
           <div className="border border-slate-200 p-5"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Nhận định theo bộ lọc</p><p className="mt-3 text-sm leading-7 text-slate-800">{data.executiveSummary}</p></div>
         </div>
-        {(data.charts || []).length > 0 && <div><h3 className="mb-3 text-base font-extrabold text-slate-900">Biểu đồ phân tích</h3><div className="grid gap-4 lg:grid-cols-2">{data.charts.map((chart, index) => <article key={chart.id || index} className={`ai-chart-reveal border border-slate-200 p-4 ${index === 0 ? 'lg:col-span-2' : ''}`} style={{ '--ai-chart-delay': `${index * 160}ms` }}><h4 className="text-sm font-extrabold uppercase tracking-wide text-slate-800">{chart.title}</h4><div className="mt-3 h-64"><AiReportChart spec={chart} revealIndex={index} /></div></article>)}</div></div>}
+        {(data.charts || []).length > 0 && <div><h3 className="mb-3 text-base font-extrabold text-slate-900">Biểu đồ phân tích</h3><div className="grid gap-4 lg:grid-cols-2">{data.charts.map((chart, index) => <article key={chart.id || index} className={`ai-chart-reveal border border-slate-200 p-4 ${index === 0 ? 'lg:col-span-2' : ''}`} style={{ '--ai-chart-delay': `${index * 160}ms` }}><h4 className="text-sm font-extrabold uppercase tracking-wide text-slate-800">{chart.title}</h4><div className="mt-3 h-64"><StableAiReportChart spec={chart} revealIndex={index} /></div></article>)}</div></div>}
         {(data.findings || []).length > 0 && <div><h3 className="mb-3 text-base font-extrabold text-slate-900">Phân tích chi tiết</h3><div className="grid gap-3 lg:grid-cols-2">{data.findings.map((item, index) => <article key={`${item.title}-${index}`} className={`border p-4 ${findingTone[item.severity] || findingTone.info}`}><div className="flex items-start justify-between gap-3"><h4 className="font-extrabold text-slate-900">{item.title}</h4><span className="shrink-0 bg-white/70 px-2 py-1 text-[11px] font-bold text-slate-700">{severity[item.severity] || severity.info}</span></div><p className="mt-2 text-sm leading-6 text-slate-700">{item.insight}</p>{item.impact && <div className="mt-3 border-l-2 border-slate-400/50 pl-3"><p className="text-[11px] font-extrabold uppercase text-slate-500">Tác động</p><p className="mt-1 text-sm leading-5 text-slate-700">{item.impact}</p></div>}{item.evidence?.length > 0 && <div className="mt-3"><p className="text-[11px] font-extrabold uppercase text-slate-500">Số liệu dẫn chứng</p><ul className="mt-1 space-y-1">{item.evidence.map((entry, evidenceIndex) => <li key={evidenceIndex} className="flex gap-2 text-xs font-semibold leading-5 text-slate-600"><span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-slate-500" />{entry}</li>)}</ul></div>}</article>)}</div></div>}
         {(data.actions || []).length > 0 && <div><h3 className="mb-3 text-base font-extrabold text-slate-900">Hành động đề xuất</h3><div className="grid gap-3 lg:grid-cols-2">{data.actions.map((action, actionIndex) => <article key={`${action.title}-${actionIndex}`} className="border border-slate-200 p-4"><div className="flex items-start justify-between gap-3"><h4 className="font-extrabold text-slate-900">{action.title}</h4><span className="h-fit shrink-0 bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-700">Ưu tiên {priority[action.priority] || priority.medium}</span></div><p className="mt-2 text-sm leading-6 text-slate-600">{action.reason}</p>{action.steps?.length > 0 && <ol className="mt-3 space-y-2">{action.steps.map((step, stepIndex) => <li key={stepIndex} className="flex gap-2 text-sm leading-5 text-slate-700"><span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-cyan-50 text-[11px] font-extrabold text-cyan-800">{stepIndex + 1}</span><span>{step}</span></li>)}</ol>}{action.expectedImpact && <p className="mt-3 border-t border-slate-100 pt-3 text-xs leading-5 text-slate-600"><strong className="text-slate-800">Kết quả mong đợi:</strong> {action.expectedImpact}</p>}{action.evidence && <p className="mt-2 text-xs font-semibold leading-5 text-slate-500">Căn cứ: {action.evidence}</p>}</article>)}</div></div>}
       </div>}
@@ -313,6 +501,17 @@ export default function Reports() {
   const [aiAnalysis, setAiAnalysis] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState('');
+  const [aiHistoryOpen, setAiHistoryOpen] = useState(false);
+  const [aiHistory, setAiHistory] = useState({ items: [], pagination: { page: 1, limit: 5, total: 0, totalPages: 1 } });
+  const [aiHistoryPage, setAiHistoryPage] = useState(1);
+  const [aiHistoryLoading, setAiHistoryLoading] = useState(false);
+  const [aiHistoryError, setAiHistoryError] = useState('');
+  const [aiHistoryRefreshKey, setAiHistoryRefreshKey] = useState(0);
+  const [aiHistoryViewingId, setAiHistoryViewingId] = useState(null);
+  const [aiHistoryEntry, setAiHistoryEntry] = useState(null);
+  const [aiHistoryDeleteTarget, setAiHistoryDeleteTarget] = useState(null);
+  const [aiHistoryDeletingId, setAiHistoryDeletingId] = useState(null);
+  const [excelExporting, setExcelExporting] = useState(false);
 
   useEffect(() => {
     const query = new URLSearchParams();
@@ -322,12 +521,27 @@ export default function Reports() {
     setLoading(true);
     setAiAnalysis(null);
     setAiError('');
+    setAiHistoryEntry(null);
     loadRevenueDashboard(filters)
       .then((data) => { if (active) { setDashboard(data); setError(''); } })
       .catch((requestError) => { if (active) setError(requestError.response?.data?.message || 'Không thể tải báo cáo doanh thu.'); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [filters]);
+
+  useEffect(() => {
+    if (!aiHistoryOpen) return undefined;
+    let active = true;
+    setAiHistoryLoading(true);
+    setAiHistoryError('');
+    loadAiRevenueAnalysisHistory({ page: aiHistoryPage, limit: 5 })
+      .then((data) => { if (active) setAiHistory(data); })
+      .catch((requestError) => {
+        if (active) setAiHistoryError(requestError.response?.data?.message || 'Không thể tải lịch sử phân tích AI.');
+      })
+      .finally(() => { if (active) setAiHistoryLoading(false); });
+    return () => { active = false; };
+  }, [aiHistoryOpen, aiHistoryPage, aiHistoryRefreshKey]);
 
   const applyFilters = () => {
     if (!draft.from || !draft.to || draft.from > draft.to) {
@@ -360,6 +574,26 @@ export default function Reports() {
     } catch (requestError) { toast.error(requestError.response?.data?.message || 'Không thể xuất báo cáo'); }
   };
 
+  const exportExcel = async () => {
+    try {
+      setExcelExporting(true);
+      const response = await exportRevenueExcelReport(filters);
+      const url = URL.createObjectURL(response.data);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `bao-cao-tong-quan-${filters.from}-${filters.to}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      toast.success('Đã xuất báo cáo Excel');
+    } catch (requestError) {
+      toast.error(requestError.response?.data?.message || 'Không thể xuất báo cáo Excel');
+    } finally {
+      setExcelExporting(false);
+    }
+  };
+
   const analyzeWithAi = async () => {
     const startedAt = Date.now();
     const waitForMinimumLoadingTime = async () => {
@@ -371,6 +605,8 @@ export default function Reports() {
       const analysis = await runAiRevenueAnalysis({ ...filters });
       await waitForMinimumLoadingTime();
       setAiAnalysis(analysis);
+      setAiHistoryEntry(null);
+      setAiHistoryRefreshKey((value) => value + 1);
     } catch (requestError) {
       await waitForMinimumLoadingTime();
       setAiAnalysis(null);
@@ -386,6 +622,52 @@ export default function Reports() {
   const showAiAnalysis = () => {
     setAiVisible(true);
     analyzeWithAi();
+  };
+
+  const showAiHistory = () => {
+    setAiHistoryOpen(true);
+    if (aiHistoryPage !== 1) setAiHistoryPage(1);
+    else setAiHistoryRefreshKey((value) => value + 1);
+  };
+
+  const viewAiHistoryItem = async (item) => {
+    try {
+      setAiHistoryViewingId(item.id);
+      const detail = await loadAiRevenueAnalysisHistoryItem(item.id);
+      if (!detail.result) throw new Error('Kết quả phân tích đã lưu không hợp lệ');
+      setAiAnalysis(detail.result);
+      setAiHistoryEntry(detail);
+      setAiError('');
+      setAiVisible(true);
+      setAiHistoryOpen(false);
+      window.setTimeout(() => document.getElementById('ai-analysis-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+    } catch (requestError) {
+      toast.error(requestError.response?.data?.message || requestError.message || 'Không thể mở kết quả phân tích AI');
+    } finally {
+      setAiHistoryViewingId(null);
+    }
+  };
+
+  const deleteAiHistoryItem = async () => {
+    if (!aiHistoryDeleteTarget) return;
+    try {
+      setAiHistoryDeletingId(aiHistoryDeleteTarget.id);
+      const response = await deleteAiRevenueAnalysisHistoryItem(aiHistoryDeleteTarget.id);
+      const shouldGoBack = aiHistory.items.length === 1 && aiHistoryPage > 1;
+      setAiHistoryDeleteTarget(null);
+      if (aiHistoryEntry?.id === aiHistoryDeleteTarget.id) {
+        setAiHistoryEntry(null);
+        setAiAnalysis(null);
+        setAiVisible(false);
+      }
+      if (shouldGoBack) setAiHistoryPage((page) => page - 1);
+      else setAiHistoryRefreshKey((value) => value + 1);
+      toast.success(response.message || 'Đã xóa lịch sử phân tích AI');
+    } catch (requestError) {
+      toast.error(requestError.response?.data?.message || 'Không thể xóa lịch sử phân tích AI');
+    } finally {
+      setAiHistoryDeletingId(null);
+    }
   };
 
   const metrics = dashboard?.summary?.metrics || {};
@@ -431,15 +713,26 @@ export default function Reports() {
           <h1 className="text-2xl font-black text-slate-950">Tổng quan kinh doanh</h1>
           <p className="mt-1 text-sm text-slate-500">Theo dõi doanh thu, lợi nhuận, xu hướng bán hàng và tình trạng tồn kho trong cùng một màn hình.</p>
         </div>
-        <button type="button" onClick={exportCsv} className="inline-flex h-10 items-center gap-2 border border-cyan-700 bg-white px-4 text-sm font-bold text-cyan-800 hover:bg-cyan-50" title="Xuất dữ liệu theo bộ lọc đang áp dụng"><Download size={17} /> Xuất CSV</button>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <button type="button" onClick={exportExcel} disabled={excelExporting} className="inline-flex h-10 items-center gap-2 border border-emerald-600 bg-white px-4 text-sm font-bold text-emerald-700 hover:bg-emerald-50 disabled:cursor-wait disabled:opacity-60" title="Xuất báo cáo Excel nhiều sheet theo bộ lọc đang áp dụng">
+            {excelExporting ? <LoaderCircle className="animate-spin" size={17} /> : <FileSpreadsheet size={17} />}
+            {excelExporting ? 'Đang xuất...' : 'Xuất Excel'}
+          </button>
+          <button type="button" onClick={exportCsv} className="inline-flex h-10 items-center gap-2 border border-cyan-700 bg-white px-4 text-sm font-bold text-cyan-800 hover:bg-cyan-50" title="Xuất dữ liệu theo bộ lọc đang áp dụng"><Download size={17} /> Xuất CSV</button>
+        </div>
       </header>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <ReportFilterMenu period={period} draft={draft} options={options} onChoosePeriod={choosePeriod} onChange={({ period: nextPeriod, ...changes }) => { if (nextPeriod) setPeriod(nextPeriod); setDraft((current) => ({ ...current, ...changes })); }} onApply={applyFilters} onReset={resetFilters} />
-        <button type="button" onClick={showAiAnalysis} disabled={aiLoading} className="inline-flex h-11 items-center justify-center gap-2 bg-[#74B8E0] px-5 text-sm font-extrabold text-white hover:bg-[#5FA9D4] disabled:cursor-wait disabled:opacity-60">
-          {aiLoading ? <LoaderCircle className="animate-spin" size={18} /> : <BrainCircuit size={18} />}
-          {aiLoading ? 'Đang phân tích kho...' : 'AI phân tích kho'}
-        </button>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <button type="button" onClick={showAiHistory} className="inline-flex h-11 items-center justify-center gap-2 border border-slate-300 bg-white px-4 text-sm font-extrabold text-slate-700 hover:border-cyan-600 hover:bg-cyan-50 hover:text-cyan-800">
+            <History size={18} /> Lịch sử phân tích
+          </button>
+          <button type="button" onClick={showAiAnalysis} disabled={aiLoading} className="inline-flex h-11 items-center justify-center gap-2 bg-[#74B8E0] px-5 text-sm font-extrabold text-white hover:bg-[#5FA9D4] disabled:cursor-wait disabled:opacity-60">
+            {aiLoading ? <LoaderCircle className="animate-spin" size={18} /> : <BrainCircuit size={18} />}
+            {aiLoading ? 'Đang phân tích dữ liệu...' : aiAnalysis ? 'Phân tích lại' : 'Phân tích AI'}
+          </button>
+        </div>
       </div>
 
       {error && <div className="border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">{error}</div>}
@@ -449,7 +742,42 @@ export default function Reports() {
         </div>
       )}
 
-      {aiVisible && <AiPanel data={aiAnalysis} isLoading={aiLoading} error={aiError} />}
+      {aiVisible && <AiPanel data={aiAnalysis} isLoading={aiLoading} error={aiError} historyEntry={aiHistoryEntry} />}
+
+      <AiHistoryModal
+        isOpen={aiHistoryOpen}
+        onClose={() => setAiHistoryOpen(false)}
+        data={aiHistory}
+        isLoading={aiHistoryLoading}
+        error={aiHistoryError}
+        categories={options.categories || []}
+        onPageChange={setAiHistoryPage}
+        onView={viewAiHistoryItem}
+        onDelete={setAiHistoryDeleteTarget}
+        viewingId={aiHistoryViewingId}
+      />
+
+      <Modal
+        isOpen={Boolean(aiHistoryDeleteTarget)}
+        onClose={() => { if (!aiHistoryDeletingId) setAiHistoryDeleteTarget(null); }}
+        title="Xóa lịch sử phân tích?"
+        maxWidth="max-w-md"
+      >
+        <p className="text-sm leading-6 text-slate-600">Kết quả phân tích này sẽ bị xóa khỏi cơ sở dữ liệu và không thể khôi phục.</p>
+        {aiHistoryDeleteTarget && (
+          <div className="mt-4 border border-slate-200 bg-slate-50 p-3">
+            <p className="text-xs font-extrabold text-slate-800">{displayDate(aiHistoryDeleteTarget.periodFrom)} – {displayDate(aiHistoryDeleteTarget.periodTo)}</p>
+            <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{aiHistoryDeleteTarget.executiveSummary}</p>
+          </div>
+        )}
+        <div className="mt-5 flex justify-end gap-2">
+          <button type="button" onClick={() => setAiHistoryDeleteTarget(null)} disabled={Boolean(aiHistoryDeletingId)} className="h-10 border border-slate-300 px-4 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50">Giữ lại</button>
+          <button type="button" onClick={deleteAiHistoryItem} disabled={Boolean(aiHistoryDeletingId)} className="inline-flex h-10 items-center gap-2 bg-rose-600 px-4 text-sm font-extrabold text-white hover:bg-rose-700 disabled:cursor-wait disabled:opacity-60">
+            {aiHistoryDeletingId ? <LoaderCircle className="animate-spin" size={16} /> : <Trash2 size={16} />}
+            {aiHistoryDeletingId ? 'Đang xóa...' : 'Xóa lịch sử'}
+          </button>
+        </div>
+      </Modal>
 
       <div className="space-y-5">
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -468,12 +796,12 @@ export default function Reports() {
       <div className="grid gap-5 xl:grid-cols-2">
         {loading ? <Skeleton className="h-80" /> : (
           <Panel title="CƠ CẤU DOANH THU THEO DANH MỤC" empty={!categoryItems.length}>
-            <div className="h-64"><CategoryRevenueChart key={`category-${chartVisitKey}`} items={categoryItems} /></div>
+            <div className="h-64"><StableCategoryRevenueChart key={`category-${chartVisitKey}`} items={categoryItems} /></div>
           </Panel>
         )}
         {loading ? <Skeleton className="h-80" /> : (
           <Panel title={`BIẾN ĐỘNG DOANH THU THEO ${trendUnit}`} empty={!hasTrendData}>
-            <div className="h-64"><DailyRevenueChart key={`revenue-${chartVisitKey}`} trend={dashboard?.trend} /></div>
+            <div className="h-64"><StableDailyRevenueChart key={`revenue-${chartVisitKey}`} trend={dashboard?.trend} /></div>
           </Panel>
         )}
       </div>
@@ -481,17 +809,17 @@ export default function Reports() {
       <div className="grid gap-5 xl:grid-cols-3">
         {loading ? <Skeleton className="h-80" /> : (
           <Panel title={`LỢI NHUẬN GỘP THEO ${trendUnit}`} empty={!hasTrendData}>
-            <div className="h-64"><GrossProfitChart key={`profit-${chartVisitKey}`} trend={dashboard?.trend} /></div>
+            <div className="h-64"><StableGrossProfitChart key={`profit-${chartVisitKey}`} trend={dashboard?.trend} /></div>
           </Panel>
         )}
         {loading ? <Skeleton className="h-80" /> : (
           <Panel title="TOP 5 SẢN PHẨM THEO DOANH THU" empty={!dashboard?.topProducts?.items?.length}>
-            <div className="h-64"><TopProductsChart key={`products-${chartVisitKey}`} items={dashboard?.topProducts?.items} /></div>
+            <div className="h-64"><StableTopProductsChart key={`products-${chartVisitKey}`} items={dashboard?.topProducts?.items} /></div>
           </Panel>
         )}
         {loading ? <Skeleton className="h-80" /> : (
           <Panel title="CƠ CẤU PHƯƠNG THỨC THANH TOÁN" empty={!dashboard?.payments?.items?.length}>
-            <div className="h-64"><PaymentChart key={`payments-${chartVisitKey}`} items={dashboard?.payments?.items} labels={paymentLabels} /></div>
+            <div className="h-64"><StablePaymentChart key={`payments-${chartVisitKey}`} items={dashboard?.payments?.items} labels={paymentLabels} /></div>
           </Panel>
         )}
       </div>

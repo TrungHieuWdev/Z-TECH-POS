@@ -47,7 +47,7 @@ export async function login(req, res) {
     }
 
     const fullAccess = ['owner', 'manager', 'admin'].includes(String(user.role || '').toLowerCase());
-    if (!fullAccess && !(await hasActiveShift(user.name))) {
+    if (!fullAccess && !(await hasActiveShift(user.name, user.employee_code))) {
       return res.status(403).json({ message: 'Quản lý cần mở và bắt đầu ca làm trước khi nhân viên đăng nhập' });
     }
 
