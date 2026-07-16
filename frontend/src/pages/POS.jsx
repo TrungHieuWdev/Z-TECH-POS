@@ -121,17 +121,34 @@ function getStockTone(stock) {
   return 'bg-green-100 text-green-700';
 }
 
+function getGiftQuantity(item) {
+  return Math.max(0, Number(item?.promotionGiftQuantity || 0));
+}
+
+function getPurchasedQuantity(item) {
+  const quantity = Math.max(0, Number(item?.quantity || 0));
+  return item?.promotionGiftSeparated === true
+    ? quantity
+    : Math.max(0, quantity - getGiftQuantity(item));
+}
+
+function getFulfillmentQuantity(item) {
+  return getPurchasedQuantity(item) + getGiftQuantity(item);
+}
+
 function buildOrderItems(cart) {
-  return cart.map((item) => ({ product_id: item.id, quantity: item.quantity }));
+  return cart.map((item) => ({ product_id: item.id, quantity: getFulfillmentQuantity(item) }));
 }
 
 function buildReceiptItems(cart) {
   return cart.map((item) => ({
     id: item.id,
     name: item.name,
-    quantity: item.quantity,
+    quantity: getFulfillmentQuantity(item),
+    purchasedQuantity: getPurchasedQuantity(item),
+    giftQuantity: getGiftQuantity(item),
     unitPrice: Number(item.price || 0),
-    lineTotal: Number(item.price || 0) * item.quantity,
+    lineTotal: Number(item.price || 0) * getFulfillmentQuantity(item),
     warranty_enabled: item.warranty_enabled,
     warranty_period_days: item.warranty_period_days,
     warranty_type: item.warranty_type,
@@ -219,7 +236,10 @@ function ReceiptContent({ receipt }) {
                     </div>
                     {item.warranty_note && <div className="mt-0.5 text-[11px] text-gray-500">{item.warranty_note}</div>}
                   </td>
-                  <td className="px-3 py-2 text-center">{item.quantity}</td>
+                  <td className="px-3 py-2 text-center">
+                    <div>{item.purchasedQuantity}</div>
+                    {item.giftQuantity > 0 && <div className="mt-0.5 text-[10px] font-bold text-emerald-700">+{item.giftQuantity} quà</div>}
+                  </td>
                   <td className="px-3 py-2 text-right whitespace-nowrap">{formatCurrency(item.unitPrice)}</td>
                   <td className="px-3 py-2 text-right font-semibold whitespace-nowrap">{formatCurrency(item.lineTotal)}</td>
                 </tr>
@@ -294,9 +314,10 @@ function ThermalReceiptContent({ receipt }) {
               <strong>{item.name}</strong>
               <small>PRD-{String(item.id).padStart(4, '0')}</small>
               <small>{getWarrantyLabel(item)}</small>
+              {item.giftQuantity > 0 && <small>Quà tặng x{item.giftQuantity}</small>}
               {item.warranty_note && <small>{item.warranty_note}</small>}
             </div>
-            <span>{item.quantity}</span>
+            <span>{item.purchasedQuantity}</span>
             <span>{Number(item.unitPrice || 0).toLocaleString('vi-VN')}</span>
             <strong>{Number(item.lineTotal || 0).toLocaleString('vi-VN')}</strong>
           </div>
@@ -599,7 +620,7 @@ export default function POS() {
   }, [customerLookup]);
 
   const subtotal = useMemo(
-    () => cart.reduce((sum, item) => sum + Number(item.price) * item.quantity, 0),
+    () => cart.reduce((sum, item) => sum + Number(item.price) * getFulfillmentQuantity(item), 0),
     [cart]
   );
 
@@ -651,7 +672,7 @@ export default function POS() {
 
   useEffect(() => {
     const refresh = () => {
-      getPromotions(initialPromotions).then(setPromotions).catch(() => setPromotions(initialPromotions));
+      getPromotions(initialPromotions, { activeOnly: true }).then(setPromotions).catch(() => setPromotions([]));
     };
     refresh();
     window.addEventListener('ztech-promotions-changed', refresh);
@@ -664,6 +685,49 @@ export default function POS() {
       toast.error('Khuyến mãi đã được gỡ vì giỏ hàng không còn đủ điều kiện.');
     }
   }, [cart, subtotal, selectedCustomer, selectedPromotion]);
+
+  useEffect(() => {
+    if (selectedPromotion?.promotionType !== 'buy_x_get_y') return;
+
+    setCart((current) => {
+      const giftProductId = Number(selectedPromotion.giftProductId);
+      const giftIndex = current.findIndex((item) => Number(item.id) === giftProductId);
+      if (giftIndex < 0) return current;
+
+      const purchasedBuyQuantity = current
+        .filter((item) => Number(item.id) === Number(selectedPromotion.buyProductId))
+        .reduce((sum, item) => sum + getPurchasedQuantity(item), 0);
+      const requiredGiftQuantity = Math.floor(
+        purchasedBuyQuantity / Math.max(1, Number(selectedPromotion.buyQuantity || 1))
+      ) * Math.max(1, Number(selectedPromotion.giftQuantity || 1));
+      const giftItem = current[giftIndex];
+      const purchasedGiftQuantity = getPurchasedQuantity(giftItem);
+      const nextGiftQuantity = allowOutOfStockSale
+        ? requiredGiftQuantity
+        : Math.min(requiredGiftQuantity, Math.max(0, Number(giftItem.stock_quantity || 0) - purchasedGiftQuantity));
+      const currentGiftQuantity = Number(giftItem.promotionGiftId) === Number(selectedPromotion.id)
+        ? getGiftQuantity(giftItem)
+        : 0;
+
+      if (nextGiftQuantity === currentGiftQuantity) return current;
+
+      const next = [...current];
+      if (nextGiftQuantity <= 0) {
+        const { promotionGiftId, promotionGiftQuantity, promotionGiftSeparated, ...rest } = giftItem;
+        if (purchasedGiftQuantity <= 0) next.splice(giftIndex, 1);
+        else next[giftIndex] = { ...rest, quantity: purchasedGiftQuantity };
+      } else {
+        next[giftIndex] = {
+          ...giftItem,
+          quantity: purchasedGiftQuantity,
+          promotionGiftId: selectedPromotion.id,
+          promotionGiftQuantity: nextGiftQuantity,
+          promotionGiftSeparated: true
+        };
+      }
+      return next;
+    });
+  }, [allowOutOfStockSale, cart, selectedPromotion]);
 
   useEffect(() => {
     if (Number(usedPoints) > maxRedeemPoints) {
@@ -708,7 +772,7 @@ export default function POS() {
       const found = current.find((item) => item.id === product.id);
 
       if (found) {
-        if (!allowOutOfStockSale && found.quantity >= Number(product.stock_quantity)) {
+        if (!allowOutOfStockSale && getFulfillmentQuantity(found) >= Number(product.stock_quantity)) {
           toast.error('Không đủ tồn kho');
           return current;
         }
@@ -747,7 +811,7 @@ export default function POS() {
       }
 
       const existingItem = cart.find((item) => item.id === product.id);
-      if (!allowOutOfStockSale && existingItem && existingItem.quantity >= Number(product.stock_quantity)) {
+      if (!allowOutOfStockSale && existingItem && getFulfillmentQuantity(existingItem) >= Number(product.stock_quantity)) {
         toast.error('Không đủ tồn kho');
         setScanCode('');
         return;
@@ -784,15 +848,23 @@ export default function POS() {
       current
         .map((item) =>
           item.id === productId
-            ? {
-                ...item,
-                quantity: allowOutOfStockSale
+            ? (() => {
+                const giftQuantity = getGiftQuantity(item);
+                const purchasedQuantity = allowOutOfStockSale
                   ? Math.max(normalizedQuantity, 0)
-                  : Math.min(Math.max(normalizedQuantity, 0), Number(item.stock_quantity))
-              }
+                  : Math.min(
+                    Math.max(normalizedQuantity, 0),
+                    Math.max(0, Number(item.stock_quantity) - giftQuantity)
+                  );
+                return {
+                  ...item,
+                  quantity: purchasedQuantity,
+                  ...(giftQuantity > 0 ? { promotionGiftSeparated: true } : {})
+                };
+              })()
             : item
         )
-        .filter((item) => item.quantity > 0)
+        .filter((item) => getPurchasedQuantity(item) > 0 || getGiftQuantity(item) > 0)
     );
   };
 
@@ -877,11 +949,8 @@ export default function POS() {
       setCart((current) => current
         .map((item) => {
           if (Number(item.promotionGiftId) !== Number(promotionId)) return item;
-          const giftQuantity = Number(item.promotionGiftQuantity || 0);
-          const nextQuantity = Number(item.quantity || 0) - giftQuantity;
-          if (nextQuantity <= 0) return null;
-          const { promotionGiftId, promotionGiftQuantity, ...rest } = item;
-          return { ...rest, quantity: nextQuantity };
+          const { promotionGiftId, promotionGiftQuantity, promotionGiftSeparated, ...rest } = item;
+          return getPurchasedQuantity(rest) > 0 ? rest : null;
         })
         .filter(Boolean));
     }
@@ -903,7 +972,7 @@ export default function POS() {
 
     const buyQuantity = cart
       .filter((item) => Number(item.id) === Number(promotion.buyProductId))
-      .reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+      .reduce((sum, item) => sum + getPurchasedQuantity(item), 0);
     const sets = Math.floor(buyQuantity / Math.max(1, Number(promotion.buyQuantity || 1)));
     const requiredGiftQuantity = sets * Math.max(1, Number(promotion.giftQuantity || 1));
     const giftProductId = Number(promotion.giftProductId);
@@ -936,8 +1005,8 @@ export default function POS() {
       return;
     }
 
-    const nextQuantity = currentGiftQuantity + giftToAdd;
-    if (!allowOutOfStockSale && nextQuantity > Number(giftProduct.stock_quantity || 0)) {
+    const nextTotalQuantity = getFulfillmentQuantity(existingGift) + giftToAdd;
+    if (!allowOutOfStockSale && nextTotalQuantity > Number(giftProduct.stock_quantity || 0)) {
       toast.error('Sản phẩm tặng không đủ tồn kho');
       return;
     }
@@ -948,17 +1017,38 @@ export default function POS() {
         return current.map((item) => Number(item.id) === Number(giftProduct.id)
           ? {
               ...item,
-              quantity: Number(item.quantity) + giftToAdd,
+              quantity: getPurchasedQuantity(item),
               promotionGiftId: promotion.id,
-              promotionGiftQuantity: currentGiftQuantity + giftToAdd
+              promotionGiftQuantity: currentGiftQuantity + giftToAdd,
+              promotionGiftSeparated: true
             }
           : item);
       }
-      return [...current, { ...giftProduct, quantity: giftToAdd, promotionGiftId: promotion.id, promotionGiftQuantity: giftToAdd }];
+      return [...current, {
+        ...giftProduct,
+        quantity: 0,
+        promotionGiftId: promotion.id,
+        promotionGiftQuantity: giftToAdd,
+        promotionGiftSeparated: true
+      }];
     });
     setSelectedPromotion(promotion);
     setIsPromotionOpen(false);
     toast.success(`Đã thêm ${giftToAdd} sản phẩm tặng vào giỏ`);
+  };
+
+  const openPromotionPicker = async () => {
+    if (!cart.length) {
+      toast.error('Không thể chọn khuyến mãi khi giỏ hàng trống');
+      return;
+    }
+
+    try {
+      setPromotions(await getPromotions(initialPromotions, { activeOnly: true }));
+    } catch {
+      // Giữ danh sách hiện có nếu backend tạm thời không phản hồi.
+    }
+    setIsPromotionOpen(true);
   };
 
   const closeCustomerPicker = () => {
@@ -1438,8 +1528,7 @@ export default function POS() {
       <aside className={`fixed inset-x-0 bottom-0 z-[60] flex max-h-[88dvh] min-h-0 flex-col overflow-y-auto border-t border-[#c3c6d7] bg-white pb-14 shadow-[0_-12px_36px_rgba(15,59,70,0.18)] transition-transform duration-200 xl:static xl:max-h-none xl:translate-y-0 xl:overflow-hidden xl:border-l xl:border-t-0 xl:pb-0 xl:shadow-none ${isMobileCartOpen ? 'translate-y-0' : 'translate-y-full'}`}>
         <div className={`border-b border-[#c3c6d7] bg-white px-2.5 py-2 xl:block ${mobileCartView === 'checkout' ? 'hidden' : 'block'}`}>
           <div className="mb-1 flex items-center justify-between">
-            <span className="text-sm font-bold text-[#191c1e]">Khách hàng</span>
-            <button type="button" onClick={openCustomerForm} className="text-xs font-bold text-brand-strong">Thêm mới (+)</button>
+            <span className="text-sm font-bold text-[#191c1e]">Chọn loại khách hàng</span>
           </div>
           <div className="grid grid-cols-2 gap-2">
             <button
@@ -1491,7 +1580,10 @@ export default function POS() {
                 Chưa có sản phẩm trong giỏ hàng
               </div>
             ) : (
-              cart.map((item) => (
+              cart.map((item) => {
+                const purchasedQuantity = getPurchasedQuantity(item);
+                const giftQuantity = getGiftQuantity(item);
+                return (
                 <div key={item.id} className="flex gap-2 border border-[#e0e3e5] bg-white p-1.5">
                   <div className="h-14 w-14 shrink-0 overflow-hidden border border-[#c3c6d7] bg-[#f2f4f6]">
                     <ProductImage product={item} iconSize={24} />
@@ -1500,9 +1592,9 @@ export default function POS() {
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <h4 className="line-clamp-2 text-sm font-bold leading-5 text-[#191c1e]">{item.name}</h4>
-                        {Number(item.promotionGiftQuantity || 0) > 0 && (
-                          <p className="mt-0.5 text-[11px] font-extrabold uppercase text-emerald-700">
-                            Quà tặng x{Number(item.promotionGiftQuantity || 0)}
+                        {giftQuantity > 0 && (
+                          <p className="mt-0.5 text-[11px] font-extrabold text-emerald-700">
+                            Quà tặng: {item.name} × {giftQuantity}
                           </p>
                         )}
                       </div>
@@ -1517,10 +1609,10 @@ export default function POS() {
                       </button>
                     </div>
                     <div className="mt-1.5 flex items-end justify-between gap-3">
-                      <div className="flex overflow-hidden rounded-lg border border-[#c3c6d7] bg-[#eceef0]">
+                      {purchasedQuantity > 0 ? <div className="flex overflow-hidden rounded-lg border border-[#c3c6d7] bg-[#eceef0]">
                         <button
                           type="button"
-                          onClick={() => setCartQuantity(item.id, item.quantity - 1)}
+                          onClick={() => setCartQuantity(item.id, purchasedQuantity - 1)}
                           className="grid h-8 w-8 place-items-center text-[#434655]"
                           title="Giảm"
                           aria-label="Giảm"
@@ -1532,8 +1624,8 @@ export default function POS() {
                           inputMode="numeric"
                           pattern="[0-9]*"
                           min="0"
-                          max={allowOutOfStockSale ? undefined : Number(item.stock_quantity || 0)}
-                          value={quantityDrafts[item.id] ?? item.quantity}
+                          max={allowOutOfStockSale ? undefined : Math.max(0, Number(item.stock_quantity || 0) - giftQuantity)}
+                          value={quantityDrafts[item.id] ?? purchasedQuantity}
                           onChange={(event) => handleQuantityInput(item.id, event.target.value)}
                           onBlur={(event) => commitQuantityInput(item.id, event.target.value)}
                           onKeyDown={(event) => {
@@ -1546,21 +1638,22 @@ export default function POS() {
                         />
                         <button
                           type="button"
-                          onClick={() => setCartQuantity(item.id, item.quantity + 1)}
+                          onClick={() => setCartQuantity(item.id, purchasedQuantity + 1)}
                           className="grid h-8 w-8 place-items-center text-[#434655]"
                           title="Tăng"
                           aria-label="Tăng"
                         >
                           <Plus size={15} />
                         </button>
-                      </div>
+                      </div> : <span className="text-[11px] font-bold text-emerald-700">Sản phẩm tặng</span>}
                       <span className="text-sm font-bold text-[#191c1e]">
-                        {formatCurrency(Number(item.price) * item.quantity)}
+                        {formatCurrency(Number(item.price) * getFulfillmentQuantity(item))}
                       </span>
                     </div>
                   </div>
                 </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
@@ -1578,7 +1671,7 @@ export default function POS() {
             <div className="border-y border-[#d9dde2] py-1.5 text-sm">
               <div className="flex items-center justify-between gap-3">
                 <span className="font-semibold text-[#434655]">Khuyến mãi</span>
-                <button type="button" onClick={() => { if (!cart.length) return toast.error('Không thể chọn khuyến mãi khi giỏ hàng trống'); setIsPromotionOpen(true); }} className="font-bold text-brand-strong">Chọn khuyến mãi</button>
+                <button type="button" onClick={openPromotionPicker} className="font-bold text-brand-strong">Chọn khuyến mãi</button>
               </div>
               {!selectedPromotion ? <p className="mt-1 text-xs text-[#737686]">Chưa áp dụng</p> : <div className="mt-2 bg-white p-2">
                 <p className="text-xs font-bold text-[#191c1e]">{selectedPromotion.name}</p>
@@ -1727,7 +1820,7 @@ export default function POS() {
       <button type="button" onClick={() => { setSelectedPromotion(null); setIsPromotionOpen(false); }} className="mb-3 h-10 w-full border border-[#c3c6d7] bg-white text-sm font-bold text-[#434655]">Không áp dụng khuyến mãi</button>
       {eligiblePromotions.length === 0 ? <div className="border border-dashed border-[#c3c6d7] p-8 text-center text-sm font-semibold text-[#737686]">Hiện chưa có khuyến mãi phù hợp với giỏ hàng này.</div> : <div className="max-h-[60vh] space-y-3 overflow-y-auto">
         {eligiblePromotions.map((promotion) => <article key={promotion.id} className="border border-[#d8e4eb] bg-white p-4">
-          <div className="flex items-start justify-between gap-3"><div><h3 className="font-bold text-[#191c1e]">{promotion.name}</h3><p className="mt-1 text-sm text-[#5f6670]">{promotion.description || promotion.condition}</p></div><span className="shrink-0 bg-brand-soft px-2 py-1 text-sm font-bold text-brand-strong">{promotion.promotionType === 'buy_x_get_y' ? `Tặng ${promotion.giftQuantity || 1} SP` : `-${formatCurrency(getPromotionDiscount(promotion, subtotal, cart))}`}</span></div>
+          <div className="flex items-start justify-between gap-3"><div><div className="flex flex-wrap items-center gap-2"><span className="bg-[#edf7fb] px-2 py-0.5 text-xs font-extrabold text-brand-strong">{promotion.code}</span><h3 className="font-bold text-[#191c1e]">{promotion.name}</h3></div><p className="mt-1 text-sm text-[#5f6670]">{promotion.description || promotion.condition}</p></div><span className="shrink-0 bg-brand-soft px-2 py-1 text-sm font-bold text-brand-strong">{promotion.promotionType === 'buy_x_get_y' ? `Tặng ${promotion.giftQuantity || 1} SP` : `-${formatCurrency(getPromotionDiscount(promotion, subtotal, cart))}`}</span></div>
           <div className="mt-3 grid gap-1 text-xs text-[#5f6670] sm:grid-cols-2"><p>Điều kiện: {promotion.condition || 'Không có'}</p><p>Hình thức: {promotion.promotionType === 'buy_x_get_y' ? 'Mua X tặng Y' : promotion.promotionType === 'combo' ? 'Combo sản phẩm' : promotion.promotionType === 'nth_item_discount' ? `Sản phẩm thứ ${promotion.nthQuantity || 2} giảm ${formatCurrency(promotion.nthDiscountAmount || 0)}` : promotion.promotionType === 'quantity_tier' ? 'Giảm theo bậc số lượng' : promotion.discountType === 'percent' ? `${promotion.discountValue}%` : formatCurrency(promotion.discountValue)}</p><p>Hiệu lực: {promotion.startDate || '-'} đến {promotion.endDate || '-'}</p></div>
           <button type="button" onClick={() => applyPromotion(promotion)} className="mt-3 h-10 w-full bg-brand px-4 text-sm font-bold text-white">Áp dụng</button>
         </article>)}
@@ -2003,17 +2096,22 @@ export default function POS() {
             <span>{isTransferQrStep ? 'Sản phẩm trong đơn chuyển khoản' : 'Sản phẩm'}</span>
           </div>
           <div className={isTransferQrStep ? 'max-h-28 space-y-2 overflow-y-auto pr-1' : 'max-h-40 space-y-3 overflow-y-auto pr-1'}>
-            {cart.map((item) => (
+            {cart.map((item) => {
+              const purchasedQuantity = getPurchasedQuantity(item);
+              const giftQuantity = getGiftQuantity(item);
+              return (
               <div key={item.id} className={isTransferQrStep ? 'flex items-start justify-between gap-4 border-b border-dashed border-[#d7eef3] pb-2 last:border-0 last:pb-0' : 'flex items-start justify-between gap-4 border-b border-dashed border-[#d7eef3] pb-3 last:border-0 last:pb-0'}>
                 <div className="min-w-0">
                   <p className="font-bold text-[#191c1e]">{item.name}</p>
-                  <p className="mt-1 text-xs font-semibold text-[#737686]">x{item.quantity}</p>
+                  <p className="mt-1 text-xs font-semibold text-[#737686]">Số lượng mua: {purchasedQuantity}</p>
+                  {giftQuantity > 0 && <p className="mt-0.5 text-xs font-bold text-emerald-700">Quà tặng: {item.name} × {giftQuantity}</p>}
                 </div>
                 <span className="shrink-0 font-extrabold text-[#0f3b46]">
-                  {formatCurrency(Number(item.price) * item.quantity)}
+                  {formatCurrency(Number(item.price) * getFulfillmentQuantity(item))}
                 </span>
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 

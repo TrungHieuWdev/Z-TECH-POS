@@ -27,6 +27,22 @@ function normalizeCode(value) {
   return String(value || '').trim().toUpperCase();
 }
 
+function getVietnamDate() {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(new Date());
+}
+
+function normalizePromotionState(payload) {
+  if (payload?.endDate && payload.endDate < getVietnamDate()) {
+    return { ...payload, enabled: false, status: 'ended' };
+  }
+  return payload;
+}
+
 function validatePromotion(body) {
   const code = normalizeCode(body.code);
   if (!/^[A-Z0-9_-]{3,20}$/.test(code)) return 'Mã khuyến mãi không hợp lệ';
@@ -37,7 +53,15 @@ function validatePromotion(body) {
 export async function getAll(req, res) {
   try {
     const rows = await query('SELECT * FROM promotions ORDER BY updated_at DESC, id DESC');
-    res.json(rows.map(parsePromotion));
+    const promotions = rows.map(parsePromotion);
+    await Promise.all(promotions.map(async (promotion) => {
+      const normalized = normalizePromotionState(promotion);
+      if (normalized.enabled === promotion.enabled) return;
+      const { createdAt, updatedAt, ...data } = normalized;
+      await query('UPDATE promotions SET data = ? WHERE id = ?', [JSON.stringify(data), promotion.id]);
+      Object.assign(promotion, normalized);
+    }));
+    res.json(promotions);
   } catch (error) {
     res.status(500).json({ message: 'Không thể lấy danh sách khuyến mãi', error: error.message });
   }
@@ -49,7 +73,7 @@ export async function create(req, res) {
     if (message) return res.status(400).json({ message });
 
     const code = normalizeCode(req.body.code);
-    const payload = { ...req.body, code };
+    const payload = normalizePromotionState({ ...req.body, code });
     const result = await query(
       'INSERT INTO promotions (code, data, created_by, updated_by) VALUES (?, ?, ?, ?)',
       [code, JSON.stringify(payload), req.user.id, req.user.id]
@@ -69,7 +93,7 @@ export async function update(req, res) {
 
     const promotionId = Number(req.params.id);
     const code = normalizeCode(req.body.code);
-    const payload = { ...req.body, id: promotionId, code };
+    const payload = normalizePromotionState({ ...req.body, id: promotionId, code });
     const result = await query(
       'UPDATE promotions SET code = ?, data = ?, updated_by = ? WHERE id = ?',
       [code, JSON.stringify(payload), req.user.id, promotionId]

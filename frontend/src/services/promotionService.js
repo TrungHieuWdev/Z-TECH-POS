@@ -2,10 +2,22 @@ import { readLocalJson } from '../utils/storage';
 import api from '../api/axios';
 
 const KEY = 'ztech_promotions';
+const VIETNAM_TIME_ZONE = 'Asia/Ho_Chi_Minh';
 let cachedPromotions = [];
+
+export function getVietnamDate(date = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: VIETNAM_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(date);
+}
+
 const addDaysISO = (dateValue, days) => {
-  const date = dateValue ? new Date(dateValue) : new Date();
-  date.setDate(date.getDate() + days);
+  const baseDate = dateValue || getVietnamDate();
+  const date = new Date(`${baseDate}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
 };
 
@@ -28,7 +40,7 @@ function normalizeStoredPromotion(promotion) {
     targetName: promotion.targetName || promotion.name || '',
     condition: promotion.condition || promotion.name || '',
     description: promotion.description || promotion.condition || '',
-    startDate: promotion.startDate || new Date().toISOString().slice(0, 10),
+    startDate: promotion.startDate || getVietnamDate(),
     endDate: promotion.endDate || addDaysISO(promotion.startDate, 30),
     status: promotion.enabled === false ? 'ended' : 'active',
     enabled: true,
@@ -43,21 +55,30 @@ function normalizeStoredPromotion(promotion) {
     targetName: promotion.targetName || promotion.name || '',
     condition: promotion.condition || promotion.name || '',
     description: promotion.description || promotion.condition || '',
-    startDate: promotion.startDate || new Date().toISOString().slice(0, 10),
+    startDate: promotion.startDate || getVietnamDate(),
     endDate: promotion.endDate || addDaysISO(promotion.startDate, 30),
     status: promotion.status || (promotion.enabled === false ? 'ended' : 'active')
   };
 }
 
-export async function getPromotions(fallback = []) {
+export function isPromotionActiveNow(promotion, today = getVietnamDate()) {
+  return Boolean(
+    promotion?.enabled &&
+    (!promotion.startDate || promotion.startDate <= today) &&
+    (!promotion.endDate || promotion.endDate >= today)
+  );
+}
+
+export async function getPromotions(fallback = [], { activeOnly = false } = {}) {
+  let promotions;
   try {
     const response = await api.get('/promotions', { cache: false });
-    cachedPromotions = Array.isArray(response.data) ? response.data.map(normalizeStoredPromotion) : [];
-    return cachedPromotions;
+    promotions = Array.isArray(response.data) ? response.data.map(normalizeStoredPromotion) : [];
   } catch {
-    cachedPromotions = readLocalJson(KEY, fallback, Array.isArray).map(normalizeStoredPromotion);
-    return cachedPromotions;
+    promotions = readLocalJson(KEY, fallback, Array.isArray).map(normalizeStoredPromotion);
   }
+  cachedPromotions = promotions;
+  return activeOnly ? promotions.filter((promotion) => isPromotionActiveNow(promotion)) : promotions;
 }
 
 export async function savePromotion(promotion) {
@@ -96,15 +117,18 @@ export function normalizePromotionText(value) {
 
 export function getPromotionDiscount(promotion, subtotal, cart = []) {
   if (promotion.promotionType === 'buy_x_get_y') {
-    const buyQuantity = cart.filter((item) => Number(item.id) === Number(promotion.buyProductId)).reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+    const buyQuantity = cart.filter((item) => Number(item.id) === Number(promotion.buyProductId)).reduce(
+      (sum, item) => sum + Math.max(0, Number(item.quantity || 0)),
+      0
+    );
     const giftItems = cart.filter((item) => Number(item.id) === Number(promotion.giftProductId));
-    const giftQuantity = giftItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+    const giftQuantity = giftItems.reduce(
+      (sum, item) => sum + (Number(item.promotionGiftId) === Number(promotion.id) ? Number(item.promotionGiftQuantity || 0) : 0),
+      0
+    );
     const buyRequired = Math.max(1, Number(promotion.buyQuantity || 1));
     const giftRequired = Math.max(1, Number(promotion.giftQuantity || 1));
-    const sameProduct = Number(promotion.buyProductId) === Number(promotion.giftProductId);
-    const sets = sameProduct
-      ? Math.floor(buyQuantity / (buyRequired + giftRequired))
-      : Math.min(Math.floor(buyQuantity / buyRequired), Math.floor(giftQuantity / giftRequired));
+    const sets = Math.min(Math.floor(buyQuantity / buyRequired), Math.floor(giftQuantity / giftRequired));
     if (sets <= 0) return 0;
     const giftUnitPrice = Number(giftItems[0]?.price || giftItems[0]?.selling_price || 0);
     return Math.min(subtotal, giftUnitPrice * giftRequired * sets);
@@ -144,15 +168,15 @@ export function getPromotionDiscount(promotion, subtotal, cart = []) {
 }
 
 export function isPromotionEligible(promotion, { cart, subtotal, isMember }) {
-  if (!promotion?.enabled) return false;
-  const today = new Date().toISOString().slice(0, 10);
-  if (promotion.startDate && promotion.startDate > today) return false;
-  if (promotion.endDate && promotion.endDate < today) return false;
+  if (!isPromotionActiveNow(promotion)) return false;
   if (subtotal < Number(promotion.minOrder || 0)) return false;
   if (Number(promotion.maxOrder || 0) > 0 && subtotal > Number(promotion.maxOrder)) return false;
   if (promotion.memberOnly && !isMember) return false;
   if (promotion.promotionType === 'buy_x_get_y') {
-    const quantityOf = (id) => cart.filter((item) => Number(item.id) === Number(id)).reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+    const quantityOf = (id) => cart.filter((item) => Number(item.id) === Number(id)).reduce(
+      (sum, item) => sum + Math.max(0, Number(item.quantity || 0)),
+      0
+    );
     return quantityOf(promotion.buyProductId) >= Number(promotion.buyQuantity || 1);
   }
   if (promotion.promotionType === 'combo') {

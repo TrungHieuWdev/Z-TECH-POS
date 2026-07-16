@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import toast from 'react-hot-toast';
 import {
   BarChart3,
   CalendarX,
@@ -16,7 +17,7 @@ import {
   X
 } from 'lucide-react';
 import { formatCurrency } from '../utils/format';
-import { deletePromotion, getPromotions, savePromotion } from '../services/promotionService';
+import { deletePromotion, getPromotions, getVietnamDate, savePromotion } from '../services/promotionService';
 import api from '../api/axios';
 import { getUser, isFullAccessRole } from '../utils/auth';
 import KpiCard from '../components/KpiCard';
@@ -187,7 +188,7 @@ function getPromotionTypeLabel(promotion) {
 
 function getPromotionStatus(promotion) {
   if (!promotion.enabled) return 'ended';
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getVietnamDate();
   if (promotion.endDate && promotion.endDate < today) return 'ended';
   if (promotion.startDate && promotion.startDate > today) return 'active';
   const endDate = promotion.endDate ? new Date(promotion.endDate) : null;
@@ -253,6 +254,8 @@ export default function Promotions({ tabNavigation = null }) {
   const [products, setProducts] = useState([]);
   const [productSearch, setProductSearch] = useState('');
   const [productSearchError, setProductSearchError] = useState('');
+  const [deletingPromotion, setDeletingPromotion] = useState(null);
+  const [isDeletingPromotion, setIsDeletingPromotion] = useState(false);
   useEffect(() => { Promise.all([api.get('/categories'), api.get('/products')]).then(([categoryResponse, productResponse]) => { setCategories(categoryResponse.data || []); setProducts(productResponse.data || []); }).catch(() => {}); }, []);
   useEffect(() => { getPromotions(initialPromotions).then(setPromotions).catch(() => setPromotions(initialPromotions)); }, []);
 
@@ -354,18 +357,50 @@ export default function Promotions({ tabNavigation = null }) {
   const togglePromotion = async (promotionId) => {
     const target = promotions.find((promotion) => promotion.id === promotionId);
     if (!target) return;
+    if (target.endDate && target.endDate < getVietnamDate()) {
+      if (target.enabled) {
+        const saved = await savePromotion({ ...target, enabled: false, status: 'ended' });
+        setPromotions((current) => current.map((promotion) => (promotion.id === promotionId ? saved : promotion)));
+      }
+      toast.error('Khuyến mãi đã hết hạn nên không thể bật lại');
+      return;
+    }
     const saved = await savePromotion({ ...target, enabled: !target.enabled, status: !target.enabled ? 'active' : 'ended' });
     setPromotions((current) => current.map((promotion) => (promotion.id === promotionId ? saved : promotion)));
   };
 
-  const handleDeletePromotion = async (promotion) => {
-    if (!window.confirm(`Xóa khuyến mãi ${promotion.code}?`)) return;
-    await deletePromotion(promotion.id);
-    setPromotions((current) => current.filter((item) => Number(item.id) !== Number(promotion.id)));
+  const confirmDeletePromotion = async () => {
+    if (!deletingPromotion || isDeletingPromotion) return;
+    try {
+      setIsDeletingPromotion(true);
+      await deletePromotion(deletingPromotion.id);
+      setPromotions((current) => current.filter((item) => Number(item.id) !== Number(deletingPromotion.id)));
+      toast.success(`Đã xóa khuyến mãi ${deletingPromotion.code}`);
+      setDeletingPromotion(null);
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Không thể xóa khuyến mãi');
+    } finally {
+      setIsDeletingPromotion(false);
+    }
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+
+    const minOrder = Number(form.minOrder || 0);
+    const maxOrder = Number(form.maxOrder || 0);
+    const maxDiscount = Number(form.maxDiscount || 0);
+    const monetaryValues = form.promotionType === 'standard'
+      ? [minOrder, maxOrder, maxDiscount]
+      : [minOrder, maxOrder];
+    if (!monetaryValues.every((value) => Number.isFinite(value) && value >= 0)) {
+      toast.error('Giá trị đơn hàng và mức giảm tối đa phải là số tiền hợp lệ');
+      return;
+    }
+    if (maxOrder > 0 && maxOrder < minOrder) {
+      toast.error('Giá trị đơn tối đa phải lớn hơn hoặc bằng giá trị đơn tối thiểu');
+      return;
+    }
 
     if (form.promotionType === 'buy_x_get_y' && (!form.buyProductId || !form.giftProductId)) {
       setProductSearchError('Vui lòng chọn đủ sản phẩm mua và sản phẩm tặng');
@@ -407,9 +442,9 @@ export default function Promotions({ tabNavigation = null }) {
       code: normalizedCode,
       name: form.name.trim(),
       discountValue: Number(form.discountValue || 0),
-      minOrder: Number(form.minOrder || 0),
-      maxOrder: Number(form.maxOrder || 0),
-      maxDiscount: Number(form.maxDiscount || 0),
+      minOrder,
+      maxOrder,
+      maxDiscount: form.promotionType === 'standard' ? maxDiscount : 0,
       buyProductId: Number(form.buyProductId || 0) || '',
       buyQuantity: Number(form.buyQuantity || 1),
       giftProductId: Number(form.giftProductId || 0) || '',
@@ -577,6 +612,8 @@ export default function Promotions({ tabNavigation = null }) {
             <tbody className="divide-y divide-[#edf0f2]">
               {filteredPromotions.map((promotion) => {
                 const status = getPromotionStatus(promotion);
+                const canToggle = status !== 'ended';
+                const isEnabled = canToggle && promotion.enabled;
 
                 return (
                   <tr key={promotion.id} className="transition hover:bg-[#f8fafc]">
@@ -611,7 +648,7 @@ export default function Promotions({ tabNavigation = null }) {
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleDeletePromotion(promotion)}
+                          onClick={() => setDeletingPromotion(promotion)}
                           style={{ display: hasFullAccess ? undefined : 'none' }}
                           className="text-[#68707a] transition hover:text-red-600"
                           title="Xóa"
@@ -622,15 +659,17 @@ export default function Promotions({ tabNavigation = null }) {
                         <button
                           type="button"
                           onClick={() => togglePromotion(promotion.id)}
+                          disabled={!canToggle}
                           style={{ display: hasFullAccess ? undefined : 'none' }}
                           className={`relative h-5 w-9 rounded-full transition ${
-                            promotion.enabled ? 'bg-brand' : 'bg-gray-300'
-                          }`}
+                            isEnabled ? 'bg-brand' : 'bg-gray-300'
+                          } ${canToggle ? '' : 'cursor-not-allowed opacity-60'}`}
                           aria-label="Bật tắt khuyến mãi"
+                          title={canToggle ? 'Bật tắt khuyến mãi' : 'Khuyến mãi đã hết hạn'}
                         >
                           <span
                             className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition ${
-                              promotion.enabled ? 'left-[18px]' : 'left-0.5'
+                              isEnabled ? 'left-[18px]' : 'left-0.5'
                             }`}
                           />
                         </button>
@@ -659,14 +698,63 @@ export default function Promotions({ tabNavigation = null }) {
             <dl className="grid gap-4 sm:grid-cols-2">
               <div><dt className="text-[#68707a]">Tên chương trình</dt><dd className="mt-1 font-bold text-[#1f2933]">{viewingPromotion.name}</dd></div>
               <div><dt className="text-[#68707a]">Giá trị giảm</dt><dd className="mt-1 font-bold text-[#1f2933]">{formatDiscount(viewingPromotion)}</dd></div>
-              <div><dt className="text-[#68707a]">Đơn tối thiểu</dt><dd className="mt-1 font-semibold">{formatCurrency(viewingPromotion.minOrder || 0)}</dd></div>
-              <div><dt className="text-[#68707a]">Đơn tối đa</dt><dd className="mt-1 font-semibold">{Number(viewingPromotion.maxOrder || 0) > 0 ? formatCurrency(viewingPromotion.maxOrder) : 'Không giới hạn'}</dd></div>
-              <div><dt className="text-[#68707a]">Giảm tối đa</dt><dd className="mt-1 font-semibold">{Number(viewingPromotion.maxDiscount || 0) > 0 ? formatCurrency(viewingPromotion.maxDiscount) : 'Không giới hạn'}</dd></div>
+              <div><dt className="text-[#68707a]">Giá trị đơn tối thiểu</dt><dd className="mt-1 font-semibold">{formatCurrency(viewingPromotion.minOrder || 0)}</dd></div>
+              <div><dt className="text-[#68707a]">Giá trị đơn tối đa</dt><dd className="mt-1 font-semibold">{Number(viewingPromotion.maxOrder || 0) > 0 ? formatCurrency(viewingPromotion.maxOrder) : 'Không giới hạn'}</dd></div>
+              {(viewingPromotion.promotionType || 'standard') === 'standard' && (
+                <div><dt className="text-[#68707a]">Mức giảm tối đa</dt><dd className="mt-1 font-semibold">{Number(viewingPromotion.maxDiscount || 0) > 0 ? formatCurrency(viewingPromotion.maxDiscount) : 'Không giới hạn'}</dd></div>
+              )}
               <div><dt className="text-[#68707a]">Phạm vi áp dụng</dt><dd className="mt-1 font-semibold">{viewingPromotion.scope}</dd></div>
               <div><dt className="text-[#68707a]">Ngày bắt đầu</dt><dd className="mt-1 font-semibold">{formatDateText(viewingPromotion.startDate)}</dd></div>
               <div><dt className="text-[#68707a]">Ngày kết thúc</dt><dd className="mt-1 font-semibold">{formatDateText(viewingPromotion.endDate)}</dd></div>
             </dl>
             <div><p className="text-[#68707a]">Mô tả</p><p className="mt-1 whitespace-pre-wrap font-medium text-[#1f2933]">{viewingPromotion.description || 'Không có mô tả'}</p></div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        isOpen={Boolean(deletingPromotion)}
+        onClose={() => { if (!isDeletingPromotion) setDeletingPromotion(null); }}
+        title="Xác nhận xóa khuyến mãi"
+        maxWidth="max-w-md"
+      >
+        {deletingPromotion && (
+          <div className="space-y-5">
+            <div className="border border-red-200 bg-red-50 p-4">
+              <div className="flex items-start gap-3">
+                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-red-100 text-red-600">
+                  <Trash2 size={19} />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-bold text-[#1f2933]">Bạn có chắc chắn muốn xóa khuyến mãi này?</p>
+                  <p className="mt-1 text-sm leading-6 text-[#68707a]">
+                    Khuyến mãi <strong className="text-[#1f2933]">{deletingPromotion.code}</strong>
+                    {' — '}
+                    <strong className="text-[#1f2933]">{deletingPromotion.name}</strong> sẽ bị xóa khỏi hệ thống.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <p className="text-sm text-[#68707a]">Thao tác này không thể hoàn tác.</p>
+            <div className="flex justify-end gap-3 border-t border-[#e1e5ea] pt-4">
+              <button
+                type="button"
+                onClick={() => setDeletingPromotion(null)}
+                disabled={isDeletingPromotion}
+                className="h-10 border border-[#d5dbe3] bg-white px-5 text-sm font-bold text-[#4f5965] hover:bg-[#f5f9fc] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeletePromotion}
+                disabled={isDeletingPromotion}
+                className="inline-flex h-10 items-center justify-center gap-2 bg-red-600 px-5 text-sm font-bold text-white hover:bg-red-700 disabled:cursor-wait disabled:opacity-60"
+              >
+                <Trash2 size={16} />
+                {isDeletingPromotion ? 'Đang xóa...' : 'Xóa khuyến mãi'}
+              </button>
+            </div>
           </div>
         )}
       </Modal>
@@ -823,41 +911,58 @@ export default function Promotions({ tabNavigation = null }) {
                   </label>
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-3">
+                <div className={`grid gap-4 ${form.promotionType === 'standard' ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
                   <label>
-                    <span className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#68707a]">Đơn tối thiểu</span>
-                    <input
-                      type="number"
-                      min="0"
-                      value={form.minOrder}
-                      onChange={(event) => setForm({ ...form, minOrder: event.target.value })}
-                      className="h-10 w-full rounded-lg border border-[#d5dbe3] px-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft"
-                      placeholder="0"
-                    />
+                    <span className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#68707a]">Giá trị đơn tối thiểu</span>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min="0"
+                        step="1000"
+                        value={form.minOrder}
+                        onChange={(event) => setForm({ ...form, minOrder: event.target.value })}
+                        className="h-10 w-full rounded-lg border border-[#d5dbe3] px-3 pr-9 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft"
+                        placeholder="0"
+                      />
+                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold text-[#68707a]">đ</span>
+                    </div>
                   </label>
                   <label>
-                    <span className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#68707a]">Đơn tối đa</span>
-                    <input
-                      type="number"
-                      min={Number(form.minOrder || 0)}
-                      value={form.maxOrder}
-                      onChange={(event) => setForm({ ...form, maxOrder: event.target.value })}
-                      className="h-10 w-full rounded-lg border border-[#d5dbe3] px-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft"
-                      placeholder="Không giới hạn"
-                    />
+                    <span className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#68707a]">Giá trị đơn tối đa</span>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min={Number(form.minOrder || 0)}
+                        step="1000"
+                        value={form.maxOrder}
+                        onChange={(event) => setForm({ ...form, maxOrder: event.target.value })}
+                        className="h-10 w-full rounded-lg border border-[#d5dbe3] px-3 pr-9 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft"
+                        placeholder="Không giới hạn"
+                      />
+                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold text-[#68707a]">đ</span>
+                    </div>
                   </label>
-                  <label>
-                    <span className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#68707a]">Giảm tối đa</span>
-                    <input
-                      type="number"
-                      min="0"
-                      value={form.maxDiscount}
-                      onChange={(event) => setForm({ ...form, maxDiscount: event.target.value })}
-                      className="h-10 w-full rounded-lg border border-[#d5dbe3] px-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft"
-                      placeholder="Không giới hạn"
-                    />
-                  </label>
+                  {form.promotionType === 'standard' && (
+                    <label>
+                      <span className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#68707a]">Mức giảm tối đa</span>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min="0"
+                          step="1000"
+                          value={form.maxDiscount}
+                          onChange={(event) => setForm({ ...form, maxDiscount: event.target.value })}
+                          className="h-10 w-full rounded-lg border border-[#d5dbe3] px-3 pr-9 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft"
+                          placeholder="Không giới hạn"
+                        />
+                        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold text-[#68707a]">đ</span>
+                      </div>
+                    </label>
+                  )}
                 </div>
+                <p className="-mt-2 text-xs leading-5 text-[#68707a]">
+                  Đây là số tiền VNĐ của hóa đơn, không phải số lượng sản phẩm. Để trống giá trị tối đa nếu không muốn giới hạn.
+                </p>
 
                 <label className="block">
                   <span className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#68707a]">Phạm vi áp dụng</span>
