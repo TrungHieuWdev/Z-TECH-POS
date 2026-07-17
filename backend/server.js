@@ -4,6 +4,9 @@ import dotenv from 'dotenv';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import path from 'path';
+import { fileURLToPath } from 'url';
+import { closePool, query } from './config/db.js';
+import { getJwtSecret } from './config/auth.js';
 import authRoutes from './routes/auth.js';
 import productRoutes from './routes/products.js';
 import deviceModelRoutes from './routes/deviceModels.js';
@@ -28,6 +31,18 @@ dotenv.config();
 
 const app = express();
 const PORT = Number(process.env.PORT || 5000);
+const isProduction = process.env.NODE_ENV === 'production';
+const serverDirectory = path.dirname(fileURLToPath(import.meta.url));
+const uploadsDirectory = path.join(serverDirectory, 'uploads');
+
+function validateRuntimeConfig() {
+  getJwtSecret();
+  if (isProduction && !String(process.env.FRONTEND_ORIGINS || process.env.FRONTEND_ORIGIN || '').trim()) {
+    throw new Error('FRONTEND_ORIGINS is required in production');
+  }
+}
+
+validateRuntimeConfig();
 
 const configuredOrigins = String(process.env.FRONTEND_ORIGINS || process.env.FRONTEND_ORIGIN || '')
   .split(',')
@@ -35,10 +50,8 @@ const configuredOrigins = String(process.env.FRONTEND_ORIGINS || process.env.FRO
   .filter(Boolean);
 const allowedOrigins = new Set([
   ...configuredOrigins,
-  'http://localhost:5173',
-  'http://127.0.0.1:5173'
+  ...(!isProduction ? ['http://localhost:5173', 'http://127.0.0.1:5173'] : [])
 ]);
-const isProduction = process.env.NODE_ENV === 'production';
 
 function isDevelopmentHost(hostname) {
   return ['localhost', '127.0.0.1', '::1', '0.0.0.0'].includes(hostname) ||
@@ -71,6 +84,9 @@ app.use(cors({
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' }
 }));
+if (String(process.env.TRUST_PROXY || '').toLowerCase() === 'true') {
+  app.set('trust proxy', 1);
+}
 app.use('/api/', rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: Number(process.env.API_RATE_LIMIT || 600),
@@ -78,8 +94,28 @@ app.use('/api/', rateLimit({
   legacyHeaders: false,
   message: { message: 'Quá nhiều yêu cầu, vui lòng thử lại sau' }
 }));
-app.use(express.json());
-app.use('/uploads', express.static(path.resolve('uploads')));
+app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || '1mb' }));
+app.use((req, res, next) => {
+  if (!isProduction) return next();
+  const sendJson = res.json.bind(res);
+  res.json = (body) => {
+    if (body && typeof body === 'object' && !Array.isArray(body) && 'error' in body) {
+      const { error, ...safeBody } = body;
+      return sendJson(safeBody);
+    }
+    return sendJson(body);
+  };
+  return next();
+});
+app.use('/uploads', express.static(uploadsDirectory, {
+  dotfiles: 'deny',
+  fallthrough: false,
+  immutable: isProduction,
+  maxAge: isProduction ? '7d' : 0,
+  setHeaders(res) {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+  }
+}));
 
 app.get('/', (req, res) => {
   res.type('html').send(`
@@ -139,8 +175,18 @@ app.get('/', (req, res) => {
   `);
 });
 
-app.get('/api/health', (req, res) => {
-  res.json({ message: 'POS API is running' });
+app.get('/api/health/live', (req, res) => {
+  res.json({ status: 'ok' });
+});
+
+app.get('/api/health', async (req, res, next) => {
+  try {
+    await query('SELECT 1 AS ok');
+    res.json({ status: 'ok', database: 'connected' });
+  } catch (error) {
+    error.status = 503;
+    next(error);
+  }
 });
 
 app.use('/api/auth', authRoutes);
@@ -191,3 +237,26 @@ server.on('error', (error) => {
 
   throw error;
 });
+
+let shuttingDown = false;
+async function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`Received ${signal}, shutting down...`);
+
+  const forceTimer = setTimeout(() => process.exit(1), 10000);
+  forceTimer.unref();
+  server.close(async () => {
+    try {
+      await closePool();
+      clearTimeout(forceTimer);
+      process.exit(0);
+    } catch (error) {
+      console.error('Database shutdown failed:', error.message);
+      process.exit(1);
+    }
+  });
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));

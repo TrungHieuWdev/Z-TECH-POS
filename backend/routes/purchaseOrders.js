@@ -1,9 +1,11 @@
 import express from 'express';
 import auth, { requireFullAccess } from '../middleware/auth.js';
 import { validatePurchaseOrder } from '../middleware/validate.js';
-import { getAll, getById, create } from '../controllers/purchaseOrderController.js';
+import { getAll, getById, create, updatePayment } from '../controllers/purchaseOrderController.js';
+import asyncHandler from '../middleware/asyncHandler.js';
 const router = express.Router();
-router.get('/', auth, getAll);
-router.get('/:id', auth, getById);
+router.get('/', auth, asyncHandler(getAll));
+router.get('/:id', auth, asyncHandler(getById));
 router.post('/', auth, requireFullAccess, validatePurchaseOrder, create);
+router.patch('/:id/payment', auth, requireFullAccess, updatePayment);
 export default router;

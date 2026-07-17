@@ -5,40 +5,17 @@ function getApiBaseUrl() {
   // In development, Vite proxies /api to the backend so browser CORS is avoided entirely.
   if (import.meta.env.DEV) return '/api';
 
-  const { protocol, hostname } = window.location;
   const configuredUrl = String(import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '').trim();
-
-  const isLocalHost = (value) => ['localhost', '127.0.0.1', '::1'].includes(value);
-  const isPrivateLanHost = (value) => (
-    /^10\./.test(value) ||
-    /^192\.168\./.test(value) ||
-    /^172\.(1[6-9]|2\d|3[01])\./.test(value)
-  );
   const withApiPath = (url) => {
     const cleanUrl = url.replace(/\/$/, '');
     return cleanUrl.endsWith('/api') ? cleanUrl : `${cleanUrl}/api`;
   };
 
   if (configuredUrl) {
-    try {
-      const configured = new URL(configuredUrl);
-      const configuredPort = configured.port || '5000';
-
-      if (isLocalHost(hostname)) {
-        return withApiPath(`${protocol}//localhost:${configuredPort}`);
-      }
-
-      if (isPrivateLanHost(hostname) && isPrivateLanHost(configured.hostname)) {
-        return withApiPath(`${protocol}//${hostname}:${configuredPort}`);
-      }
-
-      return withApiPath(configuredUrl);
-    } catch {
-      return withApiPath(configuredUrl);
-    }
+    return withApiPath(configuredUrl);
   }
 
-  return `${protocol}//${hostname}:5000/api`;
+  return '/api';
 }
 
 const api = axios.create({
@@ -46,7 +23,7 @@ const api = axios.create({
   timeout: 8000
 });
 
-const CACHE_TTL = 15 * 60 * 1000;
+const CACHE_TTL = 30 * 1000;
 const responseCache = new Map();
 const pendingRequests = new Map();
 
@@ -69,7 +46,7 @@ api.interceptors.request.use((config) => {
 
   if (method !== 'get') clearApiCache();
 
-  if (method === 'get' && config.cache !== false) {
+  if (method === 'get' && config.cache === true) {
     const requestKey = getRequestKey(config);
     const cached = responseCache.get(requestKey);
 

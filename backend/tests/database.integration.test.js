@@ -30,6 +30,11 @@ test('business migration created all required tables and columns', async () => {
   assert.deepEqual(required.filter((name) => !names.has(name)), []);
   const [typeRows] = await connection.query("SHOW COLUMNS FROM inventory_logs LIKE 'type'");
   assert.match(typeRows[0].Type, /IMPORT.*SALE.*ADJUSTMENT.*RETURN.*WARRANTY.*CANCEL_ORDER/);
+  const [purchaseOrderColumns] = await connection.query('SHOW COLUMNS FROM purchase_orders');
+  const purchaseOrderColumnNames = new Set(purchaseOrderColumns.map((column) => column.Field));
+  for (const requiredColumn of ['paid_amount', 'payment_status', 'payment_method', 'due_date', 'paid_at']) {
+    assert.ok(purchaseOrderColumnNames.has(requiredColumn), `missing purchase_orders.${requiredColumn}`);
+  }
 });
 
 test('old AI restock log table was replaced by AI report result storage', async () => {

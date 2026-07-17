@@ -15,6 +15,7 @@ import {
 import api from '../api/axios';
 import KpiCard from '../components/KpiCard';
 import Modal from '../components/Modal';
+import ConfirmDialog from '../components/ConfirmDialog';
 import TablePagination from '../components/TablePagination';
 import { formatDate } from '../utils/format';
 
@@ -60,6 +61,8 @@ export default function Categories() {
   const [form, setForm] = useState(initialForm);
   const [editingCategory, setEditingCategory] = useState(null);
   const [isOpen, setIsOpen] = useState(false);
+  const [confirmation, setConfirmation] = useState(null);
+  const [isConfirming, setIsConfirming] = useState(false);
 
   async function loadData() {
     const categoryResponse = await api.get('/categories?include_hidden=1');
@@ -158,38 +161,40 @@ export default function Categories() {
     }
   };
 
-  const handleDelete = async (category) => {
+  const handleDelete = (category) => {
     if (Number(category.productCount || 0) > 0) {
       toast.error('Không thể xóa danh mục đang có sản phẩm. Vui lòng chuyển sản phẩm sang danh mục khác trước.');
       return;
     }
 
-    if (!window.confirm(`Xóa danh mục "${category.name}"?`)) {
-      return;
-    }
+    setConfirmation({ type: 'delete', category });
+  };
 
+  const confirmCategoryAction = async () => {
+    if (!confirmation || isConfirming) return;
+    const { type, category } = confirmation;
+    const willShow = category.status === 'hidden';
+    const action = willShow ? 'mở' : 'tạm ẩn';
+    setIsConfirming(true);
     try {
-      await api.delete(`/categories/${category.id}`);
-      toast.success('Đã xóa danh mục');
+      if (type === 'delete') {
+        await api.delete(`/categories/${category.id}`);
+        toast.success('Đã xóa danh mục');
+      } else {
+        await api.patch(`/categories/${category.id}/visibility`, { is_active: willShow ? 1 : 0 });
+        toast.success(`Đã ${action} danh mục`);
+      }
       await loadData();
+      setConfirmation(null);
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Không thể xóa danh mục');
+      toast.error(error.response?.data?.message || (type === 'delete' ? 'Không thể xóa danh mục' : `Không thể ${action} danh mục`));
+    } finally {
+      setIsConfirming(false);
     }
   };
 
-  const handleVisibility = async (category) => {
-    const willShow = category.status === 'hidden';
-    const action = willShow ? 'mở' : 'tạm ẩn';
-
-    if (!window.confirm(`${willShow ? 'Mở' : 'Tạm ẩn'} danh mục "${category.name}"?`)) return;
-
-    try {
-      await api.patch(`/categories/${category.id}/visibility`, { is_active: willShow ? 1 : 0 });
-      toast.success(`Đã ${action} danh mục`);
-      await loadData();
-    } catch (error) {
-      toast.error(error.response?.data?.message || `Không thể ${action} danh mục`);
-    }
+  const handleVisibility = (category) => {
+    setConfirmation({ type: 'visibility', category });
   };
 
   const viewProducts = (category) => {
@@ -395,6 +400,18 @@ export default function Categories() {
           </label>
         </form>
       </Modal>
+      <ConfirmDialog
+        isOpen={Boolean(confirmation)}
+        onClose={() => setConfirmation(null)}
+        onConfirm={confirmCategoryAction}
+        loading={isConfirming}
+        tone={confirmation?.type === 'delete' ? 'danger' : 'primary'}
+        title={confirmation?.type === 'delete' ? 'Xóa danh mục' : 'Thay đổi trạng thái danh mục'}
+        message={confirmation?.type === 'delete'
+          ? `Bạn có chắc muốn xóa danh mục “${confirmation?.category?.name || ''}”?`
+          : `Bạn có chắc muốn ${confirmation?.category?.status === 'hidden' ? 'mở' : 'tạm ẩn'} danh mục “${confirmation?.category?.name || ''}”?`}
+        confirmLabel={confirmation?.type === 'delete' ? 'Xóa danh mục' : 'Xác nhận'}
+      />
     </div>
   );
 }

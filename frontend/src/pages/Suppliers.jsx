@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   Ban,
+  CalendarDays,
   CircleCheck,
   CirclePause,
   Download,
@@ -20,6 +21,7 @@ import {
   X,
 } from 'lucide-react';
 import Modal from '../components/Modal';
+import ConfirmDialog from '../components/ConfirmDialog';
 import KpiCard from '../components/KpiCard';
 import TablePagination from '../components/TablePagination';
 import api from '../api/axios';
@@ -135,7 +137,13 @@ function getSupplierStats(suppliers) {
 
 function formatDate(value) {
   if (!value) return 'Chưa nhập hàng';
-  return new Intl.DateTimeFormat('vi-VN').format(new Date(value));
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Chưa nhập hàng';
+  return new Intl.DateTimeFormat('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  }).format(date);
 }
 
 function formatCurrency(value) {
@@ -178,6 +186,8 @@ export default function Suppliers() {
   const [menuPosition, setMenuPosition] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
   const [deletingSupplier, setDeletingSupplier] = useState(null);
+  const [statusChange, setStatusChange] = useState(null);
+  const [isStatusUpdating, setIsStatusUpdating] = useState(false);
 
   const toggleActionMenu = (event, supplierId) => {
     if (openMenuId === supplierId) {
@@ -315,9 +325,14 @@ export default function Suppliers() {
     }
   };
 
-  const updateStatus = async (supplier, nextStatus) => {
-    const actionLabel = nextStatus === 'paused' ? 'tạm ngừng hợp tác' : nextStatus === 'inactive' ? 'ngừng hợp tác' : 'khôi phục hợp tác';
-    if (!window.confirm(`Bạn có chắc muốn ${actionLabel} với ${supplier.name}?`)) return;
+  const updateStatus = (supplier, nextStatus) => {
+    setStatusChange({ supplier, nextStatus });
+  };
+
+  const confirmStatusChange = async () => {
+    if (!statusChange || isStatusUpdating) return;
+    const { supplier, nextStatus } = statusChange;
+    setIsStatusUpdating(true);
     try {
       await api.put(`/suppliers/${supplier.id}`, {
         supplier_code: supplier.code, supplier_name: supplier.name, phone: supplier.phone || null,
@@ -327,7 +342,12 @@ export default function Suppliers() {
       });
       await loadSuppliers();
       toast.success(nextStatus === 'active' ? 'Đã chuyển sang đang hợp tác' : nextStatus === 'paused' ? 'Đã tạm ngừng hợp tác' : 'Đã ngừng hợp tác');
-    } catch (error) { toast.error(error.response?.data?.message || 'Không thể cập nhật trạng thái'); }
+      setStatusChange(null);
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Không thể cập nhật trạng thái');
+    } finally {
+      setIsStatusUpdating(false);
+    }
   };
 
   const deleteSupplier = async (supplier) => {
@@ -410,14 +430,23 @@ export default function Suppliers() {
           </select>
         </div>}
         <div className="min-h-[465px] overflow-x-auto">
-          <table className="w-full min-w-[980px] table-fixed text-left text-sm">
+          <table className="w-full min-w-[1240px] table-fixed text-left text-sm">
+            <colgroup>
+              <col className="w-[19%]" />
+              <col className="w-[12%]" />
+              <col className="w-[14%]" />
+              <col className="w-[20%]" />
+              <col className="w-[13%]" />
+              <col className="w-[13%]" />
+              <col className="w-[9%]" />
+            </colgroup>
             <thead className="bg-[#f4fcfe] text-gray-500">
               <tr>
                 <th className="px-5 py-4 text-xs font-bold uppercase tracking-wide">Nhà cung cấp</th>
                 <th className="px-5 py-4 text-xs font-bold uppercase tracking-wide">Người liên hệ</th>
                 <th className="px-5 py-4 text-xs font-bold uppercase tracking-wide">Liên hệ</th>
                 <th className="px-5 py-4 text-xs font-bold uppercase tracking-wide">Email</th>
-                <th className="hidden px-5 py-4 text-xs font-bold uppercase tracking-wide lg:table-cell">Lần nhập gần nhất</th>
+                <th className="px-5 py-4 text-xs font-bold uppercase tracking-wide">Lần nhập gần nhất</th>
                 <th className="px-5 py-4 text-xs font-bold uppercase tracking-wide">Trạng thái</th>
                 <th className="px-5 py-4 text-right text-xs font-bold uppercase tracking-wide">Thao tác</th>
               </tr>
@@ -428,15 +457,29 @@ export default function Suppliers() {
                 return (
                   <tr key={supplier.id} className="h-[84px] transition hover:bg-[#f8fdfe]">
                     <td className="px-5 py-4">
-                      <div className="flex items-center gap-3">
+                      <div className="flex min-w-0 items-center gap-3">
                         <div className="grid h-11 w-11 shrink-0 place-items-center bg-[#e8f8fb] text-xs font-extrabold text-[#159bb5]">{supplier.name.split(/\s+/).slice(0, 2).map((word) => word[0]).join('').toUpperCase()}</div>
-                        <div><div className="font-bold text-gray-950">{supplier.name}</div><div className="mt-1 inline-flex bg-[#f4fcfe] px-2 py-1 text-[11px] font-semibold text-gray-500">{supplier.code}</div></div>
+                        <div className="min-w-0"><div className="line-clamp-2 font-bold leading-5 text-gray-950" title={supplier.name}>{supplier.name}</div><div className="mt-1 inline-flex bg-[#f4fcfe] px-2 py-1 text-[11px] font-semibold text-gray-500">{supplier.code}</div></div>
                       </div>
                     </td>
-                    <td className="px-5 py-4 font-semibold text-gray-800">{supplier.contact || '—'}</td>
-                    <td className="px-5 py-4"><div className="flex items-center gap-2 font-semibold text-gray-700"><span className="grid h-6 w-6 place-items-center bg-[#e8f8fb] text-[#159bb5]"><Phone size={13} /></span>{supplier.phone || '—'}</div></td>
-                    <td className="px-5 py-4"><div className="flex items-center gap-2 text-gray-600"><span className="grid h-6 w-6 place-items-center bg-gray-50 text-gray-400"><Mail size={13} /></span>{supplier.email || '—'}</div></td>
-                    <td className="hidden whitespace-nowrap px-5 py-4 text-gray-600 lg:table-cell">{formatDate(supplier.last_purchase_at)}</td>
+                    <td className="px-5 py-4"><div className="truncate font-semibold text-gray-800" title={supplier.contact || ''}>{supplier.contact || '—'}</div></td>
+                    <td className="px-5 py-4"><div className="flex items-center gap-2 whitespace-nowrap font-semibold text-gray-700"><span className="grid h-6 w-6 shrink-0 place-items-center bg-[#e8f8fb] text-[#159bb5]"><Phone size={13} /></span><span>{supplier.phone || '—'}</span></div></td>
+                    <td className="min-w-0 px-5 py-4">
+                      <div className="flex min-w-0 items-center gap-2 text-gray-600">
+                        <span className="grid h-6 w-6 shrink-0 place-items-center bg-gray-50 text-gray-400"><Mail size={13} /></span>
+                        {supplier.email
+                          ? <a href={`mailto:${supplier.email}`} className="block min-w-0 truncate hover:text-[#159bb5] hover:underline" title={supplier.email}>{supplier.email}</a>
+                          : <span>—</span>}
+                      </div>
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-2 whitespace-nowrap">
+                        <span className={`grid h-7 w-7 shrink-0 place-items-center ${supplier.last_purchase_at ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-50 text-gray-400'}`}>
+                          <CalendarDays size={14} />
+                        </span>
+                        <span className={supplier.last_purchase_at ? 'font-semibold text-gray-700' : 'text-gray-500'}>{formatDate(supplier.last_purchase_at)}</span>
+                      </div>
+                    </td>
                     <td className="px-5 py-4">
                       <span className={`inline-flex px-3 py-1 text-xs font-bold ${statusMeta.badgeClass}`}>
                         {statusMeta.label}
@@ -647,6 +690,21 @@ export default function Suppliers() {
           </div>
         )}
       </Modal>
+      <ConfirmDialog
+        isOpen={Boolean(statusChange)}
+        onClose={() => setStatusChange(null)}
+        onConfirm={confirmStatusChange}
+        loading={isStatusUpdating}
+        tone={statusChange?.nextStatus === 'active' ? 'primary' : 'danger'}
+        title="Thay đổi trạng thái nhà cung cấp"
+        message={`Bạn có chắc muốn ${
+          statusChange?.nextStatus === 'paused'
+            ? 'tạm ngừng hợp tác'
+            : statusChange?.nextStatus === 'inactive'
+              ? 'ngừng hợp tác'
+              : 'khôi phục hợp tác'
+        } với “${statusChange?.supplier?.name || ''}”?`}
+      />
     </div>
   );
 }

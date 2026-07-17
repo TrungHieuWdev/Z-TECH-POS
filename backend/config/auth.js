@@ -1,4 +1,4 @@
-const DEFAULT_JWT_EXPIRES_IN = '7d';
+const DEFAULT_JWT_EXPIRES_IN = '8h';
 
 export function getJwtSecret() {
   const secret = process.env.JWT_SECRET;

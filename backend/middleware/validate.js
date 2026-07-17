@@ -55,7 +55,16 @@ export function validateChangePassword(req, res, next) {
 }
 
 export function validateCreateOrder(req, res, next) {
-  const { customer_id, items, promotion_discount = 0, points_used = 0, payment_method = 'cash', paid_amount = null } = req.body;
+  const {
+    customer_id,
+    promotion_id,
+    items,
+    points_used = 0,
+    payment_method = 'cash',
+    paid_amount = null,
+    idempotency_key,
+    note = ''
+  } = req.body;
 
   if (customer_id !== undefined && customer_id !== null && customer_id !== '' && !isPositiveInteger(customer_id)) {
     return badRequest(res, 'Khách hàng không hợp lệ');
@@ -73,16 +82,37 @@ export function validateCreateOrder(req, res, next) {
     if (!isPositiveInteger(item?.product_id) || !isPositiveInteger(item?.quantity)) {
       return badRequest(res, 'Sản phẩm hoặc số lượng không hợp lệ');
     }
+    const hasSeparatedQuantities = item.purchased_quantity != null || item.gift_quantity != null;
+    if (hasSeparatedQuantities) {
+      const purchasedQuantity = Number(item.purchased_quantity);
+      const giftQuantity = Number(item.gift_quantity || 0);
+      if (
+        !Number.isInteger(purchasedQuantity) ||
+        purchasedQuantity < 0 ||
+        !Number.isInteger(giftQuantity) ||
+        giftQuantity < 0 ||
+        purchasedQuantity + giftQuantity !== Number(item.quantity)
+      ) {
+        return badRequest(res, 'Số lượng mua và quà tặng không hợp lệ');
+      }
+    }
   }
 
-  if (!isNonNegativeNumber(promotion_discount) || !isNonNegativeNumber(points_used)) {
-    return badRequest(res, 'Giảm giá hoặc điểm sử dụng không hợp lệ');
+  if (promotion_id != null && promotion_id !== '' && !isPositiveInteger(promotion_id)) {
+    return badRequest(res, 'Khuyến mãi không hợp lệ');
+  }
+  if (!isNonNegativeNumber(points_used) || !Number.isInteger(Number(points_used))) {
+    return badRequest(res, 'Điểm sử dụng không hợp lệ');
   }
 
-  if (!PAYMENT_METHODS.has(String(payment_method))) {
+  if (!new Set(['cash', 'transfer']).has(String(payment_method))) {
     return badRequest(res, 'Phương thức thanh toán không hợp lệ');
   }
   if (paid_amount != null && !isNonNegativeNumber(paid_amount)) return badRequest(res, 'Số tiền thanh toán không hợp lệ');
+  if (typeof note !== 'string' || note.length > 2000) return badRequest(res, 'Ghi chú đơn hàng không hợp lệ');
+  if (idempotency_key != null && !/^[A-Za-z0-9_-]{16,64}$/.test(String(idempotency_key))) {
+    return badRequest(res, 'Mã chống trùng đơn hàng không hợp lệ');
+  }
 
   next();
 }
@@ -158,12 +188,66 @@ export function validatePurchaseOrder(req, res, next) {
   for (const item of req.body.items) {
     if (!isPositiveInteger(item.product_id) || !isPositiveInteger(item.quantity) || !isNonNegativeNumber(item.import_price)) return badRequest(res, 'Chi tiết nhập hàng không hợp lệ');
   }
+  if (req.body.paid_amount != null && !isNonNegativeNumber(req.body.paid_amount)) return badRequest(res, 'Số tiền đã thanh toán không hợp lệ');
+  if (req.body.payment_method != null && !['cash', 'transfer', 'other'].includes(req.body.payment_method)) return badRequest(res, 'Phương thức thanh toán không hợp lệ');
+  if (req.body.due_date && !/^\d{4}-\d{2}-\d{2}$/.test(String(req.body.due_date))) return badRequest(res, 'Hạn thanh toán không hợp lệ');
   next();
 }
 
 export function validatePromotion(req, res, next) {
-  if (!/^[A-Z0-9_-]{3,20}$/.test(String(req.body.code || '').trim().toUpperCase())) return badRequest(res, 'Mã khuyến mãi không hợp lệ');
-  if (!validText(req.body.name, 150) || !req.body.name.trim()) return badRequest(res, 'Tên khuyến mãi là bắt buộc');
+  const promotion = req.body || {};
+  const allowedTypes = new Set(['standard', 'buy_x_get_y', 'combo', 'nth_item_discount', 'quantity_tier']);
+  const allowedScopes = new Set(['Toàn đơn hàng', 'Theo danh mục sản phẩm', 'Theo sản phẩm cụ thể', 'Theo dòng thiết bị']);
+  const nonNegativeFields = ['minOrder', 'maxOrder', 'maxDiscount'];
+
+  if (!/^[A-Z0-9_-]{3,20}$/.test(String(promotion.code || '').trim().toUpperCase())) return badRequest(res, 'Mã khuyến mãi không hợp lệ');
+  if (!validText(promotion.name, 150) || !promotion.name.trim()) return badRequest(res, 'Tên khuyến mãi là bắt buộc');
+  if (!allowedTypes.has(promotion.promotionType || 'standard')) return badRequest(res, 'Loại khuyến mãi không hợp lệ');
+  if (!allowedScopes.has(promotion.scope || 'Toàn đơn hàng')) return badRequest(res, 'Phạm vi khuyến mãi không hợp lệ');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(promotion.startDate || '')) || !/^\d{4}-\d{2}-\d{2}$/.test(String(promotion.endDate || ''))) {
+    return badRequest(res, 'Ngày bắt đầu hoặc kết thúc không hợp lệ');
+  }
+  if (promotion.startDate > promotion.endDate) return badRequest(res, 'Ngày kết thúc phải sau ngày bắt đầu');
+  if (nonNegativeFields.some((field) => !isNonNegativeNumber(promotion[field] || 0))) return badRequest(res, 'Giá trị điều kiện khuyến mãi không hợp lệ');
+  if (Number(promotion.maxOrder || 0) > 0 && Number(promotion.maxOrder) < Number(promotion.minOrder || 0)) {
+    return badRequest(res, 'Giá trị đơn tối đa phải lớn hơn hoặc bằng giá trị đơn tối thiểu');
+  }
+
+  if ((promotion.promotionType || 'standard') === 'standard') {
+    if (!['percent', 'amount'].includes(promotion.discountType)) return badRequest(res, 'Kiểu giảm giá không hợp lệ');
+    if (!isNonNegativeNumber(promotion.discountValue)) return badRequest(res, 'Giá trị giảm không hợp lệ');
+    if (promotion.discountType === 'percent' && Number(promotion.discountValue) > 100) return badRequest(res, 'Phần trăm giảm không được vượt quá 100%');
+  }
+  if (promotion.promotionType === 'buy_x_get_y') {
+    if (!isPositiveInteger(promotion.buyProductId) || !isPositiveInteger(promotion.giftProductId) ||
+        !isPositiveInteger(promotion.buyQuantity) || !isPositiveInteger(promotion.giftQuantity)) {
+      return badRequest(res, 'Cấu hình sản phẩm mua và quà tặng không hợp lệ');
+    }
+  }
+  if (promotion.promotionType === 'combo') {
+    if (!Array.isArray(promotion.comboItems) || promotion.comboItems.length < 2 ||
+        promotion.comboItems.some((item) => !isPositiveInteger(item.productId) || !isPositiveInteger(item.quantity)) ||
+        new Set(promotion.comboItems.map((item) => Number(item.productId))).size !== promotion.comboItems.length ||
+        !['percent', 'amount'].includes(promotion.comboDiscountType) ||
+        !isNonNegativeNumber(promotion.comboDiscountValue) ||
+        (promotion.comboDiscountType === 'percent' && Number(promotion.comboDiscountValue) > 100)) {
+      return badRequest(res, 'Cấu hình combo không hợp lệ');
+    }
+  }
+  if (promotion.promotionType === 'nth_item_discount' &&
+      (!Number.isInteger(Number(promotion.nthQuantity)) || Number(promotion.nthQuantity) < 2 || !isNonNegativeNumber(promotion.nthDiscountAmount))) {
+    return badRequest(res, 'Cấu hình giảm sản phẩm thứ N không hợp lệ');
+  }
+  if (promotion.promotionType === 'quantity_tier' &&
+      (!Array.isArray(promotion.quantityTiers) || !promotion.quantityTiers.length ||
+       promotion.quantityTiers.some((tier) => !isPositiveInteger(tier.quantity) || !isNonNegativeNumber(tier.percent) || Number(tier.percent) > 100))) {
+    return badRequest(res, 'Cấu hình giảm theo số lượng không hợp lệ');
+  }
+  if (promotion.scope === 'Theo sản phẩm cụ thể' && !isPositiveInteger(promotion.productId)) return badRequest(res, 'Sản phẩm áp dụng không hợp lệ');
+  if (promotion.scope === 'Theo danh mục sản phẩm' && !isPositiveInteger(promotion.categoryId)) return badRequest(res, 'Danh mục áp dụng không hợp lệ');
+  if (promotion.scope === 'Theo dòng thiết bị' && !['apple', 'samsung', 'vivo', 'oppo', 'xiaomi', 'generic'].includes(promotion.deviceFamily)) {
+    return badRequest(res, 'Dòng thiết bị áp dụng không hợp lệ');
+  }
   next();
 }
 
@@ -190,9 +274,9 @@ export function validateProduct(req, res, next) {
 export function validateEmployee(req, res, next) {
   const { name, email, phone = '', role = 'employee', status = 'active' } = req.body || {};
   if (!validText(name, 100) || name.trim().length < 2) return badRequest(res, 'Tên nhân viên không hợp lệ');
-  if (!emailPattern.test(String(email || ''))) return badRequest(res, 'Email không hợp lệ');
+  if (email != null && email !== '' && !emailPattern.test(String(email))) return badRequest(res, 'Email không hợp lệ');
   if (phone && !phonePattern.test(String(phone))) return badRequest(res, 'Số điện thoại không hợp lệ');
-  if (!['owner','manager','employee','admin','cashier','warehouse'].includes(role)) return badRequest(res, 'Vai trò không hợp lệ');
+  if (!['employee','cashier','warehouse'].includes(role)) return badRequest(res, 'Vai trò không hợp lệ');
   if (!['active','inactive'].includes(status)) return badRequest(res, 'Trạng thái không hợp lệ');
   next();
 }

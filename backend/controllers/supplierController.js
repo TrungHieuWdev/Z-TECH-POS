@@ -6,8 +6,8 @@ const selectSql = `SELECT s.id, s.supplier_code AS code, s.supplier_name AS name
   MAX(CASE WHEN po.status = 'completed' THEN po.created_at END) AS last_purchase_at,
   COUNT(CASE WHEN po.status <> 'cancelled' THEN 1 END) AS purchase_order_count,
   COALESCE(SUM(CASE WHEN po.status <> 'cancelled' THEN po.total_amount ELSE 0 END), 0) AS total_purchased,
-  COALESCE(SUM(CASE WHEN po.status = 'completed' THEN po.total_amount ELSE 0 END), 0) AS total_paid,
-  COALESCE(SUM(CASE WHEN po.status = 'draft' THEN po.total_amount ELSE 0 END), 0) AS total_debt
+  COALESCE(SUM(CASE WHEN po.status <> 'cancelled' THEN po.paid_amount ELSE 0 END), 0) AS total_paid,
+  COALESCE(SUM(CASE WHEN po.status <> 'cancelled' THEN GREATEST(po.total_amount - po.paid_amount, 0) ELSE 0 END), 0) AS total_debt
   FROM suppliers s
   LEFT JOIN purchase_orders po ON po.supplier_id = s.id`;
 

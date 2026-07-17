@@ -109,7 +109,7 @@ export async function getSalesReport(req, res) {
       query(
         `SELECT
            COALESCE(SUM(oi.quantity), 0) AS sold_quantity,
-           COALESCE(SUM(${discountedLineRevenue} - (COALESCE(p.cost_price, 0) * oi.quantity)), 0) AS gross_profit
+           COALESCE(SUM(${discountedLineRevenue} - (COALESCE(oi.cost_price_snapshot, p.cost_price, 0) * oi.quantity)), 0) AS gross_profit
          FROM order_items oi
          JOIN orders o ON oi.order_id = o.id
          JOIN products p ON oi.product_id = p.id
@@ -120,7 +120,7 @@ export async function getSalesReport(req, res) {
         `SELECT
            DATE_FORMAT(o.created_at, '%Y-%m-%d') AS report_date,
            COALESCE(SUM(${discountedLineRevenue}), 0) AS revenue,
-           COALESCE(SUM(${discountedLineRevenue} - (COALESCE(p.cost_price, 0) * oi.quantity)), 0) AS gross_profit
+           COALESCE(SUM(${discountedLineRevenue} - (COALESCE(oi.cost_price_snapshot, p.cost_price, 0) * oi.quantity)), 0) AS gross_profit
          FROM order_items oi
          JOIN orders o ON oi.order_id = o.id
          JOIN products p ON oi.product_id = p.id
@@ -144,7 +144,7 @@ export async function getSalesReport(req, res) {
                CASE
                  WHEN o.subtotal > 0 THEN oi2.subtotal * (o.total / o.subtotal)
                  ELSE oi2.subtotal
-               END - (COALESCE(p2.cost_price, 0) * oi2.quantity)
+               END - (COALESCE(oi2.cost_price_snapshot, p2.cost_price, 0) * oi2.quantity)
              )
              FROM order_items oi2
              JOIN products p2 ON oi2.product_id = p2.id
@@ -178,7 +178,7 @@ export async function getSalesReport(req, res) {
            COALESCE(c.name, 'Chưa phân loại') AS category_name,
            COALESCE(SUM(oi.quantity), 0) AS quantity,
            COALESCE(SUM(${discountedLineRevenue}), 0) AS revenue,
-           COALESCE(SUM(${discountedLineRevenue} - (COALESCE(p.cost_price, 0) * oi.quantity)), 0) AS gross_profit,
+           COALESCE(SUM(${discountedLineRevenue} - (COALESCE(oi.cost_price_snapshot, p.cost_price, 0) * oi.quantity)), 0) AS gross_profit,
            MAX(p.stock_quantity) AS stock_quantity
          FROM order_items oi
          JOIN orders o ON oi.order_id = o.id

@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   validateChangePassword,
   validateCreateOrder,
+  validateEmployee,
   validateLogin,
   validateStockQuantity
 } from '../middleware/validate.js';
@@ -86,4 +87,47 @@ test('inventory validation accepts valid stock quantity', () => {
   });
   assert.equal(result.nextCalled, true);
   assert.equal(result.statusCode, 200);
+});
+
+test('employee validation accepts staff roles', () => {
+  for (const role of ['employee', 'cashier', 'warehouse']) {
+    const result = runMiddleware(validateEmployee, {
+      name: 'Nhân viên thử nghiệm',
+      phone: '0901234567',
+      role,
+      status: 'active'
+    });
+
+    assert.equal(result.nextCalled, true, `role ${role} should be accepted`);
+  }
+});
+
+test('employee validation rejects an invalid email when one is supplied', () => {
+  const result = runMiddleware(validateEmployee, {
+    name: 'Nhân viên thử nghiệm',
+    email: 'email-khong-hop-le',
+    phone: '0901234567',
+    role: 'cashier',
+    status: 'active'
+  });
+
+  assert.equal(result.nextCalled, false);
+  assert.equal(result.statusCode, 400);
+  assert.match(result.payload.message, /Email/);
+});
+
+test('employee validation rejects manager and owner roles', () => {
+  for (const role of ['manager', 'owner', 'admin']) {
+    const result = runMiddleware(validateEmployee, {
+      name: 'Tài khoản không phải nhân viên',
+      email: 'account@ztech.local',
+      phone: '0901234567',
+      role,
+      status: 'active'
+    });
+
+    assert.equal(result.nextCalled, false, `role ${role} should be rejected`);
+    assert.equal(result.statusCode, 400);
+    assert.match(result.payload.message, /Vai trò/);
+  }
 });

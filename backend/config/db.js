@@ -46,3 +46,7 @@ export async function withTransaction(callback) {
     connection.release();
   }
 }
+
+export async function closePool() {
+  await pool.end();
+}

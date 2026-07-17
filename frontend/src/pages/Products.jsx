@@ -20,6 +20,7 @@ import { useSearchParams } from 'react-router-dom';
 import api from '../api/axios';
 import KpiCard from '../components/KpiCard';
 import Modal from '../components/Modal';
+import ConfirmDialog from '../components/ConfirmDialog';
 import ProductImage from '../components/ProductImage';
 import TablePagination from '../components/TablePagination';
 import { formatCurrency } from '../utils/format';
@@ -299,6 +300,8 @@ export default function Products({ tabNavigation = null }) {
   const [importRows, setImportRows] = useState([]);
   const [importFileName, setImportFileName] = useState('');
   const [isImporting, setIsImporting] = useState(false);
+  const [deletingProduct, setDeletingProduct] = useState(null);
+  const [isDeletingProduct, setIsDeletingProduct] = useState(false);
 
   const productStats = useMemo(() => ({
     total: products.length,
@@ -641,19 +644,22 @@ export default function Products({ tabNavigation = null }) {
     }
   };
 
-  const handleDelete = async (product) => {
-    if (!window.confirm(`Xóa sản phẩm "${product.name}"?`)) {
-      return;
-    }
-
+  const confirmDeleteProduct = async () => {
+    if (!deletingProduct || isDeletingProduct) return;
+    setIsDeletingProduct(true);
     try {
-      await api.delete(`/products/${product.id}`);
+      await api.delete(`/products/${deletingProduct.id}`);
       toast.success('Đã xóa sản phẩm');
       await loadProducts();
+      setDeletingProduct(null);
     } catch (error) {
       toast.error(error.response?.data?.message || 'Không thể xóa sản phẩm');
+    } finally {
+      setIsDeletingProduct(false);
     }
   };
+
+  const handleDelete = (product) => setDeletingProduct(product);
 
   return (
     <div className="space-y-4">
@@ -1283,6 +1289,15 @@ export default function Products({ tabNavigation = null }) {
           </section>
         </form>
       </Modal>
+      <ConfirmDialog
+        isOpen={Boolean(deletingProduct)}
+        onClose={() => setDeletingProduct(null)}
+        onConfirm={confirmDeleteProduct}
+        loading={isDeletingProduct}
+        title="Xóa sản phẩm"
+        message={`Bạn có chắc muốn xóa sản phẩm “${deletingProduct?.name || ''}”? Dữ liệu đã phát sinh giao dịch có thể không được phép xóa.`}
+        confirmLabel="Xóa sản phẩm"
+      />
     </div>
   );
 }

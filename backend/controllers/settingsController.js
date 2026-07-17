@@ -44,15 +44,15 @@ const DEFAULT_SETTINGS = {
   payment: {
     methods: {
       cash: true,
-      transfer: true,
-      qr: true
+      transfer: false,
+      qr: false
     },
     defaultMethod: 'cash',
     vietQr: {
-      bankId: '970436',
-      bankName: 'Vietcombank - Ngan hang TMCP Ngoai thuong Viet Nam',
-      accountNo: '1033519890',
-      accountName: 'NGUYEN HOANG TRUNG HIEU',
+      bankId: '',
+      bankName: '',
+      accountNo: '',
+      accountName: '',
       memo: 'Thanh toan ZTECH'
     },
     vat: {

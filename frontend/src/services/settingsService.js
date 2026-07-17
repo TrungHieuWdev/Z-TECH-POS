@@ -6,7 +6,7 @@ export function getUploadedAssetUrl(path) {
 
   const apiBaseUrl = String(api.defaults.baseURL || '');
   const baseUrl = apiBaseUrl.startsWith('/api')
-    ? `${window.location.protocol}//${window.location.hostname}:5000`
+    ? window.location.origin
     : apiBaseUrl.replace(/\/api\/?$/, '');
   return `${baseUrl}${path.startsWith('/') ? path : `/${path}`}`;
 }

@@ -13,7 +13,7 @@ const lineDiscount = `CASE WHEN o.subtotal > 0
 const lineRefund = `CASE WHEN o.subtotal > 0
   THEN (oi.subtotal / o.subtotal) * COALESCE(rf.refund_amount, 0) ELSE 0 END`;
 const lineNet = `(oi.subtotal - ${lineDiscount} - ${lineRefund})`;
-const lineCost = `(oi.quantity * COALESCE(p.cost_price, 0))`;
+const lineCost = `(oi.quantity * COALESCE(oi.cost_price_snapshot, p.cost_price, 0))`;
 
 function buildWhere(filters, { from = filters.from, to = filters.to, completedOnly = false } = {}) {
   const clauses = ['o.created_at >= ?', "o.created_at < DATE_ADD(?, INTERVAL 1 DAY)"];

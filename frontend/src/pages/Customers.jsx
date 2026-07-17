@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
   Award, Edit, Eye, History, Phone, Plus, RefreshCcw, Search,
-  ShoppingBag, Star, UserCheck, Users, WalletCards
+  ShoppingBag, UserCheck, Users, WalletCards
 } from 'lucide-react';
 import api from '../api/axios';
 import KpiCard from '../components/KpiCard';
@@ -15,28 +15,28 @@ import { customerNameMessage, isValidCustomerName, normalizeCustomerName } from 
 const initialForm = { name: '', phone: '', email: '', address: '' };
 const initialFilters = { spending: '', recent: '', status: 'active' };
 const PAGE_SIZE = 5;
+const STORE_TIME_ZONE = 'Asia/Ho_Chi_Minh';
 
-const customerType = (customer) => {
-  const spent = Number(customer.total_spent || 0);
-  const orders = Number(customer.order_count || 0);
-  if (spent >= 20000000 || orders >= 20) return 'vip';
-  if (spent >= 8000000 || orders >= 10) return 'loyal';
-  if (Number(customer.points || 0) > 0 || orders >= 2) return 'member';
-  return 'regular';
-};
+const vietnamDateFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: STORE_TIME_ZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit'
+});
 
-const typeMeta = {
-  regular: ['Khách thường', 'bg-gray-100 text-gray-600'],
-  member: ['Thành viên', 'bg-sky-50 text-sky-700'],
-  loyal: ['Khách thân thiết', 'bg-cyan-50 text-cyan-700'],
-  vip: ['VIP', 'bg-amber-50 text-amber-700']
+const toVietnamDateKey = (value) => {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value || '').slice(0, 10);
+
+  const parts = Object.fromEntries(
+    vietnamDateFormatter.formatToParts(date).map((part) => [part.type, part.value])
+  );
+  return `${parts.year}-${parts.month}-${parts.day}`;
 };
 
 const isThisMonth = (value) => {
   if (!value) return false;
-  const date = new Date(value);
-  const now = new Date();
-  return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+  return toVietnamDateKey(value).slice(0, 7) === toVietnamDateKey(new Date()).slice(0, 7);
 };
 
 export default function Customers() {
@@ -61,19 +61,20 @@ export default function Customers() {
   const stats = useMemo(() => ({
     total: customers.length,
     newThisMonth: customers.filter((item) => isThisMonth(item.created_at)).length,
-    withPoints: customers.filter((item) => Number(item.points || 0) > 0).length,
+    totalSpent: customers.reduce((sum, item) => sum + Number(item.total_spent || 0), 0),
     returning: customers.filter((item) => Number(item.order_count || 0) >= 2).length
   }), [customers]);
 
   const filteredCustomers = useMemo(() => {
     const keyword = search.trim().toLowerCase();
     const now = new Date();
+    const todayKey = toVietnamDateKey(now);
     const filtered = customers.filter((customer) => {
       const matchesSearch = [customer.name, customer.phone].some((value) => String(value || '').toLowerCase().includes(keyword));
       const lastPurchase = customer.last_purchase_at ? new Date(customer.last_purchase_at) : null;
       const days = lastPurchase ? (now - lastPurchase) / 86400000 : Infinity;
       const matchesRecent = !filters.recent
-        || (filters.recent === 'today' && days < 1)
+        || (filters.recent === 'today' && toVietnamDateKey(customer.last_purchase_at) === todayKey)
         || (filters.recent === 'week' && days <= 7)
         || (filters.recent === 'month' && isThisMonth(customer.last_purchase_at))
         || (filters.recent === 'inactive' && days > 90);
@@ -148,7 +149,7 @@ export default function Customers() {
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard icon={Users} label="Tổng khách hàng" value={stats.total.toLocaleString('vi-VN')} detail="Khách hàng đã lưu" toneClassName="bg-sky-50 text-sky-700" />
         <KpiCard icon={UserCheck} label="Khách mới tháng này" value={stats.newThisMonth.toLocaleString('vi-VN')} detail="Đăng ký trong tháng" toneClassName="bg-cyan-50 text-cyan-700" />
-        <KpiCard icon={Star} label="Khách có điểm" value={stats.withPoints.toLocaleString('vi-VN')} detail="Có thể áp dụng tích điểm" toneClassName="bg-amber-50 text-amber-700" />
+        <KpiCard icon={WalletCards} label="Tổng tiền đã mua" value={formatCurrency(stats.totalSpent)} detail="Tổng chi tiêu của thành viên" toneClassName="bg-amber-50 text-amber-700" />
         <KpiCard icon={History} label="Khách quay lại" value={stats.returning.toLocaleString('vi-VN')} detail="Có từ 2 đơn hàng" toneClassName="bg-emerald-50 text-emerald-700" />
       </section>
 
@@ -165,16 +166,14 @@ export default function Customers() {
         </div>
 
         <div className="min-h-[375px] overflow-x-auto">
-          <table className="w-full min-w-[1250px] table-fixed text-left text-sm">
-            <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500"><tr><th className="px-4 py-3">Khách hàng</th><th className="px-4 py-3">Số điện thoại</th><th className="px-4 py-3">Loại khách</th><th className="px-4 py-3 text-right">Điểm hiện có</th><th className="px-4 py-3 text-right">Tổng chi tiêu</th><th className="px-4 py-3 text-right">Số đơn hàng</th><th className="px-4 py-3">Lần mua gần nhất</th><th className="px-4 py-3">Trạng thái</th><th className="px-4 py-3 text-center">Thao tác</th></tr></thead>
+          <table className="w-full min-w-[1100px] table-fixed text-left text-sm">
+            <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500"><tr><th className="px-4 py-3">Khách hàng</th><th className="px-4 py-3">Số điện thoại</th><th className="px-4 py-3 text-right">Điểm hiện có</th><th className="px-4 py-3 text-right">Tổng chi tiêu</th><th className="px-4 py-3 text-right">Số đơn hàng</th><th className="px-4 py-3">Lần mua gần nhất</th><th className="px-4 py-3">Trạng thái</th><th className="px-4 py-3 text-center">Thao tác</th></tr></thead>
             <tbody className="divide-y divide-gray-100">
               {paginatedCustomers.map((customer) => {
-                const type = typeMeta[customerType(customer)];
                 const active = Number(customer.order_count || 0) > 0 || (customer.last_purchase_at && (new Date() - new Date(customer.last_purchase_at)) / 86400000 <= 180);
                 return <tr key={customer.id} className="h-[64px] hover:bg-gray-50/70">
                   <td className="px-4 py-3"><p className="font-semibold text-gray-950">{customer.name}</p><p className="mt-0.5 text-xs text-gray-400">KH-{String(customer.id).padStart(4, '0')}</p></td>
                   <td className="px-4 py-3"><a href={`tel:${customer.phone}`} className="inline-flex items-center gap-1.5 font-medium text-gray-700 hover:text-sky-700"><Phone size={14} className="text-sky-500" />{customer.phone}</a></td>
-                  <td className="px-4 py-3"><span className={`inline-flex px-2 py-1 text-xs font-semibold ${type[1]}`}>{type[0]}</span></td>
                   <td className="px-4 py-3 text-right font-bold text-[#398fbd]">{Number(customer.points || 0).toLocaleString('vi-VN')}</td>
                   <td className="px-4 py-3 text-right font-semibold text-gray-950">{formatCurrency(customer.total_spent || 0)}</td>
                   <td className="px-4 py-3 text-right font-semibold">{Number(customer.order_count || 0).toLocaleString('vi-VN')}</td>

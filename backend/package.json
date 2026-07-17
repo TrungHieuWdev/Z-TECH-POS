@@ -10,6 +10,7 @@
     "test": "node --test",
     "test:integration": "node --test tests/database.integration.test.js",
     "migrate:hardening": "node scripts/applyHardeningMigration.js",
+    "migrate:production-readiness": "node scripts/applyProductionReadinessMigration.js",
     "migrate:pos-business": "node scripts/runPosBusinessMigration.js",
     "migrate:ai-report-results": "node scripts/applyAiReportResultsMigration.js",
     "check:pos-business-db": "node scripts/checkPosBusinessDatabase.js",

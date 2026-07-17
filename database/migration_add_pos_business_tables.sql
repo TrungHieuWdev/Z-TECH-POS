@@ -126,6 +126,11 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
   supplier_id INT NOT NULL,
   user_id INT NOT NULL,
   total_amount DECIMAL(15,0) NOT NULL DEFAULT 0,
+  paid_amount DECIMAL(15,0) NOT NULL DEFAULT 0,
+  payment_status ENUM('unpaid','partial','paid') NOT NULL DEFAULT 'unpaid',
+  payment_method ENUM('cash','transfer','other') NULL,
+  due_date DATE NULL,
+  paid_at DATETIME NULL,
   note TEXT NULL,
   status ENUM('draft','completed','cancelled') NOT NULL DEFAULT 'draft',
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -133,6 +138,7 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
   UNIQUE KEY uk_purchase_orders_code (purchase_code),
   INDEX idx_purchase_orders_supplier (supplier_id),
   INDEX idx_purchase_orders_user (user_id),
+  INDEX idx_purchase_orders_payment_status (payment_status, due_date),
   CONSTRAINT fk_purchase_orders_supplier FOREIGN KEY (supplier_id) REFERENCES suppliers(id),
   CONSTRAINT fk_purchase_orders_user FOREIGN KEY (user_id) REFERENCES users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -151,6 +157,33 @@ CREATE TABLE IF NOT EXISTS purchase_order_items (
   CONSTRAINT fk_purchase_items_product FOREIGN KEY (product_id) REFERENCES products(id),
   CHECK (quantity > 0), CHECK (import_price >= 0), CHECK (subtotal >= 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+SET @purchase_payment_columns_missing = (
+  SELECT COUNT(*) = 0
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'purchase_orders'
+    AND COLUMN_NAME = 'paid_amount'
+);
+
+CALL add_column_if_missing('purchase_orders', 'paid_amount', 'DECIMAL(15,0) NOT NULL DEFAULT 0 AFTER total_amount');
+CALL add_column_if_missing('purchase_orders', 'payment_status', "ENUM('unpaid','partial','paid') NOT NULL DEFAULT 'unpaid' AFTER paid_amount");
+CALL add_column_if_missing('purchase_orders', 'payment_method', "ENUM('cash','transfer','other') NULL AFTER payment_status");
+CALL add_column_if_missing('purchase_orders', 'due_date', 'DATE NULL AFTER payment_method');
+CALL add_column_if_missing('purchase_orders', 'paid_at', 'DATETIME NULL AFTER due_date');
+
+SET @purchase_payment_backfill_sql = IF(
+  @purchase_payment_columns_missing,
+  "UPDATE purchase_orders
+   SET paid_amount = CASE WHEN status = 'completed' THEN total_amount ELSE 0 END,
+       payment_status = CASE WHEN status = 'completed' THEN 'paid' ELSE 'unpaid' END,
+       payment_method = CASE WHEN status = 'completed' THEN 'other' ELSE NULL END,
+       paid_at = CASE WHEN status = 'completed' THEN created_at ELSE NULL END",
+  'SELECT 1'
+);
+PREPARE purchase_payment_backfill_stmt FROM @purchase_payment_backfill_sql;
+EXECUTE purchase_payment_backfill_stmt;
+DEALLOCATE PREPARE purchase_payment_backfill_stmt;
 
 CREATE TABLE IF NOT EXISTS payments (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -269,6 +302,7 @@ CALL add_index_if_missing('suppliers', 'uk_suppliers_code', 'UNIQUE KEY uk_suppl
 CALL add_index_if_missing('suppliers', 'idx_suppliers_name', 'INDEX idx_suppliers_name (supplier_name)');
 CALL add_index_if_missing('suppliers', 'idx_suppliers_status', 'INDEX idx_suppliers_status (status)');
 CALL add_index_if_missing('purchase_orders', 'uk_purchase_orders_code', 'UNIQUE KEY uk_purchase_orders_code (purchase_code)');
+CALL add_index_if_missing('purchase_orders', 'idx_purchase_orders_payment_status', 'INDEX idx_purchase_orders_payment_status (payment_status, due_date)');
 CALL add_index_if_missing('promotion_products', 'uk_promotion_products', 'UNIQUE KEY uk_promotion_products (promotion_id, product_id)');
 CALL add_index_if_missing('promotion_categories', 'uk_promotion_categories', 'UNIQUE KEY uk_promotion_categories (promotion_id, category_id)');
 CALL add_index_if_missing('warranties', 'uk_warranties_code', 'UNIQUE KEY uk_warranties_code (warranty_code)');

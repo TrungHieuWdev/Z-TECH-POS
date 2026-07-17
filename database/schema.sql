@@ -180,6 +180,9 @@ CREATE TABLE orders (
   customer_id INT,
   user_id INT NOT NULL,
   order_number VARCHAR(20) UNIQUE NOT NULL,
+  promotion_id INT NULL,
+  promotion_code_snapshot VARCHAR(20) NULL,
+  promotion_name_snapshot VARCHAR(150) NULL,
   subtotal DECIMAL(15,0) NOT NULL,
   warranty_enabled_snapshot BOOLEAN NULL,
   warranty_period_days_snapshot INT NULL,
@@ -188,6 +191,7 @@ CREATE TABLE orders (
   warranty_exclusions_snapshot TEXT NULL,
   warranty_note_snapshot TEXT NULL,
   discount DECIMAL(15,0) DEFAULT 0,
+  promotion_discount DECIMAL(15,0) NOT NULL DEFAULT 0,
   points_used INT NOT NULL DEFAULT 0,
   points_discount_amount DECIMAL(15,0) NOT NULL DEFAULT 0,
   points_earned INT NOT NULL DEFAULT 0,
@@ -197,7 +201,9 @@ CREATE TABLE orders (
   payment_method ENUM('cash', 'card', 'transfer') DEFAULT 'cash',
   status ENUM('completed', 'cancelled') DEFAULT 'completed',
   note TEXT,
+  idempotency_key VARCHAR(64) NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_orders_user_idempotency (user_id, idempotency_key),
   FOREIGN KEY (customer_id) REFERENCES customers(id),
   FOREIGN KEY (user_id) REFERENCES users(id)
 );
@@ -207,7 +213,10 @@ CREATE TABLE order_items (
   order_id INT NOT NULL,
   product_id INT NOT NULL,
   quantity INT NOT NULL,
+  purchased_quantity INT NULL,
+  gift_quantity INT NOT NULL DEFAULT 0,
   unit_price DECIMAL(15,0) NOT NULL,
+  cost_price_snapshot DECIMAL(15,0) NULL,
   subtotal DECIMAL(15,0) NOT NULL,
   warranty_enabled_snapshot BOOLEAN NULL,
   warranty_period_days_snapshot INT NULL,
@@ -258,9 +267,15 @@ CREATE TABLE promotions (
 CREATE TABLE purchase_orders (
   id INT AUTO_INCREMENT PRIMARY KEY, purchase_code VARCHAR(30) UNIQUE NOT NULL,
   supplier_id INT NOT NULL, user_id INT NOT NULL, total_amount DECIMAL(15,0) NOT NULL DEFAULT 0,
+  paid_amount DECIMAL(15,0) NOT NULL DEFAULT 0,
+  payment_status ENUM('unpaid','partial','paid') NOT NULL DEFAULT 'unpaid',
+  payment_method ENUM('cash','transfer','other') NULL,
+  due_date DATE NULL,
+  paid_at DATETIME NULL,
   note TEXT, status ENUM('draft','completed','cancelled') NOT NULL DEFAULT 'draft',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_purchase_orders_payment_status (payment_status, due_date),
   FOREIGN KEY (supplier_id) REFERENCES suppliers(id), FOREIGN KEY (user_id) REFERENCES users(id)
 );
 

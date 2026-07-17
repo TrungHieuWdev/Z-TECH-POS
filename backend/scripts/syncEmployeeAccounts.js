@@ -10,11 +10,11 @@ const employees = [
     name: 'Hồ Viết Bảo',
     phone: '0901234567',
     password: 'NV001@123',
-    role: 'manager',
+    role: 'cashier',
     status: 'active',
     createdAt: '2026-06-10 08:00:00',
     lastLoginAt: '2026-06-13 19:39:53',
-    note: 'Quản lý vận hành cửa hàng và phân quyền nhân viên.'
+    note: 'Phụ trách bán hàng tại quầy POS.'
   },
   {
     code: 'NV002',

@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { query } from '../config/db.js';
 import { getJwtExpiresIn, getJwtSecret } from '../config/auth.js';
-import { hasActiveShift } from './shiftController.js';
+import { hasActiveShift } from '../services/shiftService.js';
 
 function normalizeEmployeeCode(value = '') {
   return String(value).trim().toUpperCase();
@@ -47,7 +47,7 @@ export async function login(req, res) {
     }
 
     const fullAccess = ['owner', 'manager', 'admin'].includes(String(user.role || '').toLowerCase());
-    if (!fullAccess && !(await hasActiveShift(user.name, user.employee_code))) {
+    if (!fullAccess && !(await hasActiveShift(user))) {
       return res.status(403).json({ message: 'Quản lý cần mở và bắt đầu ca làm trước khi nhân viên đăng nhập' });
     }
 
@@ -122,8 +122,8 @@ export async function changePassword(req, res) {
     if (!currentPassword || !newPassword || !confirmPassword) {
       return res.status(400).json({ message: 'Vui lòng nhập đầy đủ thông tin mật khẩu' });
     }
-    if (newPassword.length < 6) {
-      return res.status(400).json({ message: 'Mật khẩu mới phải có ít nhất 6 ký tự' });
+    if (newPassword.length < 8) {
+      return res.status(400).json({ message: 'Mật khẩu mới phải có ít nhất 8 ký tự' });
     }
     if (newPassword === currentPassword) {
       return res.status(400).json({ message: 'Mật khẩu mới phải khác mật khẩu hiện tại' });

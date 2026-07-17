@@ -126,14 +126,14 @@ export async function getSummary(req, res) {
          WHERE o.status = 'completed' AND ${orderItemFilters.previous}`
       ),
       query(
-        `SELECT COALESCE(SUM(oi.subtotal - (COALESCE(p.cost_price, 0) * oi.quantity)), 0) AS value
+        `SELECT COALESCE(SUM(oi.subtotal - (COALESCE(oi.cost_price_snapshot, p.cost_price, 0) * oi.quantity)), 0) AS value
          FROM order_items oi
          JOIN orders o ON oi.order_id = o.id
          JOIN products p ON oi.product_id = p.id
          WHERE o.status = 'completed' AND ${orderItemFilters.current}`
       ),
       query(
-        `SELECT COALESCE(SUM(oi.subtotal - (COALESCE(p.cost_price, 0) * oi.quantity)), 0) AS value
+        `SELECT COALESCE(SUM(oi.subtotal - (COALESCE(oi.cost_price_snapshot, p.cost_price, 0) * oi.quantity)), 0) AS value
          FROM order_items oi
          JOIN orders o ON oi.order_id = o.id
          JOIN products p ON oi.product_id = p.id

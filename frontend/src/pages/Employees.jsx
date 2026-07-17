@@ -18,7 +18,6 @@ import {
   Phone,
   RefreshCw,
   Search,
-  ShieldCheck,
   ShoppingCart,
   Trash2,
   Unlock,
@@ -37,10 +36,11 @@ import Shifts from './Shifts';
 
 const roleOptions = [
   { value: 'all', label: 'Tất cả vai trò' },
-  { value: 'manager', label: 'Quản lý' },
   { value: 'cashier', label: 'Nhân viên bán hàng' },
   { value: 'warehouse', label: 'Nhân viên kho' }
 ];
+
+const employeeRoles = new Set(['employee', 'cashier', 'warehouse']);
 
 const statusOptions = [
   { value: 'all', label: 'Tất cả trạng thái' },
@@ -60,14 +60,12 @@ const emptyForm = {
 };
 
 const rolePermissionSummary = {
-  manager: ['Toàn quyền quản trị', 'Xem báo cáo toàn cửa hàng', 'Quản lý sản phẩm, kho và nhân viên'],
   cashier: ['Bán hàng và áp dụng khuyến mãi', 'Xem sản phẩm, kho và hóa đơn của mình', 'Chăm sóc khách hàng và tiếp nhận bảo hành'],
   warehouse: ['Xem sản phẩm và tồn kho', 'Theo dõi cảnh báo kho', 'Không được quản trị nhân viên hoặc báo cáo tổng']
 };
 
 function getRoleMeta(role) {
   const roleMap = {
-    manager: { label: 'Quản lý', badgeClass: 'bg-[#c0edf7] text-[#0f3b46]' },
     cashier: { label: 'Nhân viên bán hàng', badgeClass: 'bg-emerald-50 text-emerald-700' },
     warehouse: { label: 'Nhân viên kho', badgeClass: 'bg-amber-50 text-amber-700' }
   };
@@ -235,13 +233,13 @@ function styleExcelBody(sheet, startRow, endRow, moneyColumns = []) {
 
 function getEmployeeStats(employees) {
   const active = employees.filter((employee) => employee.status === 'active').length;
-  const admins = employees.filter((employee) => employee.role === 'manager').length;
+  const sales = employees.filter((employee) => ['employee', 'cashier'].includes(employee.role)).length;
 
   return {
     total: employees.length,
     active,
     inactive: employees.length - active,
-    admins
+    sales
   };
 }
 
@@ -270,7 +268,11 @@ export default function Employees() {
   const location = useLocation();
   const navigate = useNavigate();
   const employeeTab = location.pathname.endsWith('/revenue') ? 'revenue' : location.pathname.endsWith('/shifts') ? 'shifts' : 'accounts';
-  const [employees, setEmployees] = useState([]);
+  const [employeeRecords, setEmployeeRecords] = useState([]);
+  const employees = useMemo(
+    () => employeeRecords.filter((employee) => employeeRoles.has(String(employee.role || '').toLowerCase())),
+    [employeeRecords]
+  );
   const [loadingPage, setLoadingPage] = useState(true);
   const activeTab = employeeTab;
   const [search, setSearch] = useState('');
@@ -308,9 +310,23 @@ export default function Employees() {
   const [confirmAction, setConfirmAction] = useState(null);
   const [isConfirming, setIsConfirming] = useState(false);
 
+  useEffect(() => {
+    const isEmployeeAccount = (account) => (
+      !account || employeeRoles.has(String(account.role || '').toLowerCase())
+    );
+
+    if (!isEmployeeAccount(editingEmployee)) {
+      setEditingEmployee(null);
+      setIsFormOpen(false);
+    }
+    if (!isEmployeeAccount(viewingEmployee)) setViewingEmployee(null);
+    if (!isEmployeeAccount(passwordEmployee)) setPasswordEmployee(null);
+    if (!isEmployeeAccount(confirmAction?.employee)) setConfirmAction(null);
+  }, [confirmAction, editingEmployee, passwordEmployee, viewingEmployee]);
+
   const loadEmployees = async () => {
     const response = await api.get('/employees');
-    setEmployees(Array.isArray(response.data) ? response.data : []);
+    setEmployeeRecords(Array.isArray(response.data) ? response.data : []);
   };
 
   useEffect(() => {
@@ -964,7 +980,7 @@ export default function Employees() {
         <KpiCard icon={Users} label="Tổng nhân viên" value={stats.total.toLocaleString('vi-VN')} detail="Nhân sự đã tạo tài khoản" toneClassName="bg-sky-50 text-sky-700" />
         <KpiCard icon={UserCheck} label="Đang hoạt động" value={stats.active.toLocaleString('vi-VN')} detail={`${stats.total > 0 ? Math.round((stats.active / stats.total) * 100) : 0}% tổng nhân sự`} toneClassName="bg-emerald-50 text-emerald-700" />
         <KpiCard icon={UserX} label="Ngừng hoạt động" value={stats.inactive.toLocaleString('vi-VN')} detail={`${stats.total > 0 ? Math.round((stats.inactive / stats.total) * 100) : 0}% tổng nhân sự`} toneClassName="bg-red-50 text-red-700" />
-        <KpiCard icon={ShieldCheck} label="Quản trị viên" value={stats.admins.toLocaleString('vi-VN')} detail="Tài khoản có quyền quản lý" toneClassName="bg-violet-50 text-violet-700" />
+        <KpiCard icon={ShoppingCart} label="Nhân viên bán hàng" value={stats.sales.toLocaleString('vi-VN')} detail="Tài khoản bán hàng đã tạo" toneClassName="bg-violet-50 text-violet-700" />
       </div>
 
       <section className="flex flex-col gap-4 rounded-lg border border-[#d7eef3] bg-white p-4 shadow-sm xl:flex-row xl:items-end">
@@ -1484,7 +1500,7 @@ export default function Employees() {
             <ul className="mt-2 grid gap-1 text-xs text-[#4f5965] sm:grid-cols-2">
               {(rolePermissionSummary[form.role] || []).map((permission) => <li key={permission}>• {permission}</li>)}
             </ul>
-            {form.role !== 'manager' && <p className="mt-2 text-xs font-semibold text-amber-700">Các thao tác thêm, sửa, xóa dữ liệu quản trị sẽ bị khóa và kiểm tra lại ở backend.</p>}
+            <p className="mt-2 text-xs font-semibold text-amber-700">Các thao tác thêm, sửa, xóa dữ liệu quản trị sẽ bị khóa và kiểm tra lại ở backend.</p>
           </div>
           <label>
             <span className="mb-1 block text-sm font-medium text-gray-700">Trạng thái</span>

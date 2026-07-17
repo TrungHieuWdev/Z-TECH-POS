@@ -93,7 +93,7 @@ export async function getSummary(filters) {
     },
     notes: {
       tax: 'Doanh thu báo cáo không bao gồm VAT vì schema lưu VAT riêng trong vat_amount.',
-      cost: 'Giá vốn dùng cost_price hiện tại do order_items chưa lưu snapshot giá vốn lúc bán.',
+      cost: 'Giá vốn dùng snapshot tại thời điểm bán; dữ liệu cũ được backfill từ giá vốn hiện có khi migration.',
       refunds: 'Chỉ trừ giao dịch hoàn tiền riêng (payment_method=refund); hóa đơn cancelled bị loại khỏi doanh thu và không bị trừ lần hai.'
     }
   };
@@ -278,7 +278,7 @@ export async function getAiAnalysis(filters, { requestedBy = null } = {}) {
     },
     schemaNotes: [
       'Doanh thu không gồm VAT vì vat_amount lưu riêng.',
-      'Giá vốn lịch sử dùng products.cost_price hiện tại vì order_items chưa có cost snapshot.',
+      'Giá vốn dùng snapshot tại thời điểm bán; dữ liệu trước migration chỉ có giá trị backfill gần đúng.',
       'POS chưa có dữ liệu hoàn trả từng dòng sản phẩm.'
     ]
   };

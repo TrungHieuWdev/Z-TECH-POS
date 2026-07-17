@@ -1,8 +1,12 @@
 import bcrypt from 'bcryptjs';
 import { query } from '../config/db.js';
 
-const VALID_ROLES = new Set(['owner', 'manager', 'employee', 'admin', 'cashier', 'warehouse']);
+const VALID_ROLES = new Set(['employee', 'cashier', 'warehouse']);
 const VALID_STATUSES = new Set(['active', 'inactive']);
+
+async function ensureEmployeeSchema() {
+  return true;
+}
 
 function normalizeEmployeeCode(value = '') {
   return String(value).trim().toUpperCase();
@@ -16,6 +20,11 @@ function normalizeRole(value = '') {
 function normalizeStatus(value = '') {
   const status = String(value).trim().toLowerCase();
   return VALID_STATUSES.has(status) ? status : 'active';
+}
+
+function canManageEmployee(requester, employee) {
+  if (!employee || Number(requester?.id) === Number(employee.id)) return false;
+  return true;
 }
 
 function mapEmployee(row) {
@@ -257,7 +266,9 @@ export async function createEmployee(req, res) {
     if (!name || !phone || !password) {
       return res.status(400).json({ message: 'Họ tên, số điện thoại và mật khẩu là bắt buộc' });
     }
-
+    if (password.length < 8) {
+      return res.status(400).json({ message: 'Mật khẩu phải có ít nhất 8 ký tự' });
+    }
     const [{ nextCode }] = await query(
       `SELECT CONCAT('NV', LPAD(COALESCE(MAX(CAST(SUBSTRING(employee_code, 3) AS UNSIGNED)), 0) + 1, 3, '0')) AS nextCode
        FROM users
@@ -270,8 +281,8 @@ export async function createEmployee(req, res) {
 
     const result = await query(
       `INSERT INTO users (name, employee_code, email, phone, password, role, status, note, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [name, employeeCode, email, phone, hashedPassword, role, status, note, req.body.createdAt || new Date()]
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+      [name, employeeCode, email, phone, hashedPassword, role, status, note]
     );
 
     const [created] = await query(
@@ -292,11 +303,17 @@ export async function updateEmployee(req, res) {
     await ensureEmployeeSchema();
 
     const employeeId = Number(req.params.id);
-    const rows = await query('SELECT * FROM users WHERE id = ?', [employeeId]);
+    const rows = await query(
+      "SELECT * FROM users WHERE id = ? AND role IN ('cashier', 'employee', 'warehouse')",
+      [employeeId]
+    );
     const current = rows[0];
 
     if (!current) {
       return res.status(404).json({ message: 'Không tìm thấy nhân viên' });
+    }
+    if (!canManageEmployee(req.user, current)) {
+      return res.status(403).json({ message: 'Bạn không có quyền sửa tài khoản này' });
     }
 
     const name = String(req.body.name || '').trim();
@@ -305,23 +322,23 @@ export async function updateEmployee(req, res) {
     const role = normalizeRole(req.body.role || current.role);
     const status = normalizeStatus(req.body.status || current.status);
     const note = String(req.body.note || '').trim();
-    const createdAt = req.body.createdAt || current.created_at;
-    const lastLoginAt = req.body.lastLoginAt || current.last_login_at || null;
-
     if (!name || !phone) {
       return res.status(400).json({ message: 'Họ tên và số điện thoại là bắt buộc' });
     }
 
     let hashedPassword = current.password;
     if (password) {
+      if (password.length < 8) {
+        return res.status(400).json({ message: 'Mật khẩu phải có ít nhất 8 ký tự' });
+      }
       hashedPassword = await bcrypt.hash(password, 10);
     }
 
     await query(
       `UPDATE users
-       SET name = ?, phone = ?, password = ?, role = ?, status = ?, note = ?, created_at = ?, last_login_at = ?
+       SET name = ?, phone = ?, password = ?, role = ?, status = ?, note = ?
        WHERE id = ?`,
-      [name, phone, hashedPassword, role, status, note, createdAt, lastLoginAt || null, employeeId]
+      [name, phone, hashedPassword, role, status, note, employeeId]
     );
 
     const [updated] = await query(
@@ -342,16 +359,22 @@ export async function resetEmployeePassword(req, res) {
     await ensureEmployeeSchema();
 
     const employeeId = Number(req.params.id);
-    const rows = await query('SELECT id, employee_code FROM users WHERE id = ?', [employeeId]);
+    const rows = await query(
+      "SELECT id, employee_code, role FROM users WHERE id = ? AND role IN ('cashier', 'employee', 'warehouse')",
+      [employeeId]
+    );
     const employee = rows[0];
 
     if (!employee) {
       return res.status(404).json({ message: 'Không tìm thấy nhân viên' });
     }
+    if (!canManageEmployee(req.user, employee)) {
+      return res.status(403).json({ message: 'Bạn không có quyền đổi mật khẩu tài khoản này' });
+    }
 
     const nextPassword = String(req.body.password || '').trim();
-    if (nextPassword.length < 6) {
-      return res.status(400).json({ message: 'Mật khẩu mới phải có ít nhất 6 ký tự' });
+    if (nextPassword.length < 8) {
+      return res.status(400).json({ message: 'Mật khẩu mới phải có ít nhất 8 ký tự' });
     }
 
     const hashedPassword = await bcrypt.hash(nextPassword, 10);
@@ -369,11 +392,17 @@ export async function toggleEmployeeStatus(req, res) {
     await ensureEmployeeSchema();
 
     const employeeId = Number(req.params.id);
-    const rows = await query('SELECT id, status FROM users WHERE id = ?', [employeeId]);
+    const rows = await query(
+      "SELECT id, status, role FROM users WHERE id = ? AND role IN ('cashier', 'employee', 'warehouse')",
+      [employeeId]
+    );
     const employee = rows[0];
 
     if (!employee) {
       return res.status(404).json({ message: 'Không tìm thấy nhân viên' });
+    }
+    if (!canManageEmployee(req.user, employee)) {
+      return res.status(403).json({ message: 'Bạn không có quyền khóa hoặc mở tài khoản này' });
     }
 
     const nextStatus = employee.status === 'active' ? 'inactive' : 'active';
@@ -391,13 +420,16 @@ export async function deleteEmployee(req, res) {
 
     const employeeId = Number(req.params.id);
     const rows = await query(
-      "SELECT id, employee_code FROM users WHERE id = ? AND role IN ('cashier', 'employee', 'warehouse')",
+      "SELECT id, employee_code, role FROM users WHERE id = ? AND role IN ('cashier', 'employee', 'warehouse')",
       [employeeId]
     );
     const employee = rows[0];
 
     if (!employee) {
       return res.status(404).json({ message: 'Không tìm thấy nhân viên' });
+    }
+    if (!canManageEmployee(req.user, employee)) {
+      return res.status(403).json({ message: 'Bạn không có quyền xóa tài khoản này' });
     }
 
     await query('DELETE FROM users WHERE id = ?', [employeeId]);

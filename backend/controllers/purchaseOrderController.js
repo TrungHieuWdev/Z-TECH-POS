@@ -1,18 +1,21 @@
 import { query, withTransaction } from '../config/db.js';
+import { normalizePurchasePayment } from '../services/purchaseOrderPaymentService.js';
 
 function buildPurchaseCode(id) {
   return `PN-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}-${String(id).padStart(5, '0')}`;
 }
 
 export async function getAll(req, res) {
-  const rows = await query(`SELECT po.*, s.supplier_name, u.name AS created_by_name
+  const rows = await query(`SELECT po.*, GREATEST(po.total_amount - po.paid_amount, 0) AS debt_amount,
+    s.supplier_name, u.name AS created_by_name
     FROM purchase_orders po JOIN suppliers s ON s.id=po.supplier_id JOIN users u ON u.id=po.user_id
     ORDER BY po.created_at DESC`);
   res.json(rows);
 }
 
 export async function getById(req, res) {
-  const rows = await query(`SELECT po.*, s.supplier_name, u.name AS created_by_name
+  const rows = await query(`SELECT po.*, GREATEST(po.total_amount - po.paid_amount, 0) AS debt_amount,
+    s.supplier_name, u.name AS created_by_name
     FROM purchase_orders po JOIN suppliers s ON s.id=po.supplier_id JOIN users u ON u.id=po.user_id WHERE po.id=?`, [req.params.id]);
   if (!rows[0]) return res.status(404).json({ message: 'Không tìm thấy phiếu nhập' });
   const items = await query(`SELECT poi.*, p.name AS product_name, p.sku
@@ -48,11 +51,71 @@ export async function create(req, res) {
           [input.product_id, req.user.id, quantity, before, after, order.insertId, `Nhập hàng ${code}`]);
         total += subtotal;
       }
-      await db('UPDATE purchase_orders SET total_amount=? WHERE id=?', [total, order.insertId]);
-      return { id: order.insertId, purchase_code: code, total_amount: total };
+      const payment = normalizePurchasePayment({
+        totalAmount: total,
+        paidAmount: req.body.paid_amount,
+        paymentMethod: req.body.payment_method,
+        dueDate: req.body.due_date
+      });
+      await db(
+        `UPDATE purchase_orders
+         SET total_amount=?, paid_amount=?, payment_status=?, payment_method=?, due_date=?, paid_at=?
+         WHERE id=?`,
+        [
+          payment.totalAmount,
+          payment.paidAmount,
+          payment.paymentStatus,
+          payment.paymentMethod,
+          payment.dueDate,
+          payment.paidAmount > 0 ? new Date() : null,
+          order.insertId
+        ]
+      );
+      return { id: order.insertId, purchase_code: code, ...payment };
     });
     res.status(201).json(created);
   } catch (error) {
     res.status(error.status || 500).json({ message: error.status ? error.message : 'Không thể tạo phiếu nhập' });
+  }
+}
+
+export async function updatePayment(req, res) {
+  try {
+    const updated = await withTransaction(async (db) => {
+      const rows = await db(
+        `SELECT id, total_amount, paid_amount, status
+         FROM purchase_orders
+         WHERE id=?
+         FOR UPDATE`,
+        [req.params.id]
+      );
+      const order = rows[0];
+      if (!order) throw Object.assign(new Error('Không tìm thấy phiếu nhập'), { status: 404 });
+      if (order.status === 'cancelled') throw Object.assign(new Error('Không thể thanh toán phiếu nhập đã hủy'), { status: 409 });
+
+      const payment = normalizePurchasePayment({
+        totalAmount: order.total_amount,
+        paidAmount: req.body.paid_amount,
+        paymentMethod: req.body.payment_method,
+        dueDate: req.body.due_date
+      });
+      if (payment.paidAmount < Number(order.paid_amount || 0)) {
+        throw Object.assign(new Error('Số tiền đã thanh toán không được nhỏ hơn giá trị đã ghi nhận'), { status: 400 });
+      }
+
+      const hasNewPayment = payment.paidAmount > Number(order.paid_amount || 0);
+      await db(
+        `UPDATE purchase_orders
+         SET paid_amount=?, payment_status=?, payment_method=?, due_date=?,
+             paid_at=CASE WHEN ? = 1 THEN NOW() ELSE paid_at END
+         WHERE id=?`,
+        [payment.paidAmount, payment.paymentStatus, payment.paymentMethod, payment.dueDate, hasNewPayment ? 1 : 0, order.id]
+      );
+      return { id: order.id, ...payment };
+    });
+
+    res.json(updated);
+  } catch (error) {
+    res.status(error.status || 500).json({ message: error.status ? error.message : 'Không thể cập nhật thanh toán phiếu nhập' });
   }
 }

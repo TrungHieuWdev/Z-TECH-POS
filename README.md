@@ -1,5 +1,7 @@
 # Z-TECH POS
 
+Hướng dẫn kiểm tra và triển khai production: [DEPLOYMENT.md](DEPLOYMENT.md).
+
 ## Cấu trúc
 
 ```text

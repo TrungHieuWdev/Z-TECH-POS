@@ -137,7 +137,12 @@ function getFulfillmentQuantity(item) {
 }
 
 function buildOrderItems(cart) {
-  return cart.map((item) => ({ product_id: item.id, quantity: getFulfillmentQuantity(item) }));
+  return cart.map((item) => ({
+    product_id: item.id,
+    quantity: getFulfillmentQuantity(item),
+    purchased_quantity: getPurchasedQuantity(item),
+    gift_quantity: getGiftQuantity(item)
+  }));
 }
 
 function buildReceiptItems(cart) {
@@ -364,6 +369,7 @@ export default function POS() {
   const scanModeRef = useRef(false);
   const scanBufferRef = useRef('');
   const scanBufferTimerRef = useRef(null);
+  const checkoutIdempotencyRef = useRef('');
   const [categoryId, setCategoryId] = useState('');
   const [deviceFamily, setDeviceFamily] = useState('');
   const [usedPoints, setUsedPoints] = useState(0);
@@ -393,6 +399,10 @@ export default function POS() {
   const [transferCountdown, setTransferCountdown] = useState(TRANSFER_CONFIRM_TIMEOUT_SECONDS);
   const [pageError, setPageError] = useState('');
   const [isPageLoading, setIsPageLoading] = useState(true);
+
+  useEffect(() => {
+    checkoutIdempotencyRef.current = '';
+  }, [cart, selectedCustomer?.id, selectedPromotion?.id, usedPoints, paymentMethod]);
 
   useEffect(() => {
     loadBankTransferSettings()
@@ -623,8 +633,19 @@ export default function POS() {
     () => cart.reduce((sum, item) => sum + Number(item.price) * getFulfillmentQuantity(item), 0),
     [cart]
   );
+  const purchasedSubtotal = useMemo(
+    () => cart.reduce((sum, item) => sum + Number(item.price) * getPurchasedQuantity(item), 0),
+    [cart]
+  );
 
-  const eligiblePromotions = useMemo(() => promotions.filter((promotion) => isPromotionEligible(promotion, { cart, subtotal, isMember: Boolean(selectedCustomer) })), [promotions, cart, subtotal, selectedCustomer]);
+  const eligiblePromotions = useMemo(
+    () => promotions.filter((promotion) => isPromotionEligible(promotion, {
+      cart,
+      subtotal: purchasedSubtotal,
+      isMember: Boolean(selectedCustomer)
+    })),
+    [promotions, cart, purchasedSubtotal, selectedCustomer]
+  );
   const promotionDiscount = selectedPromotion ? getPromotionDiscount(selectedPromotion, subtotal, cart) : 0;
 
   const amountAfterPromotion = Math.max(subtotal - promotionDiscount, 0);
@@ -680,11 +701,11 @@ export default function POS() {
   }, []);
 
   useEffect(() => {
-    if (selectedPromotion && !isPromotionEligible(selectedPromotion, { cart, subtotal, isMember: Boolean(selectedCustomer) })) {
+    if (selectedPromotion && !isPromotionEligible(selectedPromotion, { cart, subtotal: purchasedSubtotal, isMember: Boolean(selectedCustomer) })) {
       clearSelectedPromotion();
       toast.error('Khuyến mãi đã được gỡ vì giỏ hàng không còn đủ điều kiện.');
     }
-  }, [cart, subtotal, selectedCustomer, selectedPromotion]);
+  }, [cart, purchasedSubtotal, selectedCustomer, selectedPromotion]);
 
   useEffect(() => {
     if (selectedPromotion?.promotionType !== 'buy_x_get_y') return;
@@ -910,6 +931,7 @@ export default function POS() {
   };
 
   const clearCart = () => {
+    checkoutIdempotencyRef.current = '';
     setCart([]);
     setQuantityDrafts({});
     setUsedPoints(0);
@@ -1123,6 +1145,10 @@ export default function POS() {
     setVietQrDataUrl('');
     setCustomerPaid('');
     setCheckoutStep('confirm');
+    if (!checkoutIdempotencyRef.current) {
+      checkoutIdempotencyRef.current = window.crypto?.randomUUID?.()
+        || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    }
     setIsConfirmOpen(true);
   };
 
@@ -1173,10 +1199,11 @@ export default function POS() {
       const response = await api.post('/orders', {
         customer_id: selectedCustomer?.id || null,
         items: buildOrderItems(cart),
-        promotion_discount: promotionDiscount,
+        promotion_id: selectedPromotion?.id || null,
         points_used: normalizedUsedPoints,
         payment_method: paymentMethod === 'qr' ? 'transfer' : paymentMethod,
-        paid_amount: isCashPayment ? customerPaidValue : total
+        paid_amount: isCashPayment ? customerPaidValue : total,
+        idempotency_key: checkoutIdempotencyRef.current
       });
 
       const remainingStockByProduct = new Map(
@@ -1197,17 +1224,19 @@ export default function POS() {
         customerName,
         paymentMethod,
         items: completedReceiptItems,
-        subtotal,
-        discount: promotionDiscount,
-        pointsUsed: normalizedUsedPoints,
-        pointsDiscountAmount,
+        subtotal: Number(response.data.subtotal ?? subtotal),
+        discount: Number(response.data.promotion_discount ?? promotionDiscount),
+        pointsUsed: Number(response.data.points_used ?? normalizedUsedPoints),
+        pointsDiscountAmount: Number(response.data.points_discount_amount ?? pointsDiscountAmount),
         pointsEarned: Number(response.data.points_earned || earnedPoints),
-        total,
+        total: Number(response.data.total ?? total),
         customerPaid: isCashPayment ? customerPaidValue : total,
-        changeDue,
-        vatRate,
-        vatAmount,
-        totalBeforeVat,
+        changeDue: isCashPayment
+          ? Math.max(customerPaidValue - Number(response.data.total ?? total), 0)
+          : 0,
+        vatRate: Number(response.data.vat_rate ?? vatRate),
+        vatAmount: Number(response.data.vat_amount ?? vatAmount),
+        totalBeforeVat: Number(response.data.total ?? total) - Number(response.data.vat_amount ?? vatAmount),
         shopInfo: posSettings.shopInfo,
         print: posSettings.print,
         transferMemo: paymentMethod === 'transfer' || paymentMethod === 'qr' ? transferMemo : ''
