@@ -23,6 +23,7 @@ import {
   X
 } from 'lucide-react';
 import api from '../api/axios';
+import CurrencyInput from '../components/CurrencyInput';
 import Modal from '../components/Modal';
 import PrintBill from '../components/PrintBill';
 import ProductImage from '../components/ProductImage';
@@ -1165,7 +1166,13 @@ export default function POS() {
     setLoading(true);
 
     try {
-      const nextVietQrDataUrl = await buildVietQrDataUrl(latestBankTransfer, total, nextTransferMemo);
+      if (paymentMethod === 'qr' && !latestBankTransfer.bankId) {
+        toast.error('Ngân hàng tự nhập không hỗ trợ tạo VietQR. Vui lòng chọn ngân hàng trong danh sách.');
+        return;
+      }
+      const nextVietQrDataUrl = latestBankTransfer.bankId
+        ? await buildVietQrDataUrl(latestBankTransfer, total, nextTransferMemo)
+        : '';
 
       setBankTransfer(latestBankTransfer);
       setTransferMemo(nextTransferMemo);
@@ -1548,7 +1555,7 @@ export default function POS() {
       {isMobileCartOpen && (
         <button
           type="button"
-          className="fixed inset-0 z-[55] bg-black/45 xl:hidden"
+          className="fixed inset-0 z-[55] bg-black/25 backdrop-blur-[1px] xl:hidden"
           onClick={() => setIsMobileCartOpen(false)}
           aria-label="Đóng giỏ hàng"
         />
@@ -2030,15 +2037,15 @@ export default function POS() {
         {isTransferQrStep && (
           <div className="grid gap-4 lg:grid-cols-[minmax(220px,0.75fr)_minmax(0,1.25fr)]">
             <div className="rounded-lg border border-[#d7eef3] bg-[#f8fdfe] p-3">
-              <div className="mx-auto grid max-w-[230px] place-items-center rounded-lg bg-white p-3 shadow-sm ring-1 ring-[#d7eef3]">
-                <img
-                  src={vietQrDataUrl}
-                  alt="Mã QR chuyển khoản VietQR"
-                  className="h-52 w-52 object-contain"
-                />
+              <div className="mx-auto grid min-h-56 max-w-[230px] place-items-center rounded-lg bg-white p-3 text-center shadow-sm ring-1 ring-[#d7eef3]">
+                {vietQrDataUrl ? (
+                  <img src={vietQrDataUrl} alt="Mã QR chuyển khoản VietQR" className="h-52 w-52 object-contain" />
+                ) : (
+                  <p className="px-4 text-sm font-semibold leading-6 text-gray-600">Ngân hàng tự nhập<br />Vui lòng chuyển khoản bằng thông tin tài khoản bên cạnh.</p>
+                )}
               </div>
               <div className="mx-auto mt-3 w-fit rounded-full border border-[#c0edf7] bg-white px-3 py-1 text-xs font-extrabold uppercase tracking-wide text-[#2563eb]">
-                VietQR / Napas 247
+                {vietQrDataUrl ? 'VietQR / Napas 247' : 'Chuyển khoản thủ công'}
               </div>
             </div>
 
@@ -2174,23 +2181,10 @@ export default function POS() {
             <>
               <label className="grid gap-1.5">
                 <span className="font-semibold text-[#434655]">Tiền khách đưa</span>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  value={customerPaid ? formatCurrency(customerPaidValue) : ''}
-                  onChange={(event) => setCustomerPaid(event.target.value.replace(/\D/g, ''))}
-                  onKeyDown={(event) => {
-                    if ((event.key !== 'Backspace' && event.key !== 'Delete') || !customerPaid) return;
-                    const valueLength = event.currentTarget.value.length;
-                    const selectionStart = event.currentTarget.selectionStart ?? valueLength;
-                    const selectionEnd = event.currentTarget.selectionEnd ?? valueLength;
-                    if (selectionStart !== selectionEnd) return;
-                    if (selectionStart >= valueLength - 2) {
-                      event.preventDefault();
-                      setCustomerPaid((current) => current.slice(0, -1));
-                    }
-                  }}
+                <CurrencyInput
+                  min="0"
+                  value={customerPaid}
+                  onValueChange={setCustomerPaid}
                   className="h-11 rounded-md border border-[#c3c6d7] bg-white px-3 text-right text-base font-bold text-[#191c1e] outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft"
                   placeholder="Nhập số tiền"
                 />

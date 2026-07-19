@@ -45,10 +45,11 @@ function getPercentChange(current, previous) {
   const previousValue = toNumber(previous);
 
   if (previousValue === 0) {
-    return currentValue > 0 ? 100 : 0;
+    return null;
   }
 
-  return Number((((currentValue - previousValue) / previousValue) * 100).toFixed(1));
+  const percentage = ((currentValue - previousValue) / Math.abs(previousValue)) * 100;
+  return Number(Math.max(-100, Math.min(100, percentage)).toFixed(1));
 }
 
 function getCompletedOrderWhere(alias = 'o') {

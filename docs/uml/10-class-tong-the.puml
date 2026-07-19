@@ -1,0 +1,278 @@
+@startuml
+left to right direction
+skinparam linetype ortho
+skinparam nodesep 40
+skinparam ranksep 65
+skinparam classAttributeIconSize 0
+hide methods
+
+package "Tài khoản và vận hành" {
+  class "Vai trò" as VaiTro {
+    +id: INT
+    +role_name: VARCHAR(100)
+    +description: TEXT
+    +status: ENUM
+  }
+
+  class "Người dùng" as NguoiDung {
+    +id: INT
+    +employee_code: VARCHAR(20)
+    +name: VARCHAR(100)
+    +email: VARCHAR(100)
+    +phone: VARCHAR(20)
+    -password: VARCHAR(255)
+    +role: ENUM
+    +status: ENUM
+    +token_version: INT
+    +last_login_at: DATETIME
+  }
+
+  class "Ca làm" as CaLam {
+    +id: TINYINT
+    +shifts_json: LONGTEXT
+    +updated_at: TIMESTAMP
+  }
+
+  class "Nhật ký hoạt động" as NhatKyHoatDong {
+    +id: INT
+    +module: VARCHAR(50)
+    +action_label: VARCHAR(100)
+    +target_name: VARCHAR(255)
+    +description: TEXT
+    +created_at: TIMESTAMP
+  }
+
+  class "Cài đặt hệ thống" as CaiDatHeThong {
+    +setting_key: VARCHAR(100)
+    +setting_value: VARCHAR(255)
+    +updated_at: TIMESTAMP
+  }
+}
+
+package "Danh mục và kho" {
+  class "Thương hiệu" as ThuongHieu {
+    +id: INT
+    +brand_name: VARCHAR(100)
+    +description: TEXT
+    +status: ENUM
+  }
+
+  class "Danh mục" as DanhMuc {
+    +id: INT
+    +name: VARCHAR(100)
+    +description: TEXT
+    +is_active: BOOLEAN
+  }
+
+  class "Dòng thiết bị" as DongThietBi {
+    +id: INT
+    +family: ENUM
+    +name: VARCHAR(100)
+    +series: VARCHAR(50)
+    +release_year: SMALLINT
+    +notes: VARCHAR(255)
+  }
+
+  class "Sản phẩm" as SanPham {
+    +id: INT
+    +sku: VARCHAR(100)
+    +barcode: VARCHAR(50)
+    +name: VARCHAR(200)
+    +price: DECIMAL(15,0)
+    +cost_price: DECIMAL(15,0)
+    +stock_quantity: INT
+    +min_stock: INT
+    +max_stock: INT
+    +warranty_enabled: BOOLEAN
+    +warranty_period_days: INT
+    +warranty_type: ENUM
+    +is_active: BOOLEAN
+  }
+
+  class "Biến động kho" as BienDongKho {
+    +id: INT
+    +type: ENUM
+    +quantity: INT
+    +before_quantity: INT
+    +after_quantity: INT
+    +reference_type: VARCHAR(50)
+    +reference_id: INT
+    +note: TEXT
+    +created_at: TIMESTAMP
+  }
+
+  class "Nhà cung cấp" as NhaCungCap {
+    +id: INT
+    +supplier_code: VARCHAR(30)
+    +supplier_name: VARCHAR(150)
+    +supplier_group: VARCHAR(100)
+    +contact_name: VARCHAR(100)
+    +phone: VARCHAR(20)
+    +email: VARCHAR(150)
+    +status: ENUM
+  }
+
+  class "Phiếu nhập" as PhieuNhap {
+    +id: INT
+    +purchase_code: VARCHAR(30)
+    +total_amount: DECIMAL(15,0)
+    +paid_amount: DECIMAL(15,0)
+    +payment_status: ENUM
+    +payment_method: ENUM
+    +due_date: DATE
+    +status: ENUM
+    +created_at: TIMESTAMP
+  }
+
+  class "Chi tiết phiếu nhập" as ChiTietPhieuNhap {
+    +id: INT
+    +quantity: INT
+    +import_price: DECIMAL(15,0)
+    +subtotal: DECIMAL(15,0)
+  }
+}
+
+package "Bán hàng" {
+  class "Khách hàng" as KhachHang {
+    +id: INT
+    +name: VARCHAR(100)
+    +phone: VARCHAR(20)
+    +email: VARCHAR(100)
+    +address: TEXT
+    +loyalty_points: INT
+  }
+
+  class "Đơn hàng" as DonHang {
+    +id: INT
+    +order_number: VARCHAR(20)
+    +subtotal: DECIMAL(15,0)
+    +discount: DECIMAL(15,0)
+    +promotion_discount: DECIMAL(15,0)
+    +points_used: INT
+    +points_earned: INT
+    +vat_rate: DECIMAL(5,2)
+    +vat_amount: DECIMAL(15,0)
+    +total: DECIMAL(15,0)
+    +payment_method: ENUM
+    +status: ENUM
+    +idempotency_key: VARCHAR(64)
+    +created_at: TIMESTAMP
+  }
+
+  class "Chi tiết đơn hàng" as ChiTietDonHang {
+    +id: INT
+    +quantity: INT
+    +purchased_quantity: INT
+    +gift_quantity: INT
+    +unit_price: DECIMAL(15,0)
+    +cost_at_sale: DECIMAL(15,0)
+    +subtotal: DECIMAL(15,0)
+    +public_token: CHAR(36)
+  }
+
+  class "Thanh toán" as ThanhToan {
+    +id: INT
+    +payment_method: ENUM
+    +amount: DECIMAL(15,0)
+    +paid_amount: DECIMAL(15,0)
+    +change_amount: DECIMAL(15,0)
+    +status: ENUM
+    +paid_at: DATETIME
+  }
+
+  class "Khuyến mãi" as KhuyenMai {
+    +id: INT
+    +code: VARCHAR(20)
+    +promotion_name: VARCHAR(150)
+    +discount_type: ENUM
+    +discount_value: DECIMAL(15,2)
+    +start_date: DATETIME
+    +end_date: DATETIME
+    +status: ENUM
+    +data: LONGTEXT
+  }
+
+  class "Sản phẩm khuyến mãi" as SanPhamKhuyenMai {
+    +id: INT
+    +created_at: TIMESTAMP
+  }
+
+  class "Danh mục khuyến mãi" as DanhMucKhuyenMai {
+    +id: INT
+    +created_at: TIMESTAMP
+  }
+}
+
+package "Bảo hành" {
+  class "Phiếu bảo hành" as PhieuBaoHanh {
+    +id: INT
+    +warranty_code: VARCHAR(40)
+    +warranty_start: DATE
+    +warranty_end: DATE
+    +status: ENUM
+    +note: TEXT
+  }
+
+  class "Yêu cầu bảo hành" as YeuCauBaoHanh {
+    +id: INT
+    +issue_description: TEXT
+    +resolution: TEXT
+    +status: ENUM
+    +created_at: TIMESTAMP
+    +updated_at: TIMESTAMP
+  }
+}
+
+package "Báo cáo" {
+  class "Kết quả phân tích AI" as KetQuaPhanTichAI {
+    +id: BIGINT
+    +analysis_key: CHAR(64)
+    +report_type: VARCHAR(50)
+    +period_from: DATE
+    +period_to: DATE
+    +filters_json: JSON
+    +result_json: JSON
+    +executive_summary: TEXT
+    +health_score: TINYINT
+    +outlook: ENUM
+    +provider: VARCHAR(100)
+    +model: VARCHAR(150)
+    +analyzed_at: DATETIME
+  }
+}
+
+VaiTro "0..1" <-- "0..*" NguoiDung : role_id
+NguoiDung "0..1" <-- "0..*" NhatKyHoatDong : user_id
+NguoiDung "0..1" <-- "0..*" CaiDatHeThong : updated_by
+NguoiDung "0..1" <-- "0..*" KetQuaPhanTichAI : requested_by
+
+DanhMuc "1" <-- "0..*" SanPham : category_id
+ThuongHieu "0..1" <-- "0..*" SanPham : brand_id
+DongThietBi "1" <-- "0..*" SanPham : device_model_id
+SanPham "1" <-- "0..*" BienDongKho : product_id
+NguoiDung "1" <-- "0..*" BienDongKho : user_id
+
+NhaCungCap "1" <-- "0..*" PhieuNhap : supplier_id
+NguoiDung "1" <-- "0..*" PhieuNhap : user_id
+PhieuNhap "1" *-- "1..*" ChiTietPhieuNhap : purchase_order_id
+SanPham "1" <-- "0..*" ChiTietPhieuNhap : product_id
+
+KhachHang "0..1" <-- "0..*" DonHang : customer_id
+NguoiDung "1" <-- "0..*" DonHang : user_id
+KhuyenMai "0..1" <-- "0..*" DonHang : promotion_id
+DonHang "1" *-- "1..*" ChiTietDonHang : order_id
+SanPham "1" <-- "0..*" ChiTietDonHang : product_id
+DonHang "1" *-- "0..*" ThanhToan : order_id
+
+KhuyenMai "1" *-- "0..*" SanPhamKhuyenMai : promotion_id
+SanPham "1" <-- "0..*" SanPhamKhuyenMai : product_id
+KhuyenMai "1" *-- "0..*" DanhMucKhuyenMai : promotion_id
+DanhMuc "1" <-- "0..*" DanhMucKhuyenMai : category_id
+
+ChiTietDonHang "1" <-- "0..1" PhieuBaoHanh : order_item_id
+KhachHang "0..1" <-- "0..*" PhieuBaoHanh : customer_id
+SanPham "1" <-- "0..*" PhieuBaoHanh : product_id
+PhieuBaoHanh "1" *-- "0..*" YeuCauBaoHanh : warranty_id
+
+CaLam -[hidden]-> NhatKyHoatDong
+@enduml

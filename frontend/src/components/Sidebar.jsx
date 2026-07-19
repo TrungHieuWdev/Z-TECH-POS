@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   BadgeCheck,
@@ -22,7 +22,7 @@ import ztechLogo from '../assets/images/1111.png';
 import { getUser, isFullAccessRole, logout } from '../utils/auth';
 
 const primaryItems = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/pos', label: 'Bán hàng', icon: ShoppingCart },
   { to: '/products', label: 'Sản phẩm', icon: Package },
   { to: '/inventory', label: 'Kho hàng', icon: Boxes },
@@ -41,7 +41,17 @@ const extraItems = [
   { to: '/settings', label: 'Cài đặt', icon: Settings },
 ];
 
-const employeeAllowedPaths = new Set(['/', '/pos', '/orders', '/products', '/inventory', '/customers', '/shifts', '/promotions', '/warranties']);
+const employeeAllowedPaths = new Set([
+  '/dashboard',
+  '/pos',
+  '/orders',
+  '/products',
+  '/inventory',
+  '/customers',
+  '/shifts',
+  '/promotions',
+  '/warranties'
+]);
 
 function isAllowed(item, hasFullAccess) {
   if (item.staffOnly) return !hasFullAccess;
@@ -50,7 +60,6 @@ function isAllowed(item, hasFullAccess) {
 
 function isPathActive(pathname, to) {
   if (!to) return false;
-  if (to === '/') return pathname === '/';
   return pathname === to || pathname.startsWith(`${to}/`);
 }
 
@@ -89,13 +98,10 @@ export default function Sidebar({ isMobileOpen = false, onMobileClose = () => {}
   const location = useLocation();
   const user = getUser();
   const hasFullAccess = isFullAccessRole(user?.role);
-  const [pendingPath, setPendingPath] = useState('');
-
   const visiblePrimaryItems = primaryItems.filter((item) => isAllowed(item, hasFullAccess));
   const visibleExtraItems = extraItems.filter((item) => isAllowed(item, hasFullAccess));
 
   useEffect(() => {
-    setPendingPath('');
     onMobileClose();
   }, [location.pathname]);
 
@@ -122,7 +128,7 @@ export default function Sidebar({ isMobileOpen = false, onMobileClose = () => {}
   }, [isMobileOpen]);
 
   const renderNavItem = (item, isCompact = false) => {
-    const isActive = pendingPath ? pendingPath === item.to : isPathActive(location.pathname, item.to);
+    const isActive = isPathActive(location.pathname, item.to);
 
     if (!item.to) {
       return (
@@ -140,13 +146,7 @@ export default function Sidebar({ isMobileOpen = false, onMobileClose = () => {}
       <NavLink
         key={item.to}
         to={item.to}
-        end={item.to === '/'}
-        onPointerDown={() => setPendingPath(item.to)}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            setPendingPath(item.to);
-          }
-        }}
+        end
         className={navItemClass(isActive, isCompact)}
       >
         <NavItemContent icon={item.icon} label={item.label} isActive={isActive} isCompact={isCompact} />
@@ -155,7 +155,7 @@ export default function Sidebar({ isMobileOpen = false, onMobileClose = () => {}
   };
 
   return (<>
-    {isMobileOpen && <button type="button" className="fixed inset-0 z-50 bg-black/45 lg:hidden" onClick={onMobileClose} aria-label="Đóng menu" />}
+    {isMobileOpen && <button type="button" className="fixed inset-0 z-50 bg-black/25 backdrop-blur-[1px] lg:hidden" onClick={onMobileClose} aria-label="Đóng menu" />}
     <aside className={`fixed left-0 top-0 z-[51] flex h-dvh w-[min(86vw,300px)] flex-col border-r border-[#c3c7cd] bg-white py-2 transition-transform duration-200 lg:z-50 lg:h-screen lg:w-[260px] lg:translate-x-0 ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
       <div className="mb-5 px-4">
         <div className="flex h-14 items-center gap-3">

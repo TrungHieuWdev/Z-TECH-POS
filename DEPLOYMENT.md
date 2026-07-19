@@ -32,6 +32,12 @@ npm run migrate:production-readiness
 npm test
 ```
 
+`migrate:hardening` bổ sung `token_version` và `password_changed_at` để thu hồi phiên cũ sau khi đổi mật khẩu hoặc khóa tài khoản.
+
+Trước khi public Internet, thay toàn bộ mật khẩu/API key/JWT secret dùng trong môi trường phát triển. Không sao chép nguyên file `backend/.env` hiện tại lên production.
+
+Nginx phục vụ frontend cần gửi thêm các header: `Content-Security-Policy`, `Strict-Transport-Security`, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy` và `frame-ancestors 'none'`.
+
 ```powershell
 cd ../frontend
 npm ci

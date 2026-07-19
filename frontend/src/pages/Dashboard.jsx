@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import api from '../api/axios';
 import RevenueAreaChart from '../components/dashboard/RevenueAreaChart';
+import PageLoading from '../components/PageLoading';
 import { formatCurrency, formatDate, formatTime } from '../utils/format';
 
 const dashboardPeriodOptions = [
@@ -47,32 +48,9 @@ const topProductRankStyles = [
   'border-[#d7ece3] bg-[#effaf5] text-[#1f6f4a]'
 ];
 
-function formatPercent(value) {
-  const numberValue = Number(value || 0);
-  const cappedValue = Math.max(-100, Math.min(100, numberValue));
-  const prefix = cappedValue > 0 ? '+' : '';
-  return `${prefix}${cappedValue.toLocaleString('vi-VN')}%`;
-}
-
-function getTodayGrowthCaption(value, comparisonLabel = 'hôm qua') {
-  if (value === null || value === undefined) return `${comparisonLabel.charAt(0).toUpperCase()}${comparisonLabel.slice(1)} chưa có dữ liệu`;
-
-  const numberValue = safeNumber(value);
-  if (numberValue === 0) return `Bằng ${comparisonLabel}`;
-
-  return `${numberValue > 0 ? 'Tăng' : 'Giảm'} ${formatPercent(Math.abs(numberValue))} so với ${comparisonLabel}`;
-}
-
 function safeNumber(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : 0;
-}
-
-function getChangePercent(currentValue, previousValue) {
-  const current = safeNumber(currentValue);
-  const previous = safeNumber(previousValue);
-  if (previous === 0) return current === 0 ? 0 : null;
-  return ((current - previous) / Math.abs(previous)) * 100;
 }
 
 function formatChangePercent(value) {
@@ -194,8 +172,14 @@ export default function Dashboard() {
     paymentTransferCount: 0,
     revenueGrowth: 0,
     orderGrowth: 0,
+    averageOrderValueGrowth: 0,
     productsSoldGrowth: 0,
-    estimatedProfitGrowth: 0
+    estimatedProfitGrowth: 0,
+    costOfGoodsSold: 0,
+    previousCostOfGoodsSold: 0,
+    missingCostProductCount: 0,
+    previousMissingCostProductCount: 0,
+    costDataComplete: true
   });
   const [topProducts, setTopProducts] = useState([]);
   const [recentOrders, setRecentOrders] = useState([]);
@@ -206,10 +190,10 @@ export default function Dashboard() {
     expiringWarranties: 0
   });
   const [revenueChart, setRevenueChart] = useState([]);
-  const [dashboardPeriod, setDashboardPeriod] = useState('7days');
-  const [dateFrom, setDateFrom] = useState(() => getLocalDateValue(new Date(Date.now() - 6 * 86400000)));
+  const [dashboardPeriod, setDashboardPeriod] = useState('today');
+  const [dateFrom, setDateFrom] = useState(() => getLocalDateValue());
   const [dateTo, setDateTo] = useState(() => getLocalDateValue());
-  const [displayedPeriod, setDisplayedPeriod] = useState('7days');
+  const [displayedPeriod, setDisplayedPeriod] = useState('today');
   const [displayedRange, setDisplayedRange] = useState({ from: '', to: '' });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -281,7 +265,7 @@ export default function Dashboard() {
       label: 'Doanh thu',
       value: formatCurrency(summary.todayRevenue),
       caption: getRevenueCaption(summary.todayRevenue, summary.yesterdayRevenue, comparisonLabel),
-      change: getChangePercent(summary.todayRevenue, summary.yesterdayRevenue),
+      change: summary.revenueGrowth,
       icon: WalletCards,
       tone: 'blue'
     },
@@ -290,7 +274,7 @@ export default function Dashboard() {
       label: 'Đơn hàng',
       value: safeNumber(summary.todayOrders).toLocaleString('vi-VN'),
       caption: getCountCaption(summary.todayOrders, summary.yesterdayOrders, 'đơn', comparisonLabel),
-      change: getChangePercent(summary.todayOrders, summary.yesterdayOrders),
+      change: summary.orderGrowth,
       icon: ReceiptText,
       tone: 'amber'
     },
@@ -299,7 +283,7 @@ export default function Dashboard() {
       label: 'Giá trị đơn trung bình',
       value: formatCurrency(summary.averageOrderValue),
       caption: getRevenueCaption(summary.averageOrderValue, summary.previousAverageOrderValue, comparisonLabel),
-      change: getChangePercent(summary.averageOrderValue, summary.previousAverageOrderValue),
+      change: summary.averageOrderValueGrowth,
       icon: CreditCard,
       tone: 'cyan'
     },
@@ -308,16 +292,22 @@ export default function Dashboard() {
       label: 'Sản phẩm đã bán',
       value: safeNumber(summary.productsSold).toLocaleString('vi-VN'),
       caption: getCountCaption(summary.productsSold, summary.previousProductsSold, 'sản phẩm', comparisonLabel),
-      change: getChangePercent(summary.productsSold, summary.previousProductsSold),
+      change: summary.productsSoldGrowth,
       icon: PackageOpen,
       tone: 'violet'
     },
     {
       id: 'profit',
-      label: 'Lợi nhuận tạm tính',
-      value: formatCurrency(summary.estimatedProfit),
-      caption: getRevenueCaption(summary.estimatedProfit, summary.previousEstimatedProfit, comparisonLabel),
-      change: getChangePercent(summary.estimatedProfit, summary.previousEstimatedProfit),
+      label: 'Lợi nhuận gộp',
+      value: summary.grossProfit === null ? 'Chưa đủ giá vốn' : formatCurrency(summary.grossProfit),
+      caption: summary.missingCostProductCount > 0
+        ? `Tạm tính từ sản phẩm đã có giá vốn; còn ${safeNumber(summary.missingCostProductCount).toLocaleString('vi-VN')} sản phẩm đã bán trong kỳ thiếu giá vốn`
+        : getRevenueCaption(summary.grossProfit, summary.previousGrossProfit, comparisonLabel),
+      statusText: summary.missingCostProductCount > 0
+        ? `${safeNumber(summary.missingCostProductCount).toLocaleString('vi-VN')} sản phẩm đã bán trong kỳ chưa có giá vốn`
+        : '',
+      hideComparison: summary.missingCostProductCount > 0,
+      change: summary.missingCostProductCount > 0 ? null : summary.estimatedProfitGrowth,
       icon: TrendingUp,
       tone: 'emerald'
     }
@@ -407,7 +397,7 @@ export default function Dashboard() {
     <div className="space-y-3">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-extrabold text-gray-950">Dashboard</h1>
+          <h1 className="text-2xl font-extrabold text-gray-950">Tổng quan</h1>
           <p className="mt-1 text-sm font-medium text-gray-500">Theo dõi nhanh doanh thu, đơn hàng, tồn kho và hiệu quả bán hàng của cửa hàng.</p>
         </div>
         <div className="flex w-full flex-wrap gap-2 sm:w-auto">
@@ -483,9 +473,12 @@ export default function Dashboard() {
         </div>
       )}
 
+      {isLoading ? (
+        <PageLoading message="Đang tải dữ liệu trang" />
+      ) : (
       <div
         aria-busy={isLoading}
-        className={`space-y-3 transition-opacity duration-200 motion-reduce:transition-none ${isLoading ? 'opacity-60' : 'opacity-100'}`}
+        className="space-y-3"
       >
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         {cards.map((card) => {
@@ -497,7 +490,6 @@ export default function Dashboard() {
             : card.change < 0
               ? 'bg-rose-50 text-rose-700'
               : 'bg-slate-100 text-slate-600';
-
           return (
             <CardWrapper
               key={card.id}
@@ -515,7 +507,9 @@ export default function Dashboard() {
               </div>
               <p className="mt-3 truncate text-2xl font-black text-slate-950">{card.value}</p>
               <div className="mt-2 flex min-h-6 flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
-                {changeText === null ? (
+                {card.statusText ? (
+                  <span className="font-semibold text-amber-700">{card.statusText}</span>
+                ) : card.hideComparison ? null : changeText === null ? (
                   <span className="font-semibold text-slate-500">Chưa có dữ liệu kỳ trước</span>
                 ) : (
                   <>
@@ -539,7 +533,7 @@ export default function Dashboard() {
         <article className="rounded-lg border border-[#e1e3e4] bg-white p-3 shadow-[0_1px_3px_rgba(25,28,29,0.08)]">
           <div className="mb-2 flex items-center justify-between gap-4">
             <h2 className="text-base font-semibold leading-6 text-[#191c1d]">Top sản phẩm bán chạy</h2>
-            <Link to={`/products?view=top-products&period=${displayedPeriod}`} className="text-sm font-semibold text-brand-strong transition hover:text-brand-deep">
+            <Link to={`/products?view=top-products&period=${displayedPeriod}`} className="text-sm font-semibold transition hover:text">
               Tất cả
             </Link>
           </div>
@@ -731,6 +725,7 @@ export default function Dashboard() {
         </article>
       </section>
       </div>
+      )}
     </div>
   );
 }

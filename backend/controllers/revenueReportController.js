@@ -22,6 +22,7 @@ export const getPaymentMethods = handler(service.getPaymentMethods);
 export const getHourly = handler(service.getHourly);
 export const getStockAlerts = handler(service.getStockAlerts);
 export const getProducts = handler(service.getProducts);
+export const getCostReconciliation = handler(service.getCostReconciliation);
 export async function getAiAnalysis(req, res) {
   try {
     const filters = validateRevenueReportQuery(req.query);
@@ -182,8 +183,8 @@ function createRevenueWorkbook(filters, data) {
   styleExcelHeader(metricHeader);
   const metricRows = [
     ['Doanh thu thuần', Number(metrics.netRevenue || 0), 'VNĐ', metrics.changes?.netRevenue ?? '', 'Doanh thu sau giảm giá và hoàn trả'],
-    ['Giá vốn hàng bán', Number(metrics.cost || 0), 'VNĐ', metrics.changes?.cost ?? '', 'Giá vốn của đơn hoàn thành'],
-    ['Lợi nhuận gộp', Number(metrics.grossProfit || 0), 'VNĐ', metrics.changes?.grossProfit ?? '', 'Doanh thu thuần trừ giá vốn'],
+    ['Giá vốn hàng bán', metrics.cost == null ? null : Number(metrics.cost), 'VNĐ', metrics.changes?.cost ?? '', metrics.costDataComplete ? 'Giá vốn của đơn hoàn thành' : 'Chưa đủ dữ liệu giá vốn'],
+    ['Lợi nhuận gộp', metrics.grossProfit == null ? null : Number(metrics.grossProfit), 'VNĐ', metrics.changes?.grossProfit ?? '', metrics.costDataComplete ? 'Doanh thu thuần trừ giá vốn' : 'Chưa đủ dữ liệu giá vốn'],
     ['Đơn hoàn thành', Number(metrics.completedOrders || 0), 'Đơn', metrics.changes?.completedOrders ?? '', 'Số hóa đơn hoàn thành'],
     ['Giá trị trung bình/đơn', Number(metrics.averageOrderValue || 0), 'VNĐ', metrics.changes?.averageOrderValue ?? '', 'Doanh thu thuần trên mỗi đơn'],
     ['Giảm giá', Number(metrics.discount || 0), 'VNĐ', metrics.changes?.discount ?? '', 'Tổng giảm giá trong kỳ'],
@@ -220,7 +221,7 @@ function createRevenueWorkbook(filters, data) {
   ], (data.trend.points || []).map((item) => ({
     label: item.label,
     netRevenue: Number(item.netRevenue || 0),
-    grossProfit: Number(item.grossProfit || 0)
+    grossProfit: item.grossProfit == null ? null : Number(item.grossProfit)
   })));
 
   addExcelDataSheet(workbook, 'Doanh thu danh mục', [

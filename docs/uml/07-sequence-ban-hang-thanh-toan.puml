@@ -1,0 +1,66 @@
+@startuml
+left to right direction
+skinparam linetype ortho
+skinparam nodesep 45
+skinparam ranksep 55
+
+actor "Nhân viên" as NhanVien
+boundary "Trang POS" as POS
+control "Order Route / Middleware" as OrderRoute
+control "Order Create Controller" as OrderController
+control "Promotion Engine" as PromotionEngine
+database "MySQL" as CSDL
+
+NhanVien -> POS : Chọn sản phẩm, khách hàng,
+khuyến mãi và phương thức thanh toán
+POS -> OrderRoute : POST /api/orders
+activate OrderRoute
+OrderRoute -> OrderRoute : Xác thực JWT, ca làm,
+kiểm tra dữ liệu
+alt Yêu cầu không hợp lệ
+  OrderRoute --> POS : 4xx Thông báo lỗi
+else Yêu cầu hợp lệ
+  OrderRoute -> OrderController : create(req, res)
+  activate OrderController
+  OrderController -> CSDL : Bắt đầu giao dịch
+  OrderController -> CSDL : Đọc cài đặt thanh toán, tồn và VAT
+  CSDL --> OrderController : Cài đặt
+  OrderController -> CSDL : Khóa sản phẩm và khách hàng
+  CSDL --> OrderController : Sản phẩm, tồn và điểm
+  alt Sản phẩm/phương thức/tồn không hợp lệ
+    OrderController -> CSDL : Rollback
+    OrderController --> POS : 400/404 Thông báo lỗi
+  else Hợp lệ
+    opt Có khuyến mãi
+      OrderController -> CSDL : Đọc khuyến mãi
+      CSDL --> OrderController : Dữ liệu khuyến mãi
+      OrderController -> PromotionEngine : calculatePromotion(...)
+      PromotionEngine --> OrderController : Mức giảm và quà tặng
+    end
+    OrderController -> OrderController : Tính điểm, VAT, tổng tiền và tiền thừa
+    alt Điểm hoặc tiền khách đưa không hợp lệ
+      OrderController -> CSDL : Rollback
+      OrderController --> POS : 400 Thông báo lỗi
+    else Hợp lệ
+      OrderController -> CSDL : Tạo orders và order_items
+      loop Mỗi sản phẩm
+        OrderController -> CSDL : Trừ products.stock_quantity
+        OrderController -> CSDL : Tạo inventory_logs loại SALE
+        opt Sản phẩm có bảo hành
+          OrderController -> CSDL : Tạo warranties
+        end
+      end
+      OrderController -> CSDL : Tạo payments trạng thái completed
+      opt Có khách hàng thành viên
+        OrderController -> CSDL : Cập nhật loyalty_points
+      end
+      OrderController -> CSDL : Commit
+      CSDL --> OrderController : Đơn hàng và tồn còn lại
+      OrderController --> POS : 201 Đơn hàng đã tạo
+      POS --> NhanVien : Hiển thị/in hóa đơn
+    end
+  end
+  deactivate OrderController
+end
+deactivate OrderRoute
+@enduml

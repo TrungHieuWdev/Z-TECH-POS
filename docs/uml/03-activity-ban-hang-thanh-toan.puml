@@ -1,0 +1,56 @@
+@startuml
+left to right direction
+skinparam linetype ortho
+skinparam nodesep 45
+skinparam ranksep 55
+
+|Nhân viên|
+start
+:Tìm hoặc quét sản phẩm;
+:Thêm sản phẩm và số lượng vào giỏ;
+if (Chọn khách hàng thành viên?) then (Có)
+  :Chọn khách hàng;
+endif
+if (Áp dụng khuyến mãi?) then (Có)
+  :Chọn khuyến mãi;
+endif
+if (Sử dụng điểm?) then (Có)
+  :Nhập số điểm sử dụng;
+endif
+:Chọn phương thức thanh toán;
+if (Thanh toán tiền mặt?) then (Có)
+  :Nhập số tiền khách đưa;
+endif
+:Xác nhận thanh toán;
+
+|Hệ thống|
+:Xác thực phiên và ca làm;
+:Kiểm tra dữ liệu đơn hàng;
+:Khóa và đọc sản phẩm trong giao dịch;
+if (Sản phẩm tồn tại và đủ tồn?) then (Có)
+  :Kiểm tra phương thức thanh toán đang bật;
+  :Tính khuyến mãi, điểm và VAT;
+  if (Điểm và số tiền thanh toán hợp lệ?) then (Có)
+    :Tạo đơn hàng và chi tiết đơn;
+    :Trừ tồn kho và ghi biến động SALE;
+    if (Sản phẩm có bảo hành?) then (Có)
+      :Tạo phiếu bảo hành;
+    endif
+    :Ghi nhận thanh toán hoàn tất;
+    if (Có khách hàng thành viên?) then (Có)
+      :Cập nhật điểm thành viên;
+    endif
+    :Commit giao dịch;
+    :Trả đơn hàng và tồn kho còn lại;
+    |Nhân viên|
+    :Hiển thị hoặc in hóa đơn;
+    stop
+  else (Không)
+    :Rollback và trả lỗi thanh toán/điểm;
+    stop
+  endif
+else (Không)
+  :Rollback và trả lỗi sản phẩm/tồn kho;
+  stop
+endif
+@enduml

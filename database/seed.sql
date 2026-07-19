@@ -1,8 +1,8 @@
 SET NAMES utf8mb4;
 
 INSERT INTO roles (id, role_name, description, status) VALUES
-(1, 'Admin', 'Quản trị toàn bộ hệ thống', 'active'),
-(2, 'Quản lý', 'Quản lý hoạt động cửa hàng', 'active'),
+(1, 'Quản trị viên', 'Toàn quyền vận hành hệ thống', 'active'),
+(2, 'Quản lý', 'Vai trò cũ đã được gộp vào Quản trị viên', 'inactive'),
 (3, 'Nhân viên bán hàng', 'Bán hàng và xử lý hóa đơn', 'active'),
 (4, 'Nhân viên kho', 'Nhập hàng và quản lý tồn kho', 'active');
 
@@ -18,9 +18,9 @@ INSERT INTO suppliers (id, supplier_code, supplier_name, phone, email, address, 
 (3, 'NCC003', 'Đối tác thiết bị di động', '0909000003', 'sales@doitacthididong.vn', 'Đà Nẵng', NULL, 'active');
 
 INSERT INTO users (id, name, employee_code, email, password, role) VALUES
-(1, 'Chủ cửa hàng', 'CH001', 'owner@pos.com', '$2a$10$zJ0vlNynsAv7pjIDZJnD2.wctQCc5BglAf3qlasqs1YWNuaWoV5ii', 'owner'),
-(2, 'Quản lý', 'QL001', 'manager@pos.com', '$2a$10$zJ0vlNynsAv7pjIDZJnD2.wctQCc5BglAf3qlasqs1YWNuaWoV5ii', 'manager'),
-(3, 'Nhân viên', 'NV001', 'employee@pos.com', '$2a$10$gP1nmk.Bvd80W7hfPCJuD.5RZ6qwwCZPG4TEuEde013Z3Nz6CH5FC', 'employee');
+(1, 'Quản trị viên', 'CH001', 'owner@pos.com', '$2a$10$zJ0vlNynsAv7pjIDZJnD2.wctQCc5BglAf3qlasqs1YWNuaWoV5ii', 'admin'),
+(2, 'Quản trị viên', 'QL001', 'manager@pos.com', '$2a$10$zJ0vlNynsAv7pjIDZJnD2.wctQCc5BglAf3qlasqs1YWNuaWoV5ii', 'admin'),
+(3, 'Nhân viên', 'NV001', 'employee@pos.com', '$2a$10$ID9zzPKRdedSZE5o.mjYOekfeOx08RQ8tuT58nx07b0e/IJhaNL2G', 'employee');
 
 INSERT INTO categories (id, name, description) VALUES
 (1, 'Cường lực màn hình', 'Kính cường lực theo từng model máy, phục vụ bán kèm khi khách mua ốp hoặc thay phụ kiện.'),
@@ -134,7 +134,7 @@ FROM products
 WHERE id IN (1, 51, 101, 151, 201, 250);
 
 UPDATE users SET role_id = CASE role
-  WHEN 'owner' THEN 1 WHEN 'admin' THEN 1 WHEN 'manager' THEN 2
+  WHEN 'owner' THEN 1 WHEN 'admin' THEN 1 WHEN 'manager' THEN 1
   WHEN 'warehouse' THEN 4 ELSE 3 END;
 
 INSERT INTO promotions

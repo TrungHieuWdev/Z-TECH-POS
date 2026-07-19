@@ -7,7 +7,13 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
-const migrationPath = path.resolve(scriptDirectory, '../../database/migration_add_pos_business_tables.sql');
+const requestedMigration = process.argv[2] || 'migration_add_pos_business_tables.sql';
+const migrationPath = path.resolve(scriptDirectory, '../../database', requestedMigration);
+const databaseDirectory = path.resolve(scriptDirectory, '../../database');
+
+if (!migrationPath.startsWith(`${databaseDirectory}${path.sep}`)) {
+  throw new Error('Migration path must stay inside the database directory.');
+}
 
 function parseStatements(sql) {
   const statements = [];

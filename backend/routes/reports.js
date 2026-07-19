@@ -4,7 +4,7 @@ import { getSalesReport } from '../controllers/reportController.js';
 import {
   deleteAiAnalysisHistoryItem, exportRevenue, exportRevenueExcel, getAiAnalysis,
   getAiAnalysisHistory, getAiAnalysisHistoryItem, getCategories, getHourly,
-  getPaymentMethods, getProducts, getStockAlerts, getSummary, getTrend
+  getCostReconciliation, getPaymentMethods, getProducts, getStockAlerts, getSummary, getTrend
 } from '../controllers/revenueReportController.js';
 
 const router = express.Router();
@@ -17,6 +17,7 @@ router.get('/revenue/payment-methods', auth, requireFullAccess, getPaymentMethod
 router.get('/revenue/hourly', auth, requireFullAccess, getHourly);
 router.get('/revenue/stock-alerts', auth, requireFullAccess, getStockAlerts);
 router.get('/revenue/products', auth, requireFullAccess, getProducts);
+router.get('/revenue/cost-reconciliation', auth, requireFullAccess, getCostReconciliation);
 router.get('/revenue/ai-analysis-history', auth, requireFullAccess, getAiAnalysisHistory);
 router.get('/revenue/ai-analysis-history/:id', auth, requireFullAccess, getAiAnalysisHistoryItem);
 router.delete('/revenue/ai-analysis-history/:id', auth, requireFullAccess, deleteAiAnalysisHistoryItem);

@@ -1,0 +1,86 @@
+@startuml
+left to right direction
+skinparam linetype ortho
+skinparam nodesep 65
+skinparam ranksep 85
+skinparam packageStyle rectangle
+
+actor "Nhân viên" as NhanVien
+actor "Quản trị viên" as QuanTriVien
+
+' Quản trị viên sử dụng được các chức năng của Nhân viên.
+QuanTriVien --|> NhanVien
+
+rectangle "Hệ thống Z-TECH POS" as HeThong {
+  usecase "Đăng nhập" as UCDangNhap
+  usecase "Đăng xuất" as UCDangXuat
+
+  usecase "Lập hóa đơn POS" as UCLapHoaDon
+  together {
+    usecase "Quét mã vạch sản phẩm" as UCQuetMaVach
+    usecase "Áp dụng khuyến mãi" as UCApDungKhuyenMai
+    usecase "Sử dụng điểm thành viên" as UCSuDungDiem
+    usecase "Chọn phương thức thanh toán" as UCChonThanhToan
+    usecase "In hóa đơn" as UCInHoaDon
+  }
+
+  together {
+    usecase "Quản lý khách hàng" as UCQuanLyKhachHang
+    usecase "Xem hóa đơn" as UCXemHoaDon
+    usecase "Theo dõi tồn kho" as UCTheoDoiTonKho
+    usecase "Tiếp nhận và xử lý bảo hành" as UCBaoHanh
+  }
+
+  together {
+    usecase "Quản lý sản phẩm,\ndanh mục và khuyến mãi" as UCHangHoa
+    usecase "Nhập hàng và\nquản lý nhà cung cấp" as UCNhapHang
+    usecase "Kiểm kê và điều chỉnh tồn kho" as UCDieuChinhTon
+    usecase "Hủy hóa đơn và hoàn tiền" as UCHuyHoaDon
+    usecase "Quản lý nhân viên và ca làm" as UCNhanSu
+    usecase "Phân tích báo cáo kinh doanh" as UCBaoCao
+    usecase "Xem nhật ký hoạt động" as UCNhatKy
+    usecase "Quản lý cài đặt hệ thống" as UCCaiDat
+  }
+
+  ' Phân rã nghiệp vụ lập hóa đơn theo đúng hướng UML 2.5.
+  UCQuetMaVach ..> UCLapHoaDon : <<extend>>
+  UCApDungKhuyenMai ..> UCLapHoaDon : <<extend>>
+  UCSuDungDiem ..> UCLapHoaDon : <<extend>>
+  UCLapHoaDon ..> UCChonThanhToan : <<include>>
+  UCInHoaDon ..> UCLapHoaDon : <<extend>>
+
+  ' Liên kết ẩn chỉ điều khiển bố cục, không thay đổi logic UML.
+  UCDangNhap -[hidden]right-> UCDangXuat
+  UCDangNhap -[hidden]down-> UCLapHoaDon
+  UCLapHoaDon -[hidden]down-> UCQuanLyKhachHang
+  UCQuanLyKhachHang -[hidden]right-> UCXemHoaDon
+  UCXemHoaDon -[hidden]right-> UCTheoDoiTonKho
+  UCTheoDoiTonKho -[hidden]right-> UCBaoHanh
+
+  UCQuanLyKhachHang -[hidden]down-> UCHangHoa
+  UCHangHoa -[hidden]down-> UCNhapHang
+  UCNhapHang -[hidden]down-> UCDieuChinhTon
+  UCDieuChinhTon -[hidden]down-> UCHuyHoaDon
+  UCHuyHoaDon -[hidden]right-> UCNhanSu
+  UCNhanSu -[hidden]right-> UCBaoCao
+  UCBaoCao -[hidden]right-> UCNhatKy
+  UCNhatKy -[hidden]right-> UCCaiDat
+}
+
+NhanVien -right-> UCDangNhap
+NhanVien -right-> UCDangXuat
+NhanVien -right-> UCLapHoaDon
+NhanVien -right-> UCQuanLyKhachHang
+NhanVien -right-> UCXemHoaDon
+NhanVien -right-> UCTheoDoiTonKho
+NhanVien -right-> UCBaoHanh
+
+QuanTriVien -right-> UCHangHoa
+QuanTriVien -right-> UCNhapHang
+QuanTriVien -right-> UCDieuChinhTon
+QuanTriVien -right-> UCHuyHoaDon
+QuanTriVien -right-> UCNhanSu
+QuanTriVien -right-> UCBaoCao
+QuanTriVien -right-> UCNhatKy
+QuanTriVien -right-> UCCaiDat
+@enduml

@@ -1,17 +1,67 @@
 import { query } from '../config/db.js';
 import { listWarranties } from './warrantyController.js';
+import { getKpiPercentChange, normalizeSalesMetrics, resolveDashboardRanges } from '../utils/dashboardKpi.js';
 
 const toNumber = (value) => Number(value || 0);
 
-function getPercentChange(current, previous) {
-  const currentValue = toNumber(current);
-  const previousValue = toNumber(previous);
+async function getSalesMetrics(orderDateFilter, itemDateFilter) {
+  const [orderRows, itemRows] = await Promise.all([
+    query(
+      `SELECT
+         COALESCE(SUM(o.subtotal - COALESCE(o.discount, 0) - COALESCE(refunds.amount, 0)), 0) AS net_revenue,
+         COUNT(*) AS completed_orders
+       FROM orders o
+       LEFT JOIN (
+         SELECT order_id, SUM(amount) AS amount
+         FROM payments
+         WHERE payment_method = 'refund'
+           AND status IN ('completed', 'refunded')
+         GROUP BY order_id
+       ) refunds ON refunds.order_id = o.id
+       WHERE o.status = 'completed' AND ${orderDateFilter}`
+    ),
+    query(
+      `SELECT
+         COALESCE(SUM(GREATEST(oi.quantity - COALESCE(returned.quantity, 0), 0)), 0) AS products_sold,
+         COALESCE(SUM(
+           CASE
+             WHEN NULLIF(oi.cost_at_sale, 0) > 0
+             THEN GREATEST(oi.quantity - COALESCE(returned.quantity, 0), 0)
+               * NULLIF(oi.cost_at_sale, 0)
+           END
+         ), NULL) AS cost_of_goods_sold,
+         COALESCE(SUM(CASE
+           WHEN NULLIF(oi.cost_at_sale, 0) > 0
+           THEN oi.subtotal - CASE WHEN o.subtotal > 0
+             THEN (oi.subtotal / o.subtotal) * (COALESCE(o.discount, 0) + COALESCE(refunds.amount, 0))
+             ELSE 0 END
+         END), NULL) AS known_cost_net_revenue,
+         COUNT(DISTINCT CASE
+           WHEN GREATEST(oi.quantity - COALESCE(returned.quantity, 0), 0) > 0
+             AND (oi.cost_at_sale IS NULL OR oi.cost_at_sale <= 0)
+           THEN oi.product_id
+         END) AS missing_cost_product_count
+       FROM order_items oi
+       JOIN orders o ON o.id = oi.order_id
+       JOIN products p ON p.id = oi.product_id
+       LEFT JOIN (
+         SELECT order_id, SUM(amount) AS amount
+         FROM payments
+         WHERE payment_method = 'refund'
+           AND status IN ('completed', 'refunded')
+         GROUP BY order_id
+       ) refunds ON refunds.order_id = o.id
+       LEFT JOIN (
+         SELECT reference_id AS order_id, product_id, SUM(quantity) AS quantity
+         FROM inventory_logs
+         WHERE type = 'RETURN' AND reference_type = 'ORDER'
+         GROUP BY reference_id, product_id
+       ) returned ON returned.order_id = o.id AND returned.product_id = oi.product_id
+       WHERE o.status = 'completed' AND ${itemDateFilter}`
+    )
+  ]);
 
-  if (previousValue === 0) {
-    return null;
-  }
-
-  return Number((((currentValue - previousValue) / previousValue) * 100).toFixed(1));
+  return normalizeSalesMetrics(orderRows[0], itemRows[0]);
 }
 
 function getCategorySharePeriod(value = 'today') {
@@ -41,14 +91,14 @@ function getCategoryShareDateFilter(period = 'today') {
     case 'yesterday':
       return 'AND DATE(o.created_at) = DATE_SUB(CURDATE(), INTERVAL 1 DAY)';
     case '7days':
-      return 'AND o.created_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)';
+      return 'AND o.created_at >= DATE_SUB(CURDATE(), INTERVAL 6 DAY) AND o.created_at < DATE_ADD(CURDATE(), INTERVAL 1 DAY)';
     case '14days':
-      return 'AND o.created_at >= DATE_SUB(CURDATE(), INTERVAL 13 DAY)';
+      return 'AND o.created_at >= DATE_SUB(CURDATE(), INTERVAL 13 DAY) AND o.created_at < DATE_ADD(CURDATE(), INTERVAL 1 DAY)';
     case '90days':
-      return 'AND o.created_at >= DATE_SUB(CURDATE(), INTERVAL 89 DAY)';
+      return 'AND o.created_at >= DATE_SUB(CURDATE(), INTERVAL 89 DAY) AND o.created_at < DATE_ADD(CURDATE(), INTERVAL 1 DAY)';
     case '30days':
     default:
-      return 'AND o.created_at >= DATE_SUB(CURDATE(), INTERVAL 29 DAY)';
+      return 'AND o.created_at >= DATE_SUB(CURDATE(), INTERVAL 29 DAY) AND o.created_at < DATE_ADD(CURDATE(), INTERVAL 1 DAY)';
   }
 }
 
@@ -72,73 +122,49 @@ function getPeriodFilters(value = 'today', alias = '', selectedDate = '', dateFr
   }
   if (period === 'today') return { current: `DATE(${column}) = CURDATE()`, previous: `DATE(${column}) = DATE_SUB(CURDATE(), INTERVAL 1 DAY)` };
   if (period === 'yesterday') return { current: `DATE(${column}) = DATE_SUB(CURDATE(), INTERVAL 1 DAY)`, previous: `DATE(${column}) = DATE_SUB(CURDATE(), INTERVAL 2 DAY)` };
-  if (period === '7days') return { current: `${column} >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)`, previous: `${column} >= DATE_SUB(CURDATE(), INTERVAL 13 DAY) AND ${column} < DATE_SUB(CURDATE(), INTERVAL 6 DAY)` };
-  if (period === '14days') return { current: `${column} >= DATE_SUB(CURDATE(), INTERVAL 13 DAY)`, previous: `${column} >= DATE_SUB(CURDATE(), INTERVAL 27 DAY) AND ${column} < DATE_SUB(CURDATE(), INTERVAL 13 DAY)` };
-  if (period === '90days') return { current: `${column} >= DATE_SUB(CURDATE(), INTERVAL 89 DAY)`, previous: `${column} >= DATE_SUB(CURDATE(), INTERVAL 179 DAY) AND ${column} < DATE_SUB(CURDATE(), INTERVAL 89 DAY)` };
-  return { current: `${column} >= DATE_SUB(CURDATE(), INTERVAL 29 DAY)`, previous: `${column} >= DATE_SUB(CURDATE(), INTERVAL 59 DAY) AND ${column} < DATE_SUB(CURDATE(), INTERVAL 29 DAY)` };
+  if (period === '7days') return { current: `${column} >= DATE_SUB(CURDATE(), INTERVAL 6 DAY) AND ${column} < DATE_ADD(CURDATE(), INTERVAL 1 DAY)`, previous: `${column} >= DATE_SUB(CURDATE(), INTERVAL 13 DAY) AND ${column} < DATE_SUB(CURDATE(), INTERVAL 6 DAY)` };
+  if (period === '14days') return { current: `${column} >= DATE_SUB(CURDATE(), INTERVAL 13 DAY) AND ${column} < DATE_ADD(CURDATE(), INTERVAL 1 DAY)`, previous: `${column} >= DATE_SUB(CURDATE(), INTERVAL 27 DAY) AND ${column} < DATE_SUB(CURDATE(), INTERVAL 13 DAY)` };
+  if (period === '90days') return { current: `${column} >= DATE_SUB(CURDATE(), INTERVAL 89 DAY) AND ${column} < DATE_ADD(CURDATE(), INTERVAL 1 DAY)`, previous: `${column} >= DATE_SUB(CURDATE(), INTERVAL 179 DAY) AND ${column} < DATE_SUB(CURDATE(), INTERVAL 89 DAY)` };
+  return { current: `${column} >= DATE_SUB(CURDATE(), INTERVAL 29 DAY) AND ${column} < DATE_ADD(CURDATE(), INTERVAL 1 DAY)`, previous: `${column} >= DATE_SUB(CURDATE(), INTERVAL 59 DAY) AND ${column} < DATE_SUB(CURDATE(), INTERVAL 29 DAY)` };
 }
 
 export async function getSummary(req, res) {
   try {
+    const businessToday = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit'
+    }).format(new Date());
+    const range = resolveDashboardRanges({
+      period: req.query.period || 'today',
+      dateFrom: req.query.date_from,
+      dateTo: req.query.date_to,
+      today: businessToday
+    });
     const filters = getPeriodFilters(req.query.period || 'today', '', req.query.date, req.query.date_from, req.query.date_to);
-    const orderItemFilters = getPeriodFilters(req.query.period || 'today', 'o.', req.query.date, req.query.date_from, req.query.date_to);
+    const itemFilters = getPeriodFilters(req.query.period || 'today', 'o.', req.query.date, req.query.date_from, req.query.date_to);
     const [
-      todayRevenue,
-      yesterdayRevenue,
+      currentMetrics,
+      previousMetrics,
       monthRevenue,
-      todayOrders,
-      yesterdayOrders,
       lowStock,
-      productsSold,
-      previousProductsSold,
-      estimatedProfit,
-      previousEstimatedProfit,
       paymentTotals
     ] = await Promise.all([
+      getSalesMetrics(filters.current, itemFilters.current),
+      getSalesMetrics(filters.previous, itemFilters.previous),
       query(
-        `SELECT COALESCE(SUM(total), 0) AS value FROM orders WHERE status = 'completed' AND ${filters.current}`
+        `SELECT COALESCE(SUM(o.subtotal - COALESCE(o.discount, 0) - COALESCE(refunds.amount, 0)), 0) AS value
+         FROM orders o
+         LEFT JOIN (
+           SELECT order_id, SUM(amount) AS amount
+           FROM payments
+           WHERE payment_method = 'refund'
+             AND status IN ('completed', 'refunded')
+           GROUP BY order_id
+         ) refunds ON refunds.order_id = o.id
+         WHERE o.status = 'completed'
+           AND YEAR(o.created_at) = YEAR(CURDATE())
+           AND MONTH(o.created_at) = MONTH(CURDATE())`
       ),
-      query(
-        `SELECT COALESCE(SUM(total), 0) AS value
-         FROM orders
-         WHERE status = 'completed' AND ${filters.previous}`
-      ),
-      query(
-        `SELECT COALESCE(SUM(total), 0) AS value
-         FROM orders
-         WHERE status = 'completed'
-           AND YEAR(created_at) = YEAR(CURDATE())
-           AND MONTH(created_at) = MONTH(CURDATE())`
-      ),
-      query(`SELECT COUNT(*) AS value FROM orders WHERE status = 'completed' AND ${filters.current}`),
-      query(`SELECT COUNT(*) AS value FROM orders WHERE status = 'completed' AND ${filters.previous}`),
       query('SELECT COUNT(*) AS value FROM products WHERE is_active = 1 AND stock_quantity <= min_stock'),
-      query(
-        `SELECT COALESCE(SUM(oi.quantity), 0) AS value
-         FROM order_items oi
-         JOIN orders o ON oi.order_id = o.id
-         WHERE o.status = 'completed' AND ${orderItemFilters.current}`
-      ),
-      query(
-        `SELECT COALESCE(SUM(oi.quantity), 0) AS value
-         FROM order_items oi
-         JOIN orders o ON oi.order_id = o.id
-         WHERE o.status = 'completed' AND ${orderItemFilters.previous}`
-      ),
-      query(
-        `SELECT COALESCE(SUM(oi.subtotal - (COALESCE(oi.cost_price_snapshot, p.cost_price, 0) * oi.quantity)), 0) AS value
-         FROM order_items oi
-         JOIN orders o ON oi.order_id = o.id
-         JOIN products p ON oi.product_id = p.id
-         WHERE o.status = 'completed' AND ${orderItemFilters.current}`
-      ),
-      query(
-        `SELECT COALESCE(SUM(oi.subtotal - (COALESCE(oi.cost_price_snapshot, p.cost_price, 0) * oi.quantity)), 0) AS value
-         FROM order_items oi
-         JOIN orders o ON oi.order_id = o.id
-         JOIN products p ON oi.product_id = p.id
-         WHERE o.status = 'completed' AND ${orderItemFilters.previous}`
-      ),
       query(
         `SELECT
            SUM(CASE WHEN payment_method = 'cash' THEN 1 ELSE 0 END) AS cash_count,
@@ -148,35 +174,42 @@ export async function getSummary(req, res) {
       )
     ]);
 
-    const todayRevenueValue = toNumber(todayRevenue[0].value);
-    const yesterdayRevenueValue = toNumber(yesterdayRevenue[0].value);
-    const todayOrdersValue = toNumber(todayOrders[0].value);
-    const yesterdayOrdersValue = toNumber(yesterdayOrders[0].value);
-    const productsSoldValue = toNumber(productsSold[0].value);
-    const previousProductsSoldValue = toNumber(previousProductsSold[0].value);
-    const estimatedProfitValue = toNumber(estimatedProfit[0].value);
-    const previousEstimatedProfitValue = toNumber(previousEstimatedProfit[0].value);
-    const averageOrderValue = todayOrdersValue > 0 ? todayRevenueValue / todayOrdersValue : 0;
-    const previousAverageOrderValue = yesterdayOrdersValue > 0 ? yesterdayRevenueValue / yesterdayOrdersValue : 0;
-
     res.json({
-      todayRevenue: todayRevenueValue,
-      yesterdayRevenue: yesterdayRevenueValue,
+      todayRevenue: currentMetrics.netRevenue,
+      yesterdayRevenue: previousMetrics.netRevenue,
       monthRevenue: toNumber(monthRevenue[0].value),
-      todayOrders: todayOrdersValue,
-      yesterdayOrders: yesterdayOrdersValue,
-      averageOrderValue,
-      previousAverageOrderValue,
+      todayOrders: currentMetrics.completedOrders,
+      yesterdayOrders: previousMetrics.completedOrders,
+      averageOrderValue: currentMetrics.averageOrderValue,
+      previousAverageOrderValue: previousMetrics.averageOrderValue,
       lowStockCount: toNumber(lowStock[0].value),
-      productsSold: productsSoldValue,
-      previousProductsSold: previousProductsSoldValue,
-      estimatedProfit: estimatedProfitValue,
-      previousEstimatedProfit: previousEstimatedProfitValue,
-      revenueGrowth: getPercentChange(todayRevenueValue, yesterdayRevenueValue),
-      orderGrowth: getPercentChange(todayOrdersValue, yesterdayOrdersValue),
-      averageOrderValueGrowth: getPercentChange(averageOrderValue, previousAverageOrderValue),
-      productsSoldGrowth: getPercentChange(productsSoldValue, previousProductsSoldValue),
-      estimatedProfitGrowth: getPercentChange(estimatedProfitValue, previousEstimatedProfitValue),
+      productsSold: currentMetrics.productsSold,
+      previousProductsSold: previousMetrics.productsSold,
+      costOfGoodsSold: currentMetrics.costOfGoodsSold,
+      previousCostOfGoodsSold: previousMetrics.costOfGoodsSold,
+      knownCostOfGoodsSold: currentMetrics.knownCostOfGoodsSold,
+      previousKnownCostOfGoodsSold: previousMetrics.knownCostOfGoodsSold,
+      knownCostNetRevenue: currentMetrics.knownCostNetRevenue,
+      previousKnownCostNetRevenue: previousMetrics.knownCostNetRevenue,
+      grossProfit: currentMetrics.grossProfit,
+      previousGrossProfit: previousMetrics.grossProfit,
+      estimatedProfit: currentMetrics.missingCostProductCount > 0
+        ? currentMetrics.provisionalGrossProfit
+        : currentMetrics.grossProfit,
+      previousEstimatedProfit: previousMetrics.missingCostProductCount > 0
+        ? previousMetrics.provisionalGrossProfit
+        : previousMetrics.grossProfit,
+      missingCostProductCount: currentMetrics.missingCostProductCount,
+      previousMissingCostProductCount: previousMetrics.missingCostProductCount,
+      costDataComplete: currentMetrics.missingCostProductCount === 0,
+      revenueGrowth: getKpiPercentChange(currentMetrics.netRevenue, previousMetrics.netRevenue),
+      orderGrowth: getKpiPercentChange(currentMetrics.completedOrders, previousMetrics.completedOrders),
+      averageOrderValueGrowth: getKpiPercentChange(currentMetrics.averageOrderValue, previousMetrics.averageOrderValue),
+      productsSoldGrowth: getKpiPercentChange(currentMetrics.productsSold, previousMetrics.productsSold),
+      estimatedProfitGrowth: currentMetrics.missingCostProductCount > 0 || previousMetrics.missingCostProductCount > 0
+        ? null
+        : getKpiPercentChange(currentMetrics.grossProfit, previousMetrics.grossProfit),
+      range,
       paymentCashCount: toNumber(paymentTotals[0].cash_count),
       paymentTransferCount: toNumber(paymentTotals[0].transfer_count)
     });
@@ -190,15 +223,25 @@ export async function getRevenueChart(req, res) {
     const period = getCategorySharePeriod(req.query.period || 'today');
     const selectedDate = getSelectedDate(req.query.date);
     const filters = getPeriodFilters(period, '', selectedDate, req.query.date_from, req.query.date_to);
-    const hasRange = getSelectedDate(req.query.date_from) && getSelectedDate(req.query.date_to);
-    const bucketExpression = (period === 'today' || period === 'yesterday' || selectedDate) && !hasRange
+    const rangeFrom = getSelectedDate(req.query.date_from);
+    const rangeTo = getSelectedDate(req.query.date_to);
+    const isSingleDayRange = rangeFrom && rangeTo && rangeFrom === rangeTo;
+    const bucketExpression = period === 'today' || period === 'yesterday' || selectedDate || isSingleDayRange
       ? 'HOUR(created_at)'
       : "DATE_FORMAT(created_at, '%Y-%m-%d')";
 
     const rows = await query(
-      `SELECT ${bucketExpression} AS bucket, COALESCE(SUM(total), 0) AS revenue
-       FROM orders
-       WHERE status = 'completed'
+      `SELECT ${bucketExpression} AS bucket,
+         COALESCE(SUM(o.subtotal - COALESCE(o.discount, 0) - COALESCE(refunds.amount, 0)), 0) AS revenue
+       FROM orders o
+       LEFT JOIN (
+         SELECT order_id, SUM(amount) AS amount
+         FROM payments
+         WHERE payment_method = 'refund'
+           AND status IN ('completed', 'refunded')
+         GROUP BY order_id
+       ) refunds ON refunds.order_id = o.id
+       WHERE o.status = 'completed'
          AND ${filters.current}
        GROUP BY ${bucketExpression}
        ORDER BY ${bucketExpression}`

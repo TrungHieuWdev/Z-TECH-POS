@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 
-export default function Modal({ isOpen, onClose, title, children, maxWidth = 'max-w-2xl', panelClassName = '', headerClassName = '', headerActions = null }) {
+export default function Modal({ isOpen, onClose, title, children, maxWidth = 'max-w-2xl', panelClassName = '', headerClassName = '', headerActions = null, showCloseButton = false }) {
   const panelRef = useRef(null);
   const onCloseRef = useRef(onClose);
   const titleId = useId();
@@ -79,12 +79,21 @@ export default function Modal({ isOpen, onClose, title, children, maxWidth = 'ma
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex h-[100dvh] w-screen touch-none items-end justify-center overflow-hidden overscroll-none bg-black/60 sm:items-center sm:px-4 sm:py-6" role="presentation">
+    <div className="fixed inset-0 z-[9999] flex h-[100dvh] w-screen touch-none items-end justify-center overflow-hidden overscroll-none bg-black/30 backdrop-blur-[1px] sm:items-center sm:px-4 sm:py-6" role="presentation">
       <div ref={panelRef} tabIndex="-1" className={`relative max-h-[94dvh] w-full ${maxWidth} touch-pan-y overscroll-contain overflow-y-auto bg-white p-4 shadow-xl outline-none sm:max-h-[90vh] sm:p-6 ${panelClassName}`} role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={(event) => event.stopPropagation()}>
         <div className={`sticky -top-4 z-30 -mx-4 mb-5 flex items-center justify-between gap-4 border-b bg-white px-4 py-3 sm:-top-6 sm:-mx-6 sm:px-6 sm:py-4 ${headerClassName}`}>
           <h2 id={titleId} className="min-w-0 truncate text-lg font-semibold text-gray-900 sm:text-xl">{title}</h2>
           <div className="flex shrink-0 items-center gap-2">
             {headerActions}
+            {showCloseButton && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="h-10 border border-[#69afd6] bg-white px-4 text-sm font-bold text-[#398fbd] transition hover:bg-sky-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#69afd6] focus-visible:ring-offset-2"
+              >
+                Đóng
+              </button>
+            )}
           </div>
         </div>
         {children}

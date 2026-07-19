@@ -46,6 +46,8 @@ CREATE TABLE users (
   status ENUM('active','inactive') NOT NULL DEFAULT 'active',
   note TEXT,
   last_login_at DATETIME NULL,
+  token_version INT UNSIGNED NOT NULL DEFAULT 0,
+  password_changed_at DATETIME NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE SET NULL
 );
@@ -217,6 +219,7 @@ CREATE TABLE order_items (
   gift_quantity INT NOT NULL DEFAULT 0,
   unit_price DECIMAL(15,0) NOT NULL,
   cost_price_snapshot DECIMAL(15,0) NULL,
+  cost_at_sale DECIMAL(15,0) NULL,
   subtotal DECIMAL(15,0) NOT NULL,
   warranty_enabled_snapshot BOOLEAN NULL,
   warranty_period_days_snapshot INT NULL,

@@ -19,11 +19,13 @@ import {
 import { useSearchParams } from 'react-router-dom';
 import api from '../api/axios';
 import KpiCard from '../components/KpiCard';
+import PageTitle from '../components/PageTitle';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import ProductImage from '../components/ProductImage';
 import TablePagination from '../components/TablePagination';
 import { formatCurrency } from '../utils/format';
+import CurrencyInput from '../components/CurrencyInput';
 import { getUser, isFullAccessRole } from '../utils/auth';
 import { getDefaultWarrantyPolicy, warrantyTypes } from '../utils/warrantyPolicy';
 
@@ -329,7 +331,8 @@ export default function Products({ tabNavigation = null }) {
       if (keyword && !searchable.includes(keyword)) return false;
       if (deviceFamily && product.device_family !== deviceFamily) return false;
       if (categoryId && !productMatchesCategory(product, selectedCategory)) return false;
-      if (statusFilter && getProductStatus(product) !== statusFilter) return false;
+      if (statusFilter === 'missing-cost' && Number(product.cost_price || 0) > 0) return false;
+      if (statusFilter && statusFilter !== 'missing-cost' && getProductStatus(product) !== statusFilter) return false;
       if (activeTab === 'low' && stockState !== 'low') return false;
       if (activeTab === 'out' && stockState !== 'out') return false;
       if (activeTab === 'no-code' && (product.sku || product.barcode)) return false;
@@ -664,10 +667,10 @@ export default function Products({ tabNavigation = null }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-extrabold text-gray-950">Sản phẩm</h1>
-          <p className="mt-1 text-sm font-medium text-gray-500">Thêm và cập nhật sản phẩm, quản lý giá bán, mã vạch, tồn kho và chính sách bảo hành.</p>
-        </div>
+        <PageTitle
+          title="Quản lý Sản phẩm"
+          description="Thêm và cập nhật sản phẩm, quản lý giá bán, mã vạch, tồn kho và chính sách bảo hành."
+        />
         <div className="flex flex-wrap items-center justify-end gap-2" style={{ display: hasFullAccess ? undefined : 'none' }}>
           <button
             type="button"
@@ -797,7 +800,11 @@ export default function Products({ tabNavigation = null }) {
             {categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
           </select>
           <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="h-10 border border-gray-300 px-3 text-sm outline-none focus:border-brand">
-            <option value="">Tất cả trạng thái</option><option value="active">Đang bán</option><option value="hidden">Tạm ẩn</option><option value="stopped">Ngừng bán</option>
+            <option value="">Tất cả trạng thái</option>
+            <option value="missing-cost">Chưa có giá vốn</option>
+            <option value="active">Đang bán</option>
+            <option value="hidden">Tạm ẩn</option>
+            <option value="stopped">Ngừng bán</option>
           </select>
         </div>
         <div className="flex gap-1 overflow-x-auto border-t border-gray-100 px-4 pt-2">
@@ -1135,22 +1142,20 @@ export default function Products({ tabNavigation = null }) {
           </label>
           <label>
             <span className="mb-1 block text-sm font-medium text-gray-700">Giá bán</span>
-            <input
-              type="number"
+            <CurrencyInput
               min="1"
               value={form.price}
-              onChange={(event) => setForm({ ...form, price: event.target.value })}
+              onValueChange={(value) => setForm({ ...form, price: value })}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-brand"
               required
             />
           </label>
           <label>
             <span className="mb-1 block text-sm font-medium text-gray-700">Giá vốn</span>
-            <input
-              type="number"
+            <CurrencyInput
               min="0"
               value={form.cost_price}
-              onChange={(event) => setForm({ ...form, cost_price: event.target.value })}
+              onValueChange={(value) => setForm({ ...form, cost_price: value })}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-brand"
             />
           </label>

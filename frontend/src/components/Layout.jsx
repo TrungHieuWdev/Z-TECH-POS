@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Bell, Menu, Search } from 'lucide-react';
 import Sidebar from './Sidebar';
 import NotificationCenter from './NotificationCenter';
-import { getRoleLabel, getUser } from '../utils/auth';
+import PageLoading from './PageLoading';
+import { getRoleLabel, getUser, isFullAccessRole } from '../utils/auth';
 
 export default function Layout() {
   const user = getUser();
@@ -48,8 +49,7 @@ export default function Layout() {
     year: 'numeric',
   }).format(currentTime);
   const isPosPage = location.pathname === '/pos';
-  const roleKey = String(user?.role || '').toLowerCase();
-  const isStoreLeader = ['owner', 'admin', 'manager'].includes(roleKey);
+  const isStoreLeader = isFullAccessRole(user?.role);
   const roleLabel = getRoleLabel(user?.role);
   const accountLabel = isStoreLeader ? roleLabel : (user?.name || 'Admin');
 
@@ -107,10 +107,16 @@ export default function Layout() {
         </header>
 
         <main className={isPosPage ? 'min-w-0 p-2 lg:p-3' : 'min-w-0 px-3 py-3 sm:px-4 md:px-5 lg:px-6 lg:py-4 xl:px-8'}>
-          <Outlet />
+          <Suspense fallback={<RouteLoader />}>
+            <Outlet key={location.pathname} />
+          </Suspense>
         </main>
       </div>
       <NotificationCenter isOpen={isNotificationsOpen} onClose={() => setIsNotificationsOpen(false)} onCountChange={setNotificationCount} />
     </div>
   );
+}
+
+function RouteLoader() {
+  return <PageLoading message="Đang tải dữ liệu trang" />;
 }

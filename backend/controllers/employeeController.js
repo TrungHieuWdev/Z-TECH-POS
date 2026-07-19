@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import { query } from '../config/db.js';
+import { validatePasswordPolicy } from '../security/passwordPolicy.js';
 
 const VALID_ROLES = new Set(['employee', 'cashier', 'warehouse']);
 const VALID_STATUSES = new Set(['active', 'inactive']);
@@ -266,9 +267,6 @@ export async function createEmployee(req, res) {
     if (!name || !phone || !password) {
       return res.status(400).json({ message: 'Họ tên, số điện thoại và mật khẩu là bắt buộc' });
     }
-    if (password.length < 8) {
-      return res.status(400).json({ message: 'Mật khẩu phải có ít nhất 8 ký tự' });
-    }
     const [{ nextCode }] = await query(
       `SELECT CONCAT('NV', LPAD(COALESCE(MAX(CAST(SUBSTRING(employee_code, 3) AS UNSIGNED)), 0) + 1, 3, '0')) AS nextCode
        FROM users
@@ -276,6 +274,8 @@ export async function createEmployee(req, res) {
     );
 
     const employeeCode = normalizeEmployeeCode(nextCode || 'NV001');
+    const passwordPolicyError = validatePasswordPolicy(password, employeeCode);
+    if (passwordPolicyError) return res.status(400).json({ message: passwordPolicyError });
     const email = `${employeeCode.toLowerCase()}@ztech.local`;
     const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -328,9 +328,8 @@ export async function updateEmployee(req, res) {
 
     let hashedPassword = current.password;
     if (password) {
-      if (password.length < 8) {
-        return res.status(400).json({ message: 'Mật khẩu phải có ít nhất 8 ký tự' });
-      }
+      const passwordPolicyError = validatePasswordPolicy(password, current.employee_code);
+      if (passwordPolicyError) return res.status(400).json({ message: passwordPolicyError });
       hashedPassword = await bcrypt.hash(password, 10);
     }
 
@@ -373,13 +372,19 @@ export async function resetEmployeePassword(req, res) {
     }
 
     const nextPassword = String(req.body.password || '').trim();
-    if (nextPassword.length < 8) {
-      return res.status(400).json({ message: 'Mật khẩu mới phải có ít nhất 8 ký tự' });
-    }
+    const passwordPolicyError = validatePasswordPolicy(nextPassword, employee.employee_code);
+    if (passwordPolicyError) return res.status(400).json({ message: passwordPolicyError });
 
     const hashedPassword = await bcrypt.hash(nextPassword, 10);
 
-    await query('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, employeeId]);
+    await query(
+      `UPDATE users
+       SET password = ?,
+           password_changed_at = NOW(),
+           token_version = token_version + 1
+       WHERE id = ?`,
+      [hashedPassword, employeeId]
+    );
 
     res.json({ message: 'Đã đổi mật khẩu', code: employee.employee_code });
   } catch (error) {
@@ -406,7 +411,13 @@ export async function toggleEmployeeStatus(req, res) {
     }
 
     const nextStatus = employee.status === 'active' ? 'inactive' : 'active';
-    await query('UPDATE users SET status = ? WHERE id = ?', [nextStatus, employeeId]);
+    await query(
+      `UPDATE users
+       SET status = ?,
+           token_version = token_version + 1
+       WHERE id = ?`,
+      [nextStatus, employeeId]
+    );
 
     res.json({ message: 'Đã cập nhật trạng thái', status: nextStatus });
   } catch (error) {

@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import api from '../api/axios';
 import KpiCard from '../components/KpiCard';
+import PageTitle from '../components/PageTitle';
 import Modal from '../components/Modal';
 import TablePagination from '../components/TablePagination';
 import { formatCurrency, formatDate, formatTime } from '../utils/format';
@@ -451,10 +452,10 @@ export default function Orders() {
   return (
     <div className="w-full space-y-5">
       <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-extrabold text-gray-950">Hóa đơn</h1>
-          <p className="mt-1 text-sm font-medium text-gray-500">Tra cứu hóa đơn, kiểm tra thanh toán và theo dõi lịch sử bán hàng của cửa hàng.</p>
-        </div>
+        <PageTitle
+          title="Quản lý Hóa đơn"
+          description="Tra cứu hóa đơn, kiểm tra thanh toán và theo dõi lịch sử bán hàng của cửa hàng."
+        />
         <button
           type="button"
           onClick={loadOrders}
@@ -516,7 +517,7 @@ export default function Orders() {
         <TablePagination currentPage={currentPage} totalItems={filteredOrders.length} pageSize={PAGE_SIZE} onPageChange={setCurrentPage} itemLabel="hóa đơn" ariaLabel="Phân trang hóa đơn" />
       </section>
 
-      <Modal isOpen={Boolean(selectedOrder)} onClose={() => setSelectedOrder(null)} title="Chi tiết đơn hàng">
+      <Modal isOpen={Boolean(selectedOrder)} onClose={() => setSelectedOrder(null)} title="Chi tiết đơn hàng" showCloseButton>
         {selectedOrder && (
           <div className="space-y-4">
             <div className="grid gap-3 rounded-lg bg-gray-50 p-4 text-sm md:grid-cols-2">
@@ -601,15 +602,8 @@ export default function Orders() {
               </div>
             )}
 
-            <div className="flex flex-col-reverse gap-2 border-t border-gray-200 pt-4 sm:flex-row sm:justify-end">
-              <button
-                type="button"
-                onClick={() => setSelectedOrder(null)}
-                className="h-10 rounded-md border border-gray-300 px-4 text-sm font-semibold text-gray-700 transition hover:bg-gray-50"
-              >
-                Đóng
-              </button>
-              {hasFullAccess && selectedOrder.status === 'completed' && (
+            {hasFullAccess && selectedOrder.status === 'completed' && (
+              <div className="flex flex-col-reverse gap-2 border-t border-gray-200 pt-4 sm:flex-row sm:justify-end">
                 <button
                   type="button"
                   onClick={() => openCancelOrder(selectedOrder)}
@@ -618,8 +612,8 @@ export default function Orders() {
                   <CircleX size={16} />
                   Hủy hóa đơn
                 </button>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         )}
       </Modal>

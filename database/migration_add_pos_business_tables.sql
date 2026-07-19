@@ -89,8 +89,7 @@ ALTER TABLE suppliers
   MODIFY COLUMN status ENUM('active','paused','inactive') NOT NULL DEFAULT 'active';
 
 INSERT IGNORE INTO roles (role_name, description) VALUES
-  ('Admin', 'Quản trị toàn bộ hệ thống'),
-  ('Quản lý', 'Quản lý hoạt động cửa hàng'),
+  ('Quản trị viên', 'Toàn quyền vận hành hệ thống'),
   ('Nhân viên bán hàng', 'Bán hàng và xử lý hóa đơn'),
   ('Nhân viên kho', 'Nhập hàng và quản lý tồn kho');
 INSERT IGNORE INTO brands (brand_name, description) VALUES

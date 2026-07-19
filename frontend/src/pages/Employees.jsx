@@ -1365,22 +1365,18 @@ export default function Employees() {
         isOpen={Boolean(selectedRevenueOrder)}
         onClose={() => setSelectedRevenueOrder(null)}
         title="Chi tiết hóa đơn"
+        showCloseButton
         maxWidth="max-w-5xl"
         headerActions={(
-          <>
-            <button
-              type="button"
-              onClick={exportRevenueOrderExcel}
-              disabled={!selectedRevenueOrder || Boolean(exportingRevenue)}
-              className="inline-flex h-10 items-center gap-2 border border-emerald-300 bg-white px-4 text-sm font-bold text-emerald-700 hover:bg-emerald-50 disabled:cursor-wait disabled:opacity-50"
-            >
-              {exportingRevenue === `order-${selectedRevenueOrder?.id}` ? <RefreshCw className="animate-spin" size={16} /> : <FileSpreadsheet size={16} />}
-              {exportingRevenue === `order-${selectedRevenueOrder?.id}` ? 'Đang xuất...' : 'Xuất Excel'}
-            </button>
-            <button type="button" onClick={() => setSelectedRevenueOrder(null)} disabled={Boolean(exportingRevenue)} className="inline-flex h-10 items-center gap-2 border border-[#69afd6] bg-white px-4 text-sm font-bold text-[#398fbd] hover:bg-sky-50 disabled:opacity-50">
-              Đóng
-            </button>
-          </>
+          <button
+            type="button"
+            onClick={exportRevenueOrderExcel}
+            disabled={!selectedRevenueOrder || Boolean(exportingRevenue)}
+            className="inline-flex h-10 items-center gap-2 border border-emerald-300 bg-white px-4 text-sm font-bold text-emerald-700 hover:bg-emerald-50 disabled:cursor-wait disabled:opacity-50"
+          >
+            {exportingRevenue === `order-${selectedRevenueOrder?.id}` ? <RefreshCw className="animate-spin" size={16} /> : <FileSpreadsheet size={16} />}
+            {exportingRevenue === `order-${selectedRevenueOrder?.id}` ? 'Đang xuất...' : 'Xuất Excel'}
+          </button>
         )}
       >
         {selectedRevenueOrder && (
@@ -1630,7 +1626,7 @@ export default function Employees() {
         )}
       </Modal>
 
-      <Modal isOpen={Boolean(viewingEmployee)} onClose={() => setViewingEmployee(null)} title="Chi tiết nhân viên">
+      <Modal isOpen={Boolean(viewingEmployee)} onClose={() => setViewingEmployee(null)} title="Chi tiết nhân viên" showCloseButton>
         {viewingEmployee && (
           <div className="space-y-4">
             <div className="flex items-center gap-4 rounded-lg bg-[#f4fcfe] p-4">

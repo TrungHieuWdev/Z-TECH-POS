@@ -1,0 +1,56 @@
+@startuml
+left to right direction
+skinparam linetype ortho
+skinparam nodesep 45
+skinparam ranksep 55
+
+actor "Quản trị viên" as QuanTriVien
+boundary "Tab nhận hàng" as TabNhapHang
+control "Purchase Order Route" as PurchaseRoute
+control "Purchase Order Controller" as PurchaseController
+control "Purchase Payment Service" as PaymentService
+database "MySQL" as CSDL
+
+QuanTriVien -> TabNhapHang : Chọn nhà cung cấp và nhập các dòng hàng
+TabNhapHang -> PurchaseRoute : POST /api/purchase-orders
+activate PurchaseRoute
+PurchaseRoute -> PurchaseRoute : Xác thực, kiểm tra toàn quyền
+và dữ liệu phiếu nhập
+alt Yêu cầu không hợp lệ
+  PurchaseRoute --> TabNhapHang : 4xx Thông báo lỗi
+else Yêu cầu hợp lệ
+  PurchaseRoute -> PurchaseController : create(req, res)
+  activate PurchaseController
+  PurchaseController -> CSDL : Bắt đầu giao dịch
+  PurchaseController -> CSDL : Khóa và kiểm tra nhà cung cấp
+  CSDL --> PurchaseController : Nhà cung cấp
+  alt Nhà cung cấp không hợp lệ
+    PurchaseController -> CSDL : Rollback
+    PurchaseController --> TabNhapHang : 400 Nhà cung cấp không hợp lệ
+  else Nhà cung cấp hợp lệ
+    PurchaseController -> CSDL : Tạo purchase_orders
+    CSDL --> PurchaseController : ID phiếu nhập
+    PurchaseController -> CSDL : Cập nhật mã phiếu PN-...
+    loop Mỗi dòng hàng
+      PurchaseController -> CSDL : Khóa sản phẩm
+      CSDL --> PurchaseController : Tồn hiện tại
+      alt Không tìm thấy sản phẩm
+        PurchaseController -> CSDL : Rollback
+        PurchaseController --> TabNhapHang : 404 Không tìm thấy sản phẩm
+      else Tìm thấy sản phẩm
+        PurchaseController -> CSDL : Tạo purchase_order_items
+        PurchaseController -> CSDL : Cộng tồn và cập nhật cost_price
+        PurchaseController -> CSDL : Tạo inventory_logs loại IMPORT
+      end
+    end
+    PurchaseController -> PaymentService : normalizePurchasePayment(...)
+    PaymentService --> PurchaseController : Tổng tiền và trạng thái thanh toán
+    PurchaseController -> CSDL : Cập nhật purchase_orders
+    PurchaseController -> CSDL : Commit
+    PurchaseController --> TabNhapHang : 201 Mã phiếu nhập
+    TabNhapHang --> QuanTriVien : Thông báo nhập kho thành công
+  end
+  deactivate PurchaseController
+end
+deactivate PurchaseRoute
+@enduml

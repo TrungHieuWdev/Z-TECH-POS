@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { aggregateOrderFixtures, fillDailySeries, fillHourlySeries, groupTransactionsByHour, percentChange, previousPeriod } from '../utils/revenueReportMath.js';
+import { aggregateOrderFixtures, calculateRevenueMetrics, fillDailySeries, fillHourlySeries, groupTransactionsByHour, percentChange, previousPeriod } from '../utils/revenueReportMath.js';
 import {
   validateAiReportHistoryId,
   validateAiReportHistoryQuery,
@@ -27,10 +27,48 @@ test('giảm giá và hoàn trả chỉ bị trừ đúng một lần', () => {
   assert.equal(metrics.netRevenue, 350000);
 });
 
+test('không coi dòng hàng bán thiếu giá vốn là 0', () => {
+  const metrics = calculateRevenueMetrics({
+    gross_revenue: 1000000,
+    discount: 0,
+    refunds: 0,
+    cost: null,
+    known_cost: 300000,
+    missing_cost_product_count: 1,
+    missing_cost_line_count: 1,
+    completed_orders: 1,
+    products_sold: 2
+  });
+
+  assert.equal(metrics.costDataComplete, false);
+  assert.equal(metrics.cost, null);
+  assert.equal(metrics.grossProfit, null);
+  assert.equal(metrics.knownCost, 300000);
+  assert.equal(metrics.missingCostProductCount, 1);
+});
+
+test('doanh thu thuần trừ giá vốn bằng lợi nhuận gộp khi đủ giá vốn', () => {
+  const metrics = calculateRevenueMetrics({
+    gross_revenue: 1000000,
+    discount: 100000,
+    refunds: 50000,
+    cost: 400000,
+    missing_cost_product_count: 0,
+    missing_cost_line_count: 0,
+    completed_orders: 1
+  });
+
+  assert.equal(metrics.netRevenue - metrics.cost, metrics.grossProfit);
+  assert.equal(metrics.costRatio, 47.1);
+  assert.equal(metrics.grossMargin, 52.9);
+});
+
 test('tính kỳ trước liền kề và phần trăm so sánh', () => {
   assert.deepEqual(previousPeriod('2026-07-08', '2026-07-14'), { from: '2026-07-01', to: '2026-07-07' });
   assert.equal(percentChange(120, 100), 20);
-  assert.equal(percentChange(0, 0), 0);
+  assert.equal(percentChange(0, 0), null);
+  assert.equal(percentChange(350, 100), 100);
+  assert.equal(percentChange(0, 100), -100);
 });
 
 test('điền nhóm ngày thiếu và nhóm doanh thu theo giờ', () => {

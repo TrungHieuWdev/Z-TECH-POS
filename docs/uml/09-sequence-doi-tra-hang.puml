@@ -1,0 +1,63 @@
+@startuml
+left to right direction
+skinparam linetype ortho
+skinparam nodesep 45
+skinparam ranksep 55
+
+actor "Quản trị viên" as QuanTriVien
+boundary "Trang bảo hành / đơn hàng" as GiaoDien
+control "Warranty Controller" as WarrantyController
+control "Order Controller" as OrderController
+database "MySQL" as CSDL
+
+alt Đổi sản phẩm bảo hành
+  QuanTriVien -> GiaoDien : Chọn phiếu bảo hành
+  opt Chưa tiếp nhận bảo hành
+    GiaoDien -> WarrantyController : POST /api/warranties/{orderItemId}/claims
+    activate WarrantyController
+    WarrantyController -> CSDL : Tìm warranties theo order_item_id
+    CSDL --> WarrantyController : Phiếu bảo hành
+    WarrantyController -> CSDL : Tạo warranty_claims(received)
+    WarrantyController -> CSDL : Cập nhật warranties.status = claimed
+    WarrantyController --> GiaoDien : 201 Yêu cầu bảo hành
+    deactivate WarrantyController
+  end
+  QuanTriVien -> GiaoDien : Nhập sản phẩm đổi và xác nhận
+  GiaoDien -> GiaoDien : adjustInventoryForExchange()
+  note right of GiaoDien
+    Source hiện tại chưa gọi API
+    và chưa thay đổi tồn kho.
+  end note
+  GiaoDien -> GiaoDien : Lưu trạng thái replaced và lịch sử trong state
+  GiaoDien --> QuanTriVien : Thông báo đã ghi nhận đổi sản phẩm
+else Trả hàng bằng hủy đơn
+  QuanTriVien -> GiaoDien : Chọn đơn và xác nhận hủy
+  GiaoDien -> OrderController : PUT /api/orders/{id}
+  activate OrderController
+  OrderController -> CSDL : Bắt đầu giao dịch và khóa đơn
+  CSDL --> OrderController : Đơn hàng
+  alt Không tìm thấy đơn
+    OrderController -> CSDL : Rollback
+    OrderController --> GiaoDien : 404 Không tìm thấy đơn
+  else Đơn đang completed
+    OrderController -> CSDL : Đọc order_items
+    loop Mỗi dòng hàng
+      OrderController -> CSDL : Khóa sản phẩm và cộng lại tồn
+      OrderController -> CSDL : Tạo inventory_logs loại CANCEL_ORDER
+    end
+    OrderController -> CSDL : Cập nhật payments = refunded
+    OrderController -> CSDL : Cập nhật warranties = void
+    opt Có khách hàng
+      OrderController -> CSDL : Hoàn tác loyalty_points
+    end
+    OrderController -> CSDL : Cập nhật orders = cancelled
+    OrderController -> CSDL : Commit
+    OrderController --> GiaoDien : 200 Đơn đã hủy
+    GiaoDien --> QuanTriVien : Hiển thị kết quả trả/hủy đơn
+  else Đơn đã cancelled
+    OrderController -> CSDL : Giữ trạng thái cancelled và commit
+    OrderController --> GiaoDien : 200 Đơn đã hủy
+  end
+  deactivate OrderController
+end
+@enduml

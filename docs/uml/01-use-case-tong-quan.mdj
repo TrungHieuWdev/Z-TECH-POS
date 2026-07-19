@@ -1,0 +1,109 @@
+{
+  "_type": "Project",
+  "_id": "P_ZTECH_POS_UC",
+  "name": "Z-TECH POS - Use Case tổng quát",
+  "ownedElements": [
+    {
+      "_type": "UMLModel",
+      "_id": "M_USE_CASE",
+      "_parent": { "$ref": "P_ZTECH_POS_UC" },
+      "name": "Mô hình Use Case",
+      "ownedElements": [
+        {
+          "_type": "UMLUseCaseDiagram",
+          "_id": "D_USE_CASE_TONG_QUAT",
+          "_parent": { "$ref": "M_USE_CASE" },
+          "name": "Use Case tổng quát Z-TECH POS",
+          "ownedViews": [
+            { "_type": "UMLUseCaseSubjectView", "_id": "V_SYSTEM", "_parent": { "$ref": "D_USE_CASE_TONG_QUAT" }, "model": { "$ref": "SYSTEM" }, "font": "Arial;13;0", "left": 190, "top": 35, "width": 1110, "height": 930, "fillColor": "#ffffff", "lineColor": "#555555" },
+
+            { "_type": "UMLAssociationView", "_id": "V_R_LOGIN", "_parent": { "$ref": "D_USE_CASE_TONG_QUAT" }, "model": { "$ref": "R_LOGIN" }, "tail": { "$ref": "V_EMPLOYEE" }, "head": { "$ref": "V_LOGIN" }, "points": "100:190;280:105" },
+            { "_type": "UMLAssociationView", "_id": "V_R_LOGOUT", "_parent": { "$ref": "D_USE_CASE_TONG_QUAT" }, "model": { "$ref": "R_LOGOUT" }, "tail": { "$ref": "V_EMPLOYEE" }, "head": { "$ref": "V_LOGOUT" }, "points": "100:200;560:105" },
+            { "_type": "UMLAssociationView", "_id": "V_R_SALE", "_parent": { "$ref": "D_USE_CASE_TONG_QUAT" }, "model": { "$ref": "R_SALE" }, "tail": { "$ref": "V_EMPLOYEE" }, "head": { "$ref": "V_SALE" }, "points": "100:210;380:205" },
+            { "_type": "UMLAssociationView", "_id": "V_R_CUSTOMER", "_parent": { "$ref": "D_USE_CASE_TONG_QUAT" }, "model": { "$ref": "R_CUSTOMER" }, "tail": { "$ref": "V_EMPLOYEE" }, "head": { "$ref": "V_CUSTOMER" }, "points": "100:220;300:300" },
+            { "_type": "UMLAssociationView", "_id": "V_R_INVOICE_VIEW", "_parent": { "$ref": "D_USE_CASE_TONG_QUAT" }, "model": { "$ref": "R_INVOICE_VIEW" }, "tail": { "$ref": "V_EMPLOYEE" }, "head": { "$ref": "V_INVOICE_VIEW" }, "points": "100:230;560:300" },
+            { "_type": "UMLAssociationView", "_id": "V_R_INVENTORY_VIEW", "_parent": { "$ref": "D_USE_CASE_TONG_QUAT" }, "model": { "$ref": "R_INVENTORY_VIEW" }, "tail": { "$ref": "V_EMPLOYEE" }, "head": { "$ref": "V_INVENTORY_VIEW" }, "points": "100:240;300:395" },
+            { "_type": "UMLAssociationView", "_id": "V_R_WARRANTY_LOOKUP", "_parent": { "$ref": "D_USE_CASE_TONG_QUAT" }, "model": { "$ref": "R_WARRANTY_LOOKUP" }, "tail": { "$ref": "V_EMPLOYEE" }, "head": { "$ref": "V_WARRANTY_LOOKUP" }, "points": "100:250;560:395" },
+            { "_type": "UMLAssociationView", "_id": "V_R_SHIFT_VIEW", "_parent": { "$ref": "D_USE_CASE_TONG_QUAT" }, "model": { "$ref": "R_SHIFT_VIEW" }, "tail": { "$ref": "V_EMPLOYEE" }, "head": { "$ref": "V_SHIFT_VIEW" }, "points": "100:260;820:395" },
+
+            { "_type": "UMLAssociationView", "_id": "V_R_GOODS", "_parent": { "$ref": "D_USE_CASE_TONG_QUAT" }, "model": { "$ref": "R_GOODS" }, "tail": { "$ref": "V_ADMIN" }, "head": { "$ref": "V_GOODS" }, "points": "1370:685;350:535" },
+            { "_type": "UMLAssociationView", "_id": "V_R_PURCHASE", "_parent": { "$ref": "D_USE_CASE_TONG_QUAT" }, "model": { "$ref": "R_PURCHASE" }, "tail": { "$ref": "V_ADMIN" }, "head": { "$ref": "V_PURCHASE" }, "points": "1370:695;690:535" },
+            { "_type": "UMLAssociationView", "_id": "V_R_STOCK", "_parent": { "$ref": "D_USE_CASE_TONG_QUAT" }, "model": { "$ref": "R_STOCK" }, "tail": { "$ref": "V_ADMIN" }, "head": { "$ref": "V_STOCK" }, "points": "1370:705;1010:535" },
+            { "_type": "UMLAssociationView", "_id": "V_R_INVOICE_MANAGE", "_parent": { "$ref": "D_USE_CASE_TONG_QUAT" }, "model": { "$ref": "R_INVOICE_MANAGE" }, "tail": { "$ref": "V_ADMIN" }, "head": { "$ref": "V_INVOICE_MANAGE" }, "points": "1370:715;350:650" },
+            { "_type": "UMLAssociationView", "_id": "V_R_WARRANTY_MANAGE", "_parent": { "$ref": "D_USE_CASE_TONG_QUAT" }, "model": { "$ref": "R_WARRANTY_MANAGE" }, "tail": { "$ref": "V_ADMIN" }, "head": { "$ref": "V_WARRANTY_MANAGE" }, "points": "1370:725;690:650" },
+            { "_type": "UMLAssociationView", "_id": "V_R_STAFF", "_parent": { "$ref": "D_USE_CASE_TONG_QUAT" }, "model": { "$ref": "R_STAFF" }, "tail": { "$ref": "V_ADMIN" }, "head": { "$ref": "V_STAFF" }, "points": "1370:735;1010:650" },
+            { "_type": "UMLAssociationView", "_id": "V_R_REPORT", "_parent": { "$ref": "D_USE_CASE_TONG_QUAT" }, "model": { "$ref": "R_REPORT" }, "tail": { "$ref": "V_ADMIN" }, "head": { "$ref": "V_REPORT" }, "points": "1370:745;350:765" },
+            { "_type": "UMLAssociationView", "_id": "V_R_LOG", "_parent": { "$ref": "D_USE_CASE_TONG_QUAT" }, "model": { "$ref": "R_LOG" }, "tail": { "$ref": "V_ADMIN" }, "head": { "$ref": "V_LOG" }, "points": "1370:755;690:765" },
+            { "_type": "UMLAssociationView", "_id": "V_R_SETTINGS", "_parent": { "$ref": "D_USE_CASE_TONG_QUAT" }, "model": { "$ref": "R_SETTINGS" }, "tail": { "$ref": "V_ADMIN" }, "head": { "$ref": "V_SETTINGS" }, "points": "1370:765;1010:765" },
+            { "_type": "UMLGeneralizationView", "_id": "V_R_ADMIN_GENERALIZATION", "_parent": { "$ref": "D_USE_CASE_TONG_QUAT" }, "model": { "$ref": "R_ADMIN_GENERALIZATION" }, "tail": { "$ref": "V_ADMIN" }, "head": { "$ref": "V_EMPLOYEE" }, "points": "1405:650;1405:470;100:470;100:285" },
+
+            { "_type": "UMLActorView", "_id": "V_EMPLOYEE", "_parent": { "$ref": "D_USE_CASE_TONG_QUAT" }, "model": { "$ref": "A_EMPLOYEE" }, "font": "Arial;13;0", "left": 45, "top": 155, "width": 110, "height": 130 },
+            { "_type": "UMLActorView", "_id": "V_ADMIN", "_parent": { "$ref": "D_USE_CASE_TONG_QUAT" }, "model": { "$ref": "A_ADMIN" }, "font": "Arial;13;0", "left": 1350, "top": 650, "width": 120, "height": 130 },
+
+            { "_type": "UMLUseCaseView", "_id": "V_LOGIN", "_parent": { "$ref": "D_USE_CASE_TONG_QUAT" }, "model": { "$ref": "UC_LOGIN" }, "font": "Arial;13;0", "left": 245, "top": 75, "width": 190, "height": 60 },
+            { "_type": "UMLUseCaseView", "_id": "V_LOGOUT", "_parent": { "$ref": "D_USE_CASE_TONG_QUAT" }, "model": { "$ref": "UC_LOGOUT" }, "font": "Arial;13;0", "left": 525, "top": 75, "width": 190, "height": 60 },
+            { "_type": "UMLUseCaseView", "_id": "V_SALE", "_parent": { "$ref": "D_USE_CASE_TONG_QUAT" }, "model": { "$ref": "UC_SALE" }, "font": "Arial;13;0", "left": 345, "top": 175, "width": 240, "height": 65 },
+            { "_type": "UMLUseCaseView", "_id": "V_CUSTOMER", "_parent": { "$ref": "D_USE_CASE_TONG_QUAT" }, "model": { "$ref": "UC_CUSTOMER" }, "font": "Arial;13;0", "left": 250, "top": 270, "width": 230, "height": 65 },
+            { "_type": "UMLUseCaseView", "_id": "V_INVOICE_VIEW", "_parent": { "$ref": "D_USE_CASE_TONG_QUAT" }, "model": { "$ref": "UC_INVOICE_VIEW" }, "font": "Arial;13;0", "left": 525, "top": 270, "width": 210, "height": 65 },
+            { "_type": "UMLUseCaseView", "_id": "V_INVENTORY_VIEW", "_parent": { "$ref": "D_USE_CASE_TONG_QUAT" }, "model": { "$ref": "UC_INVENTORY_VIEW" }, "font": "Arial;13;0", "left": 250, "top": 365, "width": 230, "height": 65 },
+            { "_type": "UMLUseCaseView", "_id": "V_WARRANTY_LOOKUP", "_parent": { "$ref": "D_USE_CASE_TONG_QUAT" }, "model": { "$ref": "UC_WARRANTY_LOOKUP" }, "font": "Arial;13;0", "left": 525, "top": 365, "width": 230, "height": 65 },
+            { "_type": "UMLUseCaseView", "_id": "V_SHIFT_VIEW", "_parent": { "$ref": "D_USE_CASE_TONG_QUAT" }, "model": { "$ref": "UC_SHIFT_VIEW" }, "font": "Arial;13;0", "left": 800, "top": 365, "width": 230, "height": 65 },
+
+            { "_type": "UMLUseCaseView", "_id": "V_GOODS", "_parent": { "$ref": "D_USE_CASE_TONG_QUAT" }, "model": { "$ref": "UC_GOODS" }, "font": "Arial;13;0", "left": 250, "top": 495, "width": 280, "height": 80 },
+            { "_type": "UMLUseCaseView", "_id": "V_PURCHASE", "_parent": { "$ref": "D_USE_CASE_TONG_QUAT" }, "model": { "$ref": "UC_PURCHASE" }, "font": "Arial;13;0", "left": 600, "top": 495, "width": 280, "height": 80 },
+            { "_type": "UMLUseCaseView", "_id": "V_STOCK", "_parent": { "$ref": "D_USE_CASE_TONG_QUAT" }, "model": { "$ref": "UC_STOCK" }, "font": "Arial;13;0", "left": 940, "top": 495, "width": 280, "height": 80 },
+            { "_type": "UMLUseCaseView", "_id": "V_INVOICE_MANAGE", "_parent": { "$ref": "D_USE_CASE_TONG_QUAT" }, "model": { "$ref": "UC_INVOICE_MANAGE" }, "font": "Arial;13;0", "left": 250, "top": 615, "width": 280, "height": 70 },
+            { "_type": "UMLUseCaseView", "_id": "V_WARRANTY_MANAGE", "_parent": { "$ref": "D_USE_CASE_TONG_QUAT" }, "model": { "$ref": "UC_WARRANTY_MANAGE" }, "font": "Arial;13;0", "left": 600, "top": 615, "width": 280, "height": 70 },
+            { "_type": "UMLUseCaseView", "_id": "V_STAFF", "_parent": { "$ref": "D_USE_CASE_TONG_QUAT" }, "model": { "$ref": "UC_STAFF" }, "font": "Arial;13;0", "left": 940, "top": 615, "width": 280, "height": 70 },
+            { "_type": "UMLUseCaseView", "_id": "V_REPORT", "_parent": { "$ref": "D_USE_CASE_TONG_QUAT" }, "model": { "$ref": "UC_REPORT" }, "font": "Arial;13;0", "left": 250, "top": 735, "width": 280, "height": 70 },
+            { "_type": "UMLUseCaseView", "_id": "V_LOG", "_parent": { "$ref": "D_USE_CASE_TONG_QUAT" }, "model": { "$ref": "UC_LOG" }, "font": "Arial;13;0", "left": 600, "top": 735, "width": 280, "height": 70 },
+            { "_type": "UMLUseCaseView", "_id": "V_SETTINGS", "_parent": { "$ref": "D_USE_CASE_TONG_QUAT" }, "model": { "$ref": "UC_SETTINGS" }, "font": "Arial;13;0", "left": 940, "top": 735, "width": 280, "height": 70 }
+          ]
+        },
+
+        { "_type": "UMLUseCaseSubject", "_id": "SYSTEM", "_parent": { "$ref": "M_USE_CASE" }, "name": "Hệ thống Z-TECH POS" },
+        { "_type": "UMLActor", "_id": "A_EMPLOYEE", "_parent": { "$ref": "M_USE_CASE" }, "name": "Nhân viên" },
+        { "_type": "UMLActor", "_id": "A_ADMIN", "_parent": { "$ref": "M_USE_CASE" }, "name": "Quản trị viên" },
+
+        { "_type": "UMLUseCase", "_id": "UC_LOGIN", "_parent": { "$ref": "M_USE_CASE" }, "name": "Đăng nhập" },
+        { "_type": "UMLUseCase", "_id": "UC_LOGOUT", "_parent": { "$ref": "M_USE_CASE" }, "name": "Đăng xuất" },
+        { "_type": "UMLUseCase", "_id": "UC_SALE", "_parent": { "$ref": "M_USE_CASE" }, "name": "Lập hóa đơn POS" },
+        { "_type": "UMLUseCase", "_id": "UC_CUSTOMER", "_parent": { "$ref": "M_USE_CASE" }, "name": "Quản lý khách hàng" },
+        { "_type": "UMLUseCase", "_id": "UC_INVOICE_VIEW", "_parent": { "$ref": "M_USE_CASE" }, "name": "Xem hóa đơn" },
+        { "_type": "UMLUseCase", "_id": "UC_INVENTORY_VIEW", "_parent": { "$ref": "M_USE_CASE" }, "name": "Theo dõi kho hàng" },
+        { "_type": "UMLUseCase", "_id": "UC_WARRANTY_LOOKUP", "_parent": { "$ref": "M_USE_CASE" }, "name": "Tra cứu bảo hành" },
+        { "_type": "UMLUseCase", "_id": "UC_SHIFT_VIEW", "_parent": { "$ref": "M_USE_CASE" }, "name": "Xem ca làm cá nhân" },
+        { "_type": "UMLUseCase", "_id": "UC_GOODS", "_parent": { "$ref": "M_USE_CASE" }, "name": "Quản lý sản phẩm, danh mục và khuyến mãi" },
+        { "_type": "UMLUseCase", "_id": "UC_PURCHASE", "_parent": { "$ref": "M_USE_CASE" }, "name": "Nhập hàng và quản lý nhà cung cấp" },
+        { "_type": "UMLUseCase", "_id": "UC_STOCK", "_parent": { "$ref": "M_USE_CASE" }, "name": "Kiểm kê và điều chỉnh tồn kho" },
+        { "_type": "UMLUseCase", "_id": "UC_INVOICE_MANAGE", "_parent": { "$ref": "M_USE_CASE" }, "name": "Quản lý hóa đơn" },
+        { "_type": "UMLUseCase", "_id": "UC_WARRANTY_MANAGE", "_parent": { "$ref": "M_USE_CASE" }, "name": "Quản lý bảo hành" },
+        { "_type": "UMLUseCase", "_id": "UC_STAFF", "_parent": { "$ref": "M_USE_CASE" }, "name": "Quản lý nhân viên và ca làm" },
+        { "_type": "UMLUseCase", "_id": "UC_REPORT", "_parent": { "$ref": "M_USE_CASE" }, "name": "Phân tích báo cáo kinh doanh" },
+        { "_type": "UMLUseCase", "_id": "UC_LOG", "_parent": { "$ref": "M_USE_CASE" }, "name": "Xem nhật ký hoạt động" },
+        { "_type": "UMLUseCase", "_id": "UC_SETTINGS", "_parent": { "$ref": "M_USE_CASE" }, "name": "Quản lý cài đặt hệ thống" },
+
+        { "_type": "UMLGeneralization", "_id": "R_ADMIN_GENERALIZATION", "_parent": { "$ref": "M_USE_CASE" }, "source": { "$ref": "A_ADMIN" }, "target": { "$ref": "A_EMPLOYEE" } },
+
+        { "_type": "UMLAssociation", "_id": "R_LOGIN", "_parent": { "$ref": "M_USE_CASE" }, "end1": { "_type": "UMLAssociationEnd", "_id": "R_LOGIN_E1", "_parent": { "$ref": "R_LOGIN" }, "reference": { "$ref": "A_EMPLOYEE" } }, "end2": { "_type": "UMLAssociationEnd", "_id": "R_LOGIN_E2", "_parent": { "$ref": "R_LOGIN" }, "reference": { "$ref": "UC_LOGIN" } } },
+        { "_type": "UMLAssociation", "_id": "R_LOGOUT", "_parent": { "$ref": "M_USE_CASE" }, "end1": { "_type": "UMLAssociationEnd", "_id": "R_LOGOUT_E1", "_parent": { "$ref": "R_LOGOUT" }, "reference": { "$ref": "A_EMPLOYEE" } }, "end2": { "_type": "UMLAssociationEnd", "_id": "R_LOGOUT_E2", "_parent": { "$ref": "R_LOGOUT" }, "reference": { "$ref": "UC_LOGOUT" } } },
+        { "_type": "UMLAssociation", "_id": "R_SALE", "_parent": { "$ref": "M_USE_CASE" }, "end1": { "_type": "UMLAssociationEnd", "_id": "R_SALE_E1", "_parent": { "$ref": "R_SALE" }, "reference": { "$ref": "A_EMPLOYEE" } }, "end2": { "_type": "UMLAssociationEnd", "_id": "R_SALE_E2", "_parent": { "$ref": "R_SALE" }, "reference": { "$ref": "UC_SALE" } } },
+        { "_type": "UMLAssociation", "_id": "R_CUSTOMER", "_parent": { "$ref": "M_USE_CASE" }, "end1": { "_type": "UMLAssociationEnd", "_id": "R_CUSTOMER_E1", "_parent": { "$ref": "R_CUSTOMER" }, "reference": { "$ref": "A_EMPLOYEE" } }, "end2": { "_type": "UMLAssociationEnd", "_id": "R_CUSTOMER_E2", "_parent": { "$ref": "R_CUSTOMER" }, "reference": { "$ref": "UC_CUSTOMER" } } },
+        { "_type": "UMLAssociation", "_id": "R_INVOICE_VIEW", "_parent": { "$ref": "M_USE_CASE" }, "end1": { "_type": "UMLAssociationEnd", "_id": "R_INVOICE_VIEW_E1", "_parent": { "$ref": "R_INVOICE_VIEW" }, "reference": { "$ref": "A_EMPLOYEE" } }, "end2": { "_type": "UMLAssociationEnd", "_id": "R_INVOICE_VIEW_E2", "_parent": { "$ref": "R_INVOICE_VIEW" }, "reference": { "$ref": "UC_INVOICE_VIEW" } } },
+        { "_type": "UMLAssociation", "_id": "R_INVENTORY_VIEW", "_parent": { "$ref": "M_USE_CASE" }, "end1": { "_type": "UMLAssociationEnd", "_id": "R_INVENTORY_VIEW_E1", "_parent": { "$ref": "R_INVENTORY_VIEW" }, "reference": { "$ref": "A_EMPLOYEE" } }, "end2": { "_type": "UMLAssociationEnd", "_id": "R_INVENTORY_VIEW_E2", "_parent": { "$ref": "R_INVENTORY_VIEW" }, "reference": { "$ref": "UC_INVENTORY_VIEW" } } },
+        { "_type": "UMLAssociation", "_id": "R_WARRANTY_LOOKUP", "_parent": { "$ref": "M_USE_CASE" }, "end1": { "_type": "UMLAssociationEnd", "_id": "R_WARRANTY_LOOKUP_E1", "_parent": { "$ref": "R_WARRANTY_LOOKUP" }, "reference": { "$ref": "A_EMPLOYEE" } }, "end2": { "_type": "UMLAssociationEnd", "_id": "R_WARRANTY_LOOKUP_E2", "_parent": { "$ref": "R_WARRANTY_LOOKUP" }, "reference": { "$ref": "UC_WARRANTY_LOOKUP" } } },
+        { "_type": "UMLAssociation", "_id": "R_SHIFT_VIEW", "_parent": { "$ref": "M_USE_CASE" }, "end1": { "_type": "UMLAssociationEnd", "_id": "R_SHIFT_VIEW_E1", "_parent": { "$ref": "R_SHIFT_VIEW" }, "reference": { "$ref": "A_EMPLOYEE" } }, "end2": { "_type": "UMLAssociationEnd", "_id": "R_SHIFT_VIEW_E2", "_parent": { "$ref": "R_SHIFT_VIEW" }, "reference": { "$ref": "UC_SHIFT_VIEW" } } },
+
+        { "_type": "UMLAssociation", "_id": "R_GOODS", "_parent": { "$ref": "M_USE_CASE" }, "end1": { "_type": "UMLAssociationEnd", "_id": "R_GOODS_E1", "_parent": { "$ref": "R_GOODS" }, "reference": { "$ref": "A_ADMIN" } }, "end2": { "_type": "UMLAssociationEnd", "_id": "R_GOODS_E2", "_parent": { "$ref": "R_GOODS" }, "reference": { "$ref": "UC_GOODS" } } },
+        { "_type": "UMLAssociation", "_id": "R_PURCHASE", "_parent": { "$ref": "M_USE_CASE" }, "end1": { "_type": "UMLAssociationEnd", "_id": "R_PURCHASE_E1", "_parent": { "$ref": "R_PURCHASE" }, "reference": { "$ref": "A_ADMIN" } }, "end2": { "_type": "UMLAssociationEnd", "_id": "R_PURCHASE_E2", "_parent": { "$ref": "R_PURCHASE" }, "reference": { "$ref": "UC_PURCHASE" } } },
+        { "_type": "UMLAssociation", "_id": "R_STOCK", "_parent": { "$ref": "M_USE_CASE" }, "end1": { "_type": "UMLAssociationEnd", "_id": "R_STOCK_E1", "_parent": { "$ref": "R_STOCK" }, "reference": { "$ref": "A_ADMIN" } }, "end2": { "_type": "UMLAssociationEnd", "_id": "R_STOCK_E2", "_parent": { "$ref": "R_STOCK" }, "reference": { "$ref": "UC_STOCK" } } },
+        { "_type": "UMLAssociation", "_id": "R_INVOICE_MANAGE", "_parent": { "$ref": "M_USE_CASE" }, "end1": { "_type": "UMLAssociationEnd", "_id": "R_INVOICE_MANAGE_E1", "_parent": { "$ref": "R_INVOICE_MANAGE" }, "reference": { "$ref": "A_ADMIN" } }, "end2": { "_type": "UMLAssociationEnd", "_id": "R_INVOICE_MANAGE_E2", "_parent": { "$ref": "R_INVOICE_MANAGE" }, "reference": { "$ref": "UC_INVOICE_MANAGE" } } },
+        { "_type": "UMLAssociation", "_id": "R_WARRANTY_MANAGE", "_parent": { "$ref": "M_USE_CASE" }, "end1": { "_type": "UMLAssociationEnd", "_id": "R_WARRANTY_MANAGE_E1", "_parent": { "$ref": "R_WARRANTY_MANAGE" }, "reference": { "$ref": "A_ADMIN" } }, "end2": { "_type": "UMLAssociationEnd", "_id": "R_WARRANTY_MANAGE_E2", "_parent": { "$ref": "R_WARRANTY_MANAGE" }, "reference": { "$ref": "UC_WARRANTY_MANAGE" } } },
+        { "_type": "UMLAssociation", "_id": "R_STAFF", "_parent": { "$ref": "M_USE_CASE" }, "end1": { "_type": "UMLAssociationEnd", "_id": "R_STAFF_E1", "_parent": { "$ref": "R_STAFF" }, "reference": { "$ref": "A_ADMIN" } }, "end2": { "_type": "UMLAssociationEnd", "_id": "R_STAFF_E2", "_parent": { "$ref": "R_STAFF" }, "reference": { "$ref": "UC_STAFF" } } },
+        { "_type": "UMLAssociation", "_id": "R_REPORT", "_parent": { "$ref": "M_USE_CASE" }, "end1": { "_type": "UMLAssociationEnd", "_id": "R_REPORT_E1", "_parent": { "$ref": "R_REPORT" }, "reference": { "$ref": "A_ADMIN" } }, "end2": { "_type": "UMLAssociationEnd", "_id": "R_REPORT_E2", "_parent": { "$ref": "R_REPORT" }, "reference": { "$ref": "UC_REPORT" } } },
+        { "_type": "UMLAssociation", "_id": "R_LOG", "_parent": { "$ref": "M_USE_CASE" }, "end1": { "_type": "UMLAssociationEnd", "_id": "R_LOG_E1", "_parent": { "$ref": "R_LOG" }, "reference": { "$ref": "A_ADMIN" } }, "end2": { "_type": "UMLAssociationEnd", "_id": "R_LOG_E2", "_parent": { "$ref": "R_LOG" }, "reference": { "$ref": "UC_LOG" } } },
+        { "_type": "UMLAssociation", "_id": "R_SETTINGS", "_parent": { "$ref": "M_USE_CASE" }, "end1": { "_type": "UMLAssociationEnd", "_id": "R_SETTINGS_E1", "_parent": { "$ref": "R_SETTINGS" }, "reference": { "$ref": "A_ADMIN" } }, "end2": { "_type": "UMLAssociationEnd", "_id": "R_SETTINGS_E2", "_parent": { "$ref": "R_SETTINGS" }, "reference": { "$ref": "UC_SETTINGS" } } }
+      ]
+    }
+  ]
+}

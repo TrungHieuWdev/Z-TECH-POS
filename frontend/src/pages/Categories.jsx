@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import api from '../api/axios';
 import KpiCard from '../components/KpiCard';
+import PageTitle from '../components/PageTitle';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import TablePagination from '../components/TablePagination';
@@ -211,12 +212,10 @@ export default function Categories() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-extrabold text-gray-950">Danh mục sản phẩm</h1>
-          <p className="mt-1 text-sm font-medium text-gray-500">
-            Sắp xếp sản phẩm theo từng nhóm để dễ tìm kiếm, quản lý kho và theo dõi báo cáo bán hàng.
-          </p>
-        </div>
+        <PageTitle
+          title="Quản lý Danh mục"
+          description="Sắp xếp sản phẩm theo từng nhóm để dễ tìm kiếm, quản lý kho và theo dõi báo cáo bán hàng."
+        />
       </div>
 
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">

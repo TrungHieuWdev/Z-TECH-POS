@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import api from '../api/axios';
 import KpiCard from '../components/KpiCard';
+import PageTitle from '../components/PageTitle';
 import Modal from '../components/Modal';
 import TablePagination from '../components/TablePagination';
 import { formatCurrency, formatDate } from '../utils/format';
@@ -142,7 +143,10 @@ export default function Customers() {
   return (
     <div className="space-y-5">
       <header className="flex flex-wrap items-start justify-between gap-4">
-        <div><h1 className="text-2xl font-extrabold text-gray-950">Khách hàng</h1><p className="mt-1 text-sm font-medium text-gray-500">Lưu thông tin khách hàng, theo dõi điểm tích lũy và xem lại lịch sử mua hàng.</p></div>
+        <PageTitle
+          title="Quản lý Khách hàng"
+          description="Lưu thông tin khách hàng, theo dõi điểm tích lũy và xem lại lịch sử mua hàng."
+        />
         <button type="button" onClick={openCreate} className="flex items-center gap-2 bg-[#69afd6] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#579fc8]"><Plus size={18} /> Thêm khách hàng</button>
       </header>
 
@@ -198,7 +202,7 @@ export default function Customers() {
         </form>
       </Modal>
 
-      <Modal isOpen={detailsOpen} onClose={() => setDetailsOpen(false)} title="Chi tiết khách hàng" maxWidth="max-w-5xl">
+      <Modal isOpen={detailsOpen} onClose={() => setDetailsOpen(false)} title="Chi tiết khách hàng" maxWidth="max-w-5xl" showCloseButton>
         {details && <div className="space-y-5">
           <div className="grid gap-4 border border-gray-200 bg-gray-50 p-4 md:grid-cols-[1.4fr_repeat(4,1fr)]">
             <div><p className="text-lg font-bold text-gray-950">{details.customer.name}</p><p className="mt-1 text-sm text-gray-600">{details.customer.phone}</p><p className="mt-1 text-xs text-gray-500">{details.customer.email || 'Chưa có email'} · {details.customer.address || 'Chưa có địa chỉ'}</p></div>

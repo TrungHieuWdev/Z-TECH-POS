@@ -19,6 +19,8 @@ async function run() {
   await addColumnIfMissing('users', 'status', "ENUM('active','inactive') NOT NULL DEFAULT 'active' AFTER role");
   await addColumnIfMissing('users', 'note', 'TEXT NULL AFTER status');
   await addColumnIfMissing('users', 'last_login_at', 'DATETIME NULL AFTER note');
+  await addColumnIfMissing('users', 'token_version', 'INT UNSIGNED NOT NULL DEFAULT 0 AFTER last_login_at');
+  await addColumnIfMissing('users', 'password_changed_at', 'DATETIME NULL AFTER token_version');
   await query("ALTER TABLE users MODIFY role ENUM('owner', 'manager', 'employee', 'admin', 'cashier', 'warehouse') DEFAULT 'employee'");
 
   await addColumnIfMissing('orders', 'vat_rate', 'DECIMAL(5,2) NOT NULL DEFAULT 0 AFTER points_earned');

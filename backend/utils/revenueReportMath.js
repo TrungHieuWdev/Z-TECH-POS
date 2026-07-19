@@ -1,10 +1,12 @@
 export const money = (value) => Math.round(Number(value || 0));
 
 export function percentChange(current, previous) {
+  if (current == null || previous == null) return null;
   const currentValue = money(current);
   const previousValue = money(previous);
-  if (previousValue === 0) return currentValue === 0 ? 0 : 100;
-  return Number((((currentValue - previousValue) / Math.abs(previousValue)) * 100).toFixed(1));
+  if (previousValue === 0) return null;
+  const percentage = ((currentValue - previousValue) / Math.abs(previousValue)) * 100;
+  return Number(Math.max(-100, Math.min(100, percentage)).toFixed(1));
 }
 
 export function previousPeriod(from, to) {
@@ -25,11 +27,19 @@ export function calculateRevenueMetrics(row = {}) {
   const grossRevenue = money(row.grossRevenue ?? row.gross_revenue);
   const discount = money(row.discount);
   const refunds = money(row.refunds);
-  const cost = money(row.cost);
+  const missingCostProductCount = Number(row.missingCostProductCount ?? row.missing_cost_product_count ?? 0);
+  const missingCostLineCount = Number(row.missingCostLineCount ?? row.missing_cost_line_count ?? 0);
+  const costDataComplete = missingCostLineCount === 0;
+  const cost = costDataComplete && row.cost != null ? money(row.cost) : null;
+  const knownCost = money(row.knownCost ?? row.known_cost);
   const netRevenue = grossRevenue - discount - refunds;
-  const grossProfit = netRevenue - cost;
+  const grossProfit = cost == null ? null : netRevenue - cost;
   return {
-    grossRevenue, discount, refunds, netRevenue, cost, grossProfit,
+    grossRevenue, discount, refunds, netRevenue, cost, knownCost, grossProfit,
+    costDataComplete, missingCostProductCount, missingCostLineCount,
+    productsSold: Number(row.productsSold ?? row.products_sold ?? 0),
+    costRatio: cost != null && netRevenue > 0 ? Number((cost / netRevenue * 100).toFixed(1)) : null,
+    grossMargin: grossProfit != null && netRevenue > 0 ? Number((grossProfit / netRevenue * 100).toFixed(1)) : null,
     completedOrders: Number(row.completedOrders ?? row.completed_orders ?? 0),
     averageOrderValue: Number(row.completedOrders ?? row.completed_orders ?? 0) > 0
       ? money(netRevenue / Number(row.completedOrders ?? row.completed_orders)) : 0
@@ -68,7 +78,8 @@ export function fillDailySeries(rows, from, to) {
     result.push({
       date: key,
       netRevenue: money(row.netRevenue ?? row.net_revenue),
-      grossProfit: money(row.grossProfit ?? row.gross_profit)
+      grossProfit: (row.grossProfit ?? row.gross_profit) == null && byDate.has(key)
+        ? null : money(row.grossProfit ?? row.gross_profit)
     });
   }
   return result;
@@ -83,7 +94,8 @@ export function fillHourlySeries(rows = [], endHour = 23) {
     return {
       label: `${String(hour).padStart(2, '0')}:00`,
       netRevenue: money(row.netRevenue ?? row.net_revenue),
-      grossProfit: money(row.grossProfit ?? row.gross_profit)
+      grossProfit: (row.grossProfit ?? row.gross_profit) == null && byHour.has(hour)
+        ? null : money(row.grossProfit ?? row.gross_profit)
     };
   });
 }

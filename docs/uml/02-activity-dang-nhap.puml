@@ -1,0 +1,52 @@
+@startuml
+left to right direction
+skinparam linetype ortho
+skinparam nodesep 45
+skinparam ranksep 55
+
+|Người dùng|
+start
+:Nhập mã nhân viên/email và mật khẩu;
+:Gửi yêu cầu đăng nhập;
+
+|Hệ thống|
+:Kiểm tra dữ liệu đầu vào;
+if (Dữ liệu hợp lệ?) then (Có)
+  :Tìm tài khoản theo mã nhân viên hoặc email;
+  if (Tìm thấy tài khoản?) then (Có)
+    if (Tài khoản đang hoạt động?) then (Có)
+      :So sánh mật khẩu đã mã hóa;
+      if (Mật khẩu đúng?) then (Có)
+        if (Là quản trị viên?) then (Có)
+          :Tạo JWT;
+        else (Không)
+          :Kiểm tra ca làm đang hoạt động;
+          if (Có ca làm đang hoạt động?) then (Có)
+            :Tạo JWT;
+          else (Không)
+            :Thông báo quản lý chưa mở ca;
+            stop
+          endif
+        endif
+        :Cập nhật lần đăng nhập cuối;
+        :Trả token và thông tin người dùng;
+        |Người dùng|
+        :Truy cập màn hình theo quyền;
+        stop
+      else (Không)
+        :Thông báo thông tin đăng nhập sai;
+        stop
+      endif
+    else (Không)
+      :Thông báo tài khoản bị khóa;
+      stop
+    endif
+  else (Không)
+    :Thông báo thông tin đăng nhập sai;
+    stop
+  endif
+else (Không)
+  :Thông báo dữ liệu đăng nhập không hợp lệ;
+  stop
+endif
+@enduml

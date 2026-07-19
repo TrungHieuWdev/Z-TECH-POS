@@ -1,0 +1,52 @@
+@startuml
+left to right direction
+skinparam linetype ortho
+skinparam nodesep 45
+skinparam ranksep 55
+
+actor "Người dùng" as NguoiDung
+boundary "Trang đăng nhập" as TrangDangNhap
+control "Auth Route / Middleware" as AuthRoute
+control "Auth Controller" as AuthController
+control "Shift Service" as ShiftService
+database "MySQL" as CSDL
+
+NguoiDung -> TrangDangNhap : Nhập mã nhân viên/email và mật khẩu
+TrangDangNhap -> AuthRoute : POST /api/auth/login
+activate AuthRoute
+AuthRoute -> AuthRoute : Giới hạn tần suất và kiểm tra đầu vào
+alt Dữ liệu không hợp lệ
+  AuthRoute --> TrangDangNhap : 400 Thông tin không hợp lệ
+else Dữ liệu hợp lệ
+  AuthRoute -> AuthController : login(req, res)
+  activate AuthController
+  AuthController -> CSDL : Tìm user theo employee_code hoặc email
+  CSDL --> AuthController : Thông tin tài khoản
+  alt Không tìm thấy hoặc sai mật khẩu
+    AuthController --> TrangDangNhap : 401 Thông tin đăng nhập sai
+  else Tài khoản bị khóa
+    AuthController --> TrangDangNhap : 403 Tài khoản bị khóa
+  else Tài khoản hợp lệ
+    AuthController -> AuthController : bcrypt.compare()
+    alt Không phải quản trị viên
+      AuthController -> ShiftService : hasActiveShift(user)
+      ShiftService -> CSDL : Đọc ca làm hiện tại
+      CSDL --> ShiftService : Trạng thái ca
+      ShiftService --> AuthController : Có/không có ca hoạt động
+      alt Không có ca hoạt động
+        AuthController --> TrangDangNhap : 403 Quản lý chưa mở ca
+      else Có ca hoạt động
+        AuthController -> AuthController : Ký JWT
+      end
+    else Là quản trị viên
+      AuthController -> AuthController : Ký JWT
+    end
+    AuthController -> CSDL : Cập nhật last_login_at
+    CSDL --> AuthController : Kết quả cập nhật
+    AuthController --> TrangDangNhap : 200 token và user
+    TrangDangNhap --> NguoiDung : Chuyển tới màn hình theo quyền
+  end
+  deactivate AuthController
+end
+deactivate AuthRoute
+@enduml

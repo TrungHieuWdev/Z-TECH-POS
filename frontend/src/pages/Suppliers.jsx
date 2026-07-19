@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
+import PageTitle from '../components/PageTitle';
 import KpiCard from '../components/KpiCard';
 import TablePagination from '../components/TablePagination';
 import api from '../api/axios';
@@ -380,15 +381,10 @@ export default function Suppliers() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-4 border-b border-[#d7eef3] pb-5 lg:flex-row lg:items-center">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-extrabold text-gray-950">Nhà cung cấp</h1>
-            <span className="grid h-7 w-7 place-items-center rounded-md bg-[#e8f8fb] text-[#2e9db3]"><SlidersHorizontal size={15} /></span>
-          </div>
-          <p className="mt-1 text-sm font-medium text-gray-500">
-            Quản lý thông tin đối tác cung ứng hàng hóa cho hệ thống cửa hàng.
-          </p>
-        </div>
+        <PageTitle
+          title="Quản lý Nhà cung cấp"
+          description="Quản lý thông tin đối tác cung ứng hàng hóa cho hệ thống cửa hàng."
+        />
         <div className="flex flex-col gap-3 sm:flex-row">
           <div className="flex h-11 min-w-72 items-center gap-2 border border-[#d7eef3] bg-white px-4 focus-within:border-[#7ed5e6]">
             <Search size={18} className="text-gray-400" />
@@ -620,15 +616,7 @@ export default function Suppliers() {
         isOpen={Boolean(viewingSupplier)}
         onClose={() => setViewingSupplier(null)}
         title="Chi tiết nhà cung cấp"
-        headerActions={(
-          <button
-            type="button"
-            onClick={() => setViewingSupplier(null)}
-            className="h-10 border border-[#69afd6] bg-white px-5 text-sm font-bold text-[#398fbd] transition hover:bg-sky-50"
-          >
-            Đóng
-          </button>
-        )}
+        showCloseButton
       >
         {viewingSupplier && (
           <div className="space-y-4">

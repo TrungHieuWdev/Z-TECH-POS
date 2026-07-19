@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
-  ArrowRight,
   Check,
   Eye,
   EyeOff,
@@ -66,11 +65,10 @@ function LoginCard({
   onPasswordToggle,
   onSubmit
 }) {
-  const inputClass = 'h-[54px] w-full rounded-xl border border-[#d8e0eb] bg-white pl-12 pr-4 text-[15px] font-medium text-[#17233a] outline-none transition placeholder:text-[#9aa6b8] focus:border-[#5ba9e7] focus:ring-2 focus:ring-[#d9efff]';
+  const inputClass = 'h-[54px] w-full border border-[#d8e0eb] bg-white pl-12 pr-4 text-[15px] font-medium text-[#17233a] outline-none transition placeholder:text-[#9aa6b8] focus:border-[#5ba9e7] focus:ring-2 focus:ring-[#d9efff]';
 
   return (
     <div
-      data-preserve-radius="login-card"
       className="w-full max-w-[462px] border border-white/80 bg-white/95 px-5 py-6 shadow-[0_24px_70px_rgba(55,119,169,0.14)] backdrop-blur sm:px-8 sm:py-8 xl:px-9 xl:py-9"
     >
       <Brand compact />
@@ -83,7 +81,6 @@ function LoginCard({
       <form onSubmit={onSubmit} className="space-y-4 sm:space-y-5">
         <Field label="Mã đăng nhập hoặc email" icon={UserRound}>
           <input
-            data-preserve-radius="login-control"
             value={form.employeeCode}
             onChange={(event) => onFormChange('employeeCode', event.target.value.toUpperCase())}
             autoComplete="username"
@@ -95,7 +92,6 @@ function LoginCard({
 
         <Field label="Mật khẩu" icon={LockKeyhole}>
           <input
-            data-preserve-radius="login-control"
             type={showPassword ? 'text' : 'password'}
             value={form.password}
             onChange={(event) => onFormChange('password', event.target.value)}
@@ -125,11 +121,10 @@ function LoginCard({
           <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-[#26364d]">
             <span className="relative grid h-[18px] w-[18px] place-items-center">
               <input
-                data-preserve-radius="login-checkbox"
                 type="checkbox"
                 checked={remember}
                 onChange={(event) => onRememberChange(event.target.checked)}
-                className="peer h-[18px] w-[18px] appearance-none rounded border border-[#b9c6d8] bg-white checked:border-[#58a9e8] checked:bg-[#58a9e8] focus:outline-none focus:ring-2 focus:ring-[#d9efff]"
+                className="peer h-[18px] w-[18px] appearance-none border border-[#b9c6d8] bg-white checked:border-[#58a9e8] checked:bg-[#58a9e8] focus:outline-none focus:ring-2 focus:ring-[#d9efff]"
               />
               <Check size={13} strokeWidth={3} className="pointer-events-none absolute text-white opacity-0 peer-checked:opacity-100" />
             </span>
@@ -141,11 +136,9 @@ function LoginCard({
         <button
           type="submit"
           disabled={loading}
-          data-preserve-radius="login-control"
           className="flex h-[54px] w-full items-center justify-center gap-3 bg-gradient-to-r from-[#55a7e7] to-[#65b6ef] px-5 text-base font-semibold text-white shadow-[0_10px_24px_rgba(77,164,226,0.22)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-70"
         >
           <span>{loading ? 'Đang đăng nhập...' : 'Đăng nhập'}</span>
-          {!loading && <ArrowRight size={20} />}
         </button>
       </form>
     </div>
@@ -179,7 +172,7 @@ export default function Login() {
 
       saveAuth(user, response.data.token, remember);
       toast.success('Đăng nhập thành công');
-      navigate('/');
+      navigate('/dashboard');
     } catch (error) {
       const message = error.response?.status === 401
         ? 'Mật khẩu hoặc mã đăng nhập bạn nhập bị sai'
@@ -203,7 +196,7 @@ export default function Login() {
 
       <section className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_35%_30%,#ffffff_0%,#f4faff_48%,#e9f5ff_100%)] px-4 py-6 sm:px-8 sm:py-8">
         <div className="pointer-events-none absolute inset-0 opacity-45 [background-image:radial-gradient(#b8dcf6_1px,transparent_1px)] [background-size:24px_24px] [mask-image:linear-gradient(to_bottom,black,transparent_72%)]" />
-        <div className="relative z-10 flex w-full justify-center">
+        <div className="relative z-10 flex w-full justify-center lg:justify-start">
           <LoginCard
             form={form}
             loading={loading}
@@ -216,7 +209,7 @@ export default function Login() {
             onSubmit={handleSubmit}
           />
         </div>
-        <footer className="relative z-10 mt-5 text-center text-xs font-medium leading-5 text-[#718198] sm:mt-7 sm:leading-6">
+        <footer className="relative z-10 mt-5 w-full max-w-[462px] text-center text-xs font-medium leading-5 text-[#718198] sm:mt-7 sm:leading-6 lg:self-start">
           <p>© 2026 Z-TECH POS</p>
           <p>Phiên bản 1.0.0</p>
         </footer>

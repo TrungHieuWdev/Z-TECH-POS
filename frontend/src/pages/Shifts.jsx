@@ -19,6 +19,7 @@ import Modal from '../components/Modal';
 import { getUser, isFullAccessRole } from '../utils/auth';
 import { readLocalJson } from '../utils/storage';
 import { formatCurrency } from '../utils/format';
+import CurrencyInput from '../components/CurrencyInput';
 
 const STORAGE_KEY = 'ztech-shifts';
 const VIETNAM_TIME_ZONE = 'Asia/Ho_Chi_Minh';
@@ -778,7 +779,7 @@ export default function Shifts({ embedded = false }) {
           </label>
           <label>
             <span className="mb-1 block text-sm font-medium text-gray-700">Tiền đầu ca</span>
-            <div className="relative"><input type="number" min="0" step="1000" value={form.openingCash} onChange={(event) => setForm({ ...form, openingCash: event.target.value === '' ? '' : Math.max(Number(event.target.value), 0) })} className="w-full border border-gray-300 px-3 py-2 pr-10 outline-none focus:border-[#7ed5e6] focus:ring-2 focus:ring-[#c0edf7]" placeholder="0"/><span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-500">đ</span></div>
+            <CurrencyInput min="0" value={form.openingCash} onValueChange={(value) => setForm({ ...form, openingCash: value })} className="w-full border border-gray-300 px-3 py-2 outline-none focus:border-[#7ed5e6] focus:ring-2 focus:ring-[#c0edf7]" />
             <p className="mt-1 text-xs text-gray-500">{formatCurrency(Number(form.openingCash || 0))}</p>
           </label>
           <label className="md:col-span-2">
@@ -800,7 +801,7 @@ export default function Shifts({ embedded = false }) {
         </form>
       </Modal>
 
-      <Modal isOpen={Boolean(viewingShift)} onClose={() => setViewingShift(null)} title="Chi tiết ca làm">
+      <Modal isOpen={Boolean(viewingShift)} onClose={() => setViewingShift(null)} title="Chi tiết ca làm" showCloseButton>
         {viewingShift && (
           <div className="space-y-4">
             <div className="rounded-lg bg-[#f4fcfe] p-4">
@@ -841,7 +842,7 @@ export default function Shifts({ embedded = false }) {
       </Modal>
 
       <Modal isOpen={Boolean(closingShift)} onClose={() => setClosingShift(null)} title="Chốt ca làm">
-        {closingShift && <div className="space-y-4"><div className="grid gap-3 border bg-[#f8fdfe] p-4 text-sm sm:grid-cols-2"><div><span className="text-gray-500">Tiền đầu ca</span><p className="font-bold">{formatCurrency(closingShift.openingCash || 0)}</p></div><div><span className="text-gray-500">Tiền mặt bán được</span><p className="font-bold">{formatCurrency(getCashSales(closingShift))}</p></div><div className="sm:col-span-2"><span className="text-gray-500">Tiền mặt dự kiến cuối ca</span><p className="text-lg font-bold text-[#0f3b46]">{formatCurrency(getExpectedCash(closingShift))}</p></div></div><label className="block"><span className="mb-1 block text-sm font-semibold">Tiền mặt thực tế</span><input type="number" min="0" value={actualCash} onChange={(event) => setActualCash(event.target.value)} className="h-11 w-full border px-3" placeholder="0"/><p className="mt-1 text-xs text-gray-500">Chênh lệch dự kiến: <strong className={Number(actualCash || 0) - getExpectedCash(closingShift) < 0 ? 'text-red-600' : 'text-emerald-700'}>{formatCurrency(Number(actualCash || 0) - getExpectedCash(closingShift))}</strong></p></label><div className="flex justify-end gap-2"><button type="button" onClick={() => setClosingShift(null)} className="h-10 border px-4 font-semibold">Hủy</button><button type="button" onClick={confirmCloseShift} className="h-10 bg-brand px-4 font-bold text-white">Xác nhận chốt ca</button></div></div>}
+        {closingShift && <div className="space-y-4"><div className="grid gap-3 border bg-[#f8fdfe] p-4 text-sm sm:grid-cols-2"><div><span className="text-gray-500">Tiền đầu ca</span><p className="font-bold">{formatCurrency(closingShift.openingCash || 0)}</p></div><div><span className="text-gray-500">Tiền mặt bán được</span><p className="font-bold">{formatCurrency(getCashSales(closingShift))}</p></div><div className="sm:col-span-2"><span className="text-gray-500">Tiền mặt dự kiến cuối ca</span><p className="text-lg font-bold text-[#0f3b46]">{formatCurrency(getExpectedCash(closingShift))}</p></div></div><label className="block"><span className="mb-1 block text-sm font-semibold">Tiền mặt thực tế</span><CurrencyInput min="0" value={actualCash} onValueChange={setActualCash} className="h-11 w-full border px-3" /><p className="mt-1 text-xs text-gray-500">Chênh lệch dự kiến: <strong className={Number(actualCash || 0) - getExpectedCash(closingShift) < 0 ? 'text-red-600' : 'text-emerald-700'}>{formatCurrency(Number(actualCash || 0) - getExpectedCash(closingShift))}</strong></p></label><div className="flex justify-end gap-2"><button type="button" onClick={() => setClosingShift(null)} className="h-10 border px-4 font-semibold">Hủy</button><button type="button" onClick={confirmCloseShift} className="h-10 bg-brand px-4 font-bold text-white">Xác nhận chốt ca</button></div></div>}
       </Modal>
     </div>
   );

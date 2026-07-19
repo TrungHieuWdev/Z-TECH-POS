@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { CreditCard } from 'lucide-react';
 import { PAYMENT_METHODS } from '../../constants/settingsDefaults';
+import { bankOptions, getBankById } from '../../utils/bankTransfer';
 import { Header, SaveButton, Toggle } from './PrintSettings';
 
 export default function PaymentSettings({ value, onSave, isSaving }) {
@@ -29,8 +30,11 @@ export default function PaymentSettings({ value, onSave, isSaving }) {
     event.preventDefault();
     if (!enabledMethods.length) return toast.error('Cần bật ít nhất một phương thức thanh toán');
     if (!form.methods[form.defaultMethod]) return toast.error('Phương thức mặc định phải là phương thức đang bật');
-    if ((form.methods.transfer || form.methods.qr) && (!form.vietQr.bankId || !form.vietQr.accountNo || !form.vietQr.accountName)) {
-      return toast.error('Vui lòng nhập đầy đủ thông tin VietQR');
+    if ((form.methods.transfer || form.methods.qr) && (!form.vietQr.bankName || !form.vietQr.accountNo || !form.vietQr.accountName)) {
+      return toast.error('Vui lòng nhập đầy đủ thông tin ngân hàng');
+    }
+    if (form.methods.qr && !form.vietQr.bankId) {
+      return toast.error('Để bật QR Code, vui lòng chọn một ngân hàng trong danh sách VietQR');
     }
     if (form.vat.enabled && (Number(form.vat.rate) < 0 || Number(form.vat.rate) > 100)) {
       return toast.error('Phần trăm VAT phải từ 0 đến 100');
@@ -58,7 +62,20 @@ export default function PaymentSettings({ value, onSave, isSaving }) {
       <div className="border border-[#e1e3e4] p-4">
         <h3 className="text-sm font-extrabold text-[#191c1d]">Cấu hình VietQR</h3>
         <div className="mt-3 grid gap-4 md:grid-cols-2">
-          <Field label="Ngân hàng / mã BIN" value={form.vietQr.bankId} onChange={(value) => updateVietQr('bankId', value.replace(/\D/g, '').slice(0, 6))} />
+          <BankField
+            bankId={form.vietQr.bankId}
+            bankName={form.vietQr.bankName}
+            onChange={(bankId, bankName) => {
+              setForm((current) => ({
+                ...current,
+                vietQr: {
+                  ...current.vietQr,
+                  bankId,
+                  bankName
+                }
+              }));
+            }}
+          />
           <Field label="Số tài khoản" value={form.vietQr.accountNo} onChange={(value) => updateVietQr('accountNo', value.replace(/\D/g, '').slice(0, 20))} />
           <Field label="Tên chủ tài khoản" value={form.vietQr.accountName} onChange={(value) => updateVietQr('accountName', value.toUpperCase())} />
           <Field label="Nội dung chuyển khoản mặc định" value={form.vietQr.memo} onChange={(value) => updateVietQr('memo', value)} />
@@ -80,6 +97,48 @@ export default function PaymentSettings({ value, onSave, isSaving }) {
 
       <SaveButton isSaving={isSaving} label="Lưu cài đặt thanh toán" />
     </form>
+  );
+}
+
+function BankField({ bankId, bankName, onChange }) {
+  const isKnownBank = Boolean(getBankById(bankId));
+  const [isCustom, setIsCustom] = useState(!isKnownBank && Boolean(bankName));
+  const selection = isCustom ? 'custom' : (isKnownBank ? bankId : '');
+
+  useEffect(() => {
+    if (isKnownBank) setIsCustom(false);
+  }, [isKnownBank]);
+
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-sm font-bold text-[#34424d]">Tên ngân hàng</span>
+      <select
+        value={selection}
+        onChange={(event) => {
+          if (event.target.value === 'custom') {
+            setIsCustom(true);
+            return onChange('', '');
+          }
+          const bank = getBankById(event.target.value);
+          setIsCustom(false);
+          onChange(bank?.bankId || '', bank?.bankName || '');
+        }}
+        className="h-11 w-full border border-[#d7e2ea] bg-white px-3 text-sm font-semibold outline-none focus:border-brand-strong focus:ring-2 focus:ring-brand-soft"
+      >
+        <option value="" disabled>Chọn ngân hàng</option>
+        {bankOptions.map((bank) => <option key={bank.bankId} value={bank.bankId}>{bank.bankName}</option>)}
+        <option value="custom">Ngân hàng khác — Nhập thủ công</option>
+      </select>
+      {isCustom && (
+        <input
+          autoFocus
+          value={bankName || ''}
+          onChange={(event) => onChange('', event.target.value.slice(0, 150))}
+          placeholder="Nhập tên ngân hàng"
+          className="mt-2 h-11 w-full border border-[#d7e2ea] bg-white px-3 text-sm font-semibold outline-none focus:border-brand-strong focus:ring-2 focus:ring-brand-soft"
+        />
+      )}
+    </label>
   );
 }
 

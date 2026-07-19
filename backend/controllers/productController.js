@@ -1,4 +1,4 @@
-import { query } from '../config/db.js';
+import { query, withTransaction } from '../config/db.js';
 import { logActivity } from '../utils/activityLogger.js';
 import ExcelJS from 'exceljs';
 import { normalizeWarrantyPolicy } from '../utils/warrantyPolicy.js';
@@ -718,13 +718,14 @@ export async function update(req, res) {
       return res.status(400).json({ message: validationMessage });
     }
 
-    await query(
-      `UPDATE products
+    await withTransaction(async (transactionQuery) => {
+      await transactionQuery(
+        `UPDATE products
        SET sku = ?, barcode = ?, category_id = ?, device_model_id = ?, name = ?, description = ?, price = ?, cost_price = ?,
            stock_quantity = ?, min_stock = ?, image_url = ?, warranty_enabled = ?, warranty_period_days = ?,
            warranty_type = ?, warranty_conditions = ?, warranty_exclusions = ?, warranty_note = ?
        WHERE id = ?`,
-      [
+        [
         product.sku,
         product.barcode,
         product.category_id,
@@ -743,8 +744,21 @@ export async function update(req, res) {
         product.warranty_exclusions,
         product.warranty_note,
         req.params.id
-      ]
-    );
+        ]
+      );
+
+      // Repair only legacy rows that never captured a cost. Existing
+      // sale-time snapshots remain immutable when product costs change.
+      if (Number(product.cost_price) > 0) {
+        await transactionQuery(
+          `UPDATE order_items
+           SET cost_at_sale = ?, cost_price_snapshot = COALESCE(cost_price_snapshot, ?)
+           WHERE product_id = ?
+             AND (cost_at_sale IS NULL OR cost_at_sale <= 0)`,
+          [product.cost_price, product.cost_price, req.params.id]
+        );
+      }
+    });
 
     const updated = await query(`${productSelect} WHERE p.id = ?`, [req.params.id]);
     await logActivity(req.user?.id, 'Sửa sản phẩm', product.name, Number(current[0].stock_quantity) !== Number(product.stock_quantity) ? `Cập nhật tồn kho: ${current[0].stock_quantity} → ${product.stock_quantity}` : 'Cập nhật thông tin sản phẩm');

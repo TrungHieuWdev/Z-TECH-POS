@@ -4,6 +4,7 @@ import { Banknote, CalendarDays, CreditCard, Eye, Plus, Save, Trash2 } from 'luc
 import api from '../../api/axios';
 import Modal from '../Modal';
 import { formatCurrency } from '../../utils/format';
+import CurrencyInput from '../CurrencyInput';
 
 const emptyItem = { product_id: '', quantity: 1, import_price: 0 };
 
@@ -216,7 +217,7 @@ export default function PurchaseReceivingTab({ preferredSupplierId = null, canMa
               {products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
             </select>
             <input required min="1" type="number" value={item.quantity} onChange={(event) => updateItem(index, 'quantity', event.target.value)} className="h-11 border border-gray-300 bg-white px-3 outline-none focus:border-[#69afd6]" title="Số lượng" />
-            <input required min="1" type="number" value={item.import_price} onChange={(event) => updateItem(index, 'import_price', event.target.value)} className={`h-11 border px-3 outline-none focus:border-[#69afd6] ${Number(item.import_price) <= 0 ? 'border-amber-400 bg-amber-50' : 'border-gray-300 bg-white'}`} title="Giá nhập" placeholder="Nhập giá nhập" />
+            <CurrencyInput required min="1" value={item.import_price} onValueChange={(value) => updateItem(index, 'import_price', value)} className={`h-11 border px-3 outline-none focus:border-[#69afd6] ${Number(item.import_price) <= 0 ? 'border-amber-400 bg-amber-50' : 'border-gray-300 bg-white'}`} title="Giá nhập" placeholder="Nhập giá nhập" />
             <button type="button" title="Xóa dòng" onClick={() => setItems((rows) => rows.length === 1 ? rows : rows.filter((_, itemIndex) => itemIndex !== index))} className="grid h-11 place-items-center text-red-600 hover:bg-red-50">
               <Trash2 size={18} />
             </button>
@@ -244,12 +245,11 @@ export default function PurchaseReceivingTab({ preferredSupplierId = null, canMa
           </label>
           <label className="text-sm font-semibold text-gray-700">
             Đã thanh toán
-            <input
-              type="number"
+            <CurrencyInput
               min="0"
               max={total}
               value={paymentMode === 'partial' ? paidAmountInput : paidAmount}
-              onChange={(event) => setPaidAmountInput(event.target.value)}
+              onValueChange={setPaidAmountInput}
               readOnly={paymentMode !== 'partial'}
               className={`mt-1 h-11 w-full border px-3 outline-none focus:border-[#69afd6] ${paymentMode === 'partial' ? 'border-gray-300 bg-white' : 'border-gray-200 bg-gray-100 text-gray-500'}`}
             />
@@ -362,6 +362,7 @@ export default function PurchaseReceivingTab({ preferredSupplierId = null, canMa
         isOpen={Boolean(detailOrder)}
         onClose={() => setDetailOrder(null)}
         title="Chi tiết phiếu nhập"
+        showCloseButton
         maxWidth="max-w-5xl"
       >
         {detailOrder && (
@@ -428,7 +429,7 @@ export default function PurchaseReceivingTab({ preferredSupplierId = null, canMa
                 <div className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto] md:items-end">
                   <label className="text-sm font-semibold text-gray-700">
                     Số tiền trả thêm
-                    <input required type="number" min="1" max={Number(detailOrder.debt_amount || 0)} value={paymentRecord.amount} onChange={(event) => setPaymentRecord({ ...paymentRecord, amount: event.target.value })} className="mt-1 h-10 w-full border border-amber-200 bg-white px-3 outline-none focus:border-amber-500" />
+                    <CurrencyInput required min="1" max={Number(detailOrder.debt_amount || 0)} value={paymentRecord.amount} onValueChange={(value) => setPaymentRecord({ ...paymentRecord, amount: value })} className="mt-1 h-10 w-full border border-amber-200 bg-white px-3 outline-none focus:border-amber-500" />
                   </label>
                   <label className="text-sm font-semibold text-gray-700">
                     Phương thức
@@ -479,11 +480,6 @@ export default function PurchaseReceivingTab({ preferredSupplierId = null, canMa
                   )}
                 </tbody>
               </table>
-            </div>
-            <div className="flex justify-end border-t border-gray-200 pt-4">
-              <button type="button" onClick={() => setDetailOrder(null)} className="h-10 border border-gray-300 bg-white px-5 text-sm font-bold text-gray-700 hover:bg-gray-50">
-                Đóng
-              </button>
             </div>
           </div>
         )}

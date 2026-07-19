@@ -82,8 +82,30 @@ app.use(cors({
   credentials: true
 }));
 app.use(helmet({
-  crossOriginResourcePolicy: { policy: 'cross-origin' }
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  hsts: isProduction
+    ? {
+        maxAge: 31536000,
+        includeSubDomains: true,
+        preload: true
+      }
+    : false,
+  referrerPolicy: {
+    policy: 'no-referrer'
+  }
 }));
+app.use((req, res, next) => {
+  res.setHeader(
+    'Permissions-Policy',
+    'camera=(self), microphone=(), geolocation=(), payment=()'
+  );
+
+  if (req.path.startsWith('/api/auth')) {
+    res.setHeader('Cache-Control', 'no-store');
+  }
+
+  next();
+});
 if (String(process.env.TRUST_PROXY || '').toLowerCase() === 'true') {
   app.set('trust proxy', 1);
 }

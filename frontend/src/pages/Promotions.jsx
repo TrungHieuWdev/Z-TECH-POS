@@ -22,6 +22,7 @@ import api from '../api/axios';
 import { getUser, isFullAccessRole } from '../utils/auth';
 import KpiCard from '../components/KpiCard';
 import Modal from '../components/Modal';
+import CurrencyInput from '../components/CurrencyInput';
 
 export const initialPromotions = [
   {
@@ -687,6 +688,7 @@ export default function Promotions({ tabNavigation = null }) {
         isOpen={Boolean(viewingPromotion)}
         onClose={() => setViewingPromotion(null)}
         title="Chi tiết khuyến mãi"
+        showCloseButton
         maxWidth="max-w-2xl"
       >
         {viewingPromotion && (
@@ -763,7 +765,7 @@ export default function Promotions({ tabNavigation = null }) {
         <div className="fixed inset-0 z-[70]">
           <button
             type="button"
-            className="absolute inset-0 bg-black/35"
+            className="absolute inset-0 bg-black/25 backdrop-blur-[1px]"
             aria-label="Đóng form khuyến mãi"
             onClick={closeDrawer}
           />
@@ -861,7 +863,7 @@ export default function Promotions({ tabNavigation = null }) {
                     <label><span className="mb-1 block text-xs font-bold text-[#68707a]">SẢN PHẨM 2</span><SearchableProductSelect products={products} value={form.comboProduct2Id} onChange={(id) => { setForm({ ...form, comboProduct2Id: id }); setProductSearchError(''); }} placeholder="Chọn sản phẩm thứ hai..." /></label>
                     <label><span className="mb-1 block text-xs font-bold text-[#68707a]">SỐ LƯỢNG</span><input type="number" min="1" value={form.comboProduct2Quantity} onChange={(e) => setForm({ ...form, comboProduct2Quantity: e.target.value })} className="h-10 w-full border px-3 text-sm" /></label>
                     <label><span className="mb-1 block text-xs font-bold text-[#68707a]">LOẠI GIẢM</span><select value={form.comboDiscountType} onChange={(e) => setForm({ ...form, comboDiscountType: e.target.value })} className="h-10 w-full border px-3 text-sm"><option value="amount">Giảm tiền</option><option value="percent">Giảm phần trăm</option></select></label>
-                    <label><span className="mb-1 block text-xs font-bold text-[#68707a]">GIÁ TRỊ GIẢM</span><input type="number" min="0" max={form.comboDiscountType === 'percent' ? 100 : undefined} value={form.comboDiscountValue} onChange={(e) => setForm({ ...form, comboDiscountValue: e.target.value })} className="h-10 w-full border px-3 text-sm" placeholder="0" /></label>
+                    <label><span className="mb-1 block text-xs font-bold text-[#68707a]">GIÁ TRỊ GIẢM</span>{form.comboDiscountType === 'amount' ? <CurrencyInput min="0" value={form.comboDiscountValue} onValueChange={(value) => setForm({ ...form, comboDiscountValue: value })} className="h-10 w-full border px-3 text-sm" /> : <input type="number" min="0" max="100" value={form.comboDiscountValue} onChange={(e) => setForm({ ...form, comboDiscountValue: e.target.value })} className="h-10 w-full border px-3 text-sm" placeholder="0" />}</label>
                   </div>
                   {productSearchError && <p className="mt-2 text-xs font-semibold text-red-600">{productSearchError}</p>}
                 </div>}
@@ -871,7 +873,7 @@ export default function Promotions({ tabNavigation = null }) {
                   <p className="mb-3 text-xs text-[#68707a]">Ví dụ: sản phẩm thứ 3 giảm 20.000đ; mua 6 sản phẩm sẽ được giảm hai lần.</p>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <label className="text-xs font-bold text-[#68707a]">SẢN PHẨM THỨ<input type="number" min="2" value={form.nthQuantity} onChange={(e) => setForm({ ...form, nthQuantity: e.target.value })} className="mt-1 h-10 w-full border px-3 text-sm" /></label>
-                    <label className="text-xs font-bold text-[#68707a]">SỐ TIỀN GIẢM<input type="number" min="0" value={form.nthDiscountAmount} onChange={(e) => setForm({ ...form, nthDiscountAmount: e.target.value })} className="mt-1 h-10 w-full border px-3 text-sm" placeholder="0" /></label>
+                    <label className="text-xs font-bold text-[#68707a]">SỐ TIỀN GIẢM<CurrencyInput min="0" value={form.nthDiscountAmount} onValueChange={(value) => setForm({ ...form, nthDiscountAmount: value })} className="mt-1 h-10 w-full border px-3 text-sm" /></label>
                   </div>
                   {productSearchError && <p className="mt-2 text-xs font-semibold text-red-600">{productSearchError}</p>}
                 </div>}
@@ -896,17 +898,25 @@ export default function Promotions({ tabNavigation = null }) {
                   <label>
                     <span className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#68707a]">Giá trị giảm</span>
                     <div className="relative">
-                      <input
-                        type="number"
-                        min="0"
-                        value={form.discountValue}
-                        onChange={(event) => setForm({ ...form, discountValue: event.target.value })}
-                        className="h-10 w-full rounded-lg border border-[#d5dbe3] px-3 pr-10 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft"
-                        placeholder="0"
-                      />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold text-[#68707a]">
-                        {form.discountType === 'percent' ? '%' : 'đ'}
-                      </span>
+                      {form.discountType === 'amount' ? (
+                        <CurrencyInput
+                          min="0"
+                          value={form.discountValue}
+                          onValueChange={(value) => setForm({ ...form, discountValue: value })}
+                          className="h-10 w-full rounded-lg border border-[#d5dbe3] px-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft"
+                        />
+                      ) : (
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={form.discountValue}
+                          onChange={(event) => setForm({ ...form, discountValue: event.target.value })}
+                          className="h-10 w-full rounded-lg border border-[#d5dbe3] px-3 pr-10 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft"
+                          placeholder="0"
+                        />
+                      )}
+                      {form.discountType === 'percent' && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold text-[#68707a]">%</span>}
                     </div>
                   </label>
                 </div>
@@ -915,47 +925,37 @@ export default function Promotions({ tabNavigation = null }) {
                   <label>
                     <span className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#68707a]">Giá trị đơn tối thiểu</span>
                     <div className="relative">
-                      <input
-                        type="number"
+                      <CurrencyInput
                         min="0"
-                        step="1000"
                         value={form.minOrder}
-                        onChange={(event) => setForm({ ...form, minOrder: event.target.value })}
-                        className="h-10 w-full rounded-lg border border-[#d5dbe3] px-3 pr-9 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft"
-                        placeholder="0"
+                        onValueChange={(value) => setForm({ ...form, minOrder: value })}
+                        className="h-10 w-full rounded-lg border border-[#d5dbe3] px-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft"
                       />
-                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold text-[#68707a]">đ</span>
                     </div>
                   </label>
                   <label>
                     <span className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#68707a]">Giá trị đơn tối đa</span>
                     <div className="relative">
-                      <input
-                        type="number"
+                      <CurrencyInput
                         min={Number(form.minOrder || 0)}
-                        step="1000"
                         value={form.maxOrder}
-                        onChange={(event) => setForm({ ...form, maxOrder: event.target.value })}
-                        className="h-10 w-full rounded-lg border border-[#d5dbe3] px-3 pr-9 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft"
+                        onValueChange={(value) => setForm({ ...form, maxOrder: value })}
+                        className="h-10 w-full rounded-lg border border-[#d5dbe3] px-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft"
                         placeholder="Không giới hạn"
                       />
-                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold text-[#68707a]">đ</span>
                     </div>
                   </label>
                   {form.promotionType === 'standard' && (
                     <label>
                       <span className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#68707a]">Mức giảm tối đa</span>
                       <div className="relative">
-                        <input
-                          type="number"
+                        <CurrencyInput
                           min="0"
-                          step="1000"
                           value={form.maxDiscount}
-                          onChange={(event) => setForm({ ...form, maxDiscount: event.target.value })}
-                          className="h-10 w-full rounded-lg border border-[#d5dbe3] px-3 pr-9 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft"
+                          onValueChange={(value) => setForm({ ...form, maxDiscount: value })}
+                          className="h-10 w-full rounded-lg border border-[#d5dbe3] px-3 text-sm outline-none focus:border-brand focus:ring-2 focus:ring-brand-soft"
                           placeholder="Không giới hạn"
                         />
-                        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold text-[#68707a]">đ</span>
                       </div>
                     </label>
                   )}

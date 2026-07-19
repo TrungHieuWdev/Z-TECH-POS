@@ -51,9 +51,11 @@ function groupTrend(rows, from, to) {
       date.setUTCDate(date.getUTCDate() - weekday);
       key = date.toISOString().slice(0, 10);
     } else if (grouping === 'month') key = row.date.slice(0, 7);
-    const existing = groups.get(key) || { label: key, netRevenue: 0, grossProfit: 0 };
+    const existing = groups.get(key) || { label: key, netRevenue: 0, grossProfit: 0, costDataComplete: true };
     existing.netRevenue += row.netRevenue;
-    existing.grossProfit += row.grossProfit;
+    if (row.grossProfit == null) existing.costDataComplete = false;
+    else existing.grossProfit += row.grossProfit;
+    if (!existing.costDataComplete) existing.grossProfit = null;
     groups.set(key, existing);
   });
   return { grouping, points: [...groups.values()] };
@@ -74,9 +76,10 @@ function getBusinessDateTime() {
 
 export async function getSummary(filters) {
   const previous = previousPeriod(filters.from, filters.to);
-  const [currentRow, previousRow, filterOptions, availability] = await Promise.all([
+  const [currentRow, previousRow, missingCostRows, filterOptions, availability] = await Promise.all([
     repository.getAggregate(filters),
     filters.compare ? repository.getAggregate(filters, previous) : Promise.resolve({}),
+    repository.getMissingCostItems(filters),
     repository.getFilterOptions(),
     repository.getDataAvailability()
   ]);
@@ -84,7 +87,17 @@ export async function getSummary(filters) {
   const previousMetrics = calculateRevenueMetrics(previousRow);
   return {
     range: { from: filters.from, to: filters.to, previousFrom: previous.from, previousTo: previous.to },
-    metrics: { ...current, changes: filters.compare ? metricChanges(current, previousMetrics) : {} },
+    metrics: {
+      ...current,
+      missingCostItems: missingCostRows.map((row) => ({
+        productId: row.product_id,
+        sku: row.sku,
+        name: row.name,
+        soldQuantity: Number(row.sold_quantity || 0),
+        invoiceLineCount: Number(row.invoice_line_count || 0)
+      })),
+      changes: filters.compare ? metricChanges(current, previousMetrics) : {}
+    },
     comparison: filters.compare ? previousMetrics : null,
     filterOptions,
     dataAvailability: {
@@ -93,7 +106,7 @@ export async function getSummary(filters) {
     },
     notes: {
       tax: 'Doanh thu báo cáo không bao gồm VAT vì schema lưu VAT riêng trong vat_amount.',
-      cost: 'Giá vốn dùng snapshot tại thời điểm bán; dữ liệu cũ được backfill từ giá vốn hiện có khi migration.',
+      cost: 'Giá vốn chỉ dùng cost_at_sale bất biến trên từng dòng bán; dòng thiếu giá vốn được báo thiếu và không bị coi là 0.',
       refunds: 'Chỉ trừ giao dịch hoàn tiền riêng (payment_method=refund); hóa đơn cancelled bị loại khỏi doanh thu và không bị trừ lần hai.'
     }
   };
@@ -143,8 +156,31 @@ function normalizeProduct(row) {
     productId: row.product_id, sku: row.sku, name: row.name, categoryName: row.category_name,
     soldQuantity: Number(row.sold_quantity || 0), grossRevenue: money(row.gross_revenue),
     discount: money(row.discount), refunds: money(row.refunds), netRevenue: money(row.net_revenue),
-    cost: money(row.cost), grossProfit: money(row.gross_profit),
-    margin: Number(Number(row.margin || 0).toFixed(1)), returnedQuantity: Number(row.returned_quantity || 0)
+    cost: row.cost == null ? null : money(row.cost),
+    grossProfit: row.gross_profit == null ? null : money(row.gross_profit),
+    costDataComplete: Number(row.missing_cost_line_count || 0) === 0,
+    margin: row.gross_profit == null ? null : Number(Number(row.margin || 0).toFixed(1)),
+    returnedQuantity: Number(row.returned_quantity || 0)
+  };
+}
+
+export async function getCostReconciliation(filters) {
+  const rows = await repository.getCostReconciliation(filters);
+  return {
+    items: rows.map((row) => ({
+      orderId: row.order_id,
+      orderCode: row.order_number,
+      orderItemId: row.order_item_id,
+      productId: row.product_id,
+      sku: row.sku,
+      name: row.name,
+      soldQuantity: Number(row.sold_quantity || 0),
+      unitPrice: money(row.unit_price),
+      netRevenue: money(row.net_revenue),
+      unitCost: row.unit_cost == null ? null : money(row.unit_cost),
+      totalCost: row.total_cost == null ? null : money(row.total_cost),
+      costStatus: row.cost_status
+    }))
   };
 }
 
@@ -278,7 +314,7 @@ export async function getAiAnalysis(filters, { requestedBy = null } = {}) {
     },
     schemaNotes: [
       'Doanh thu không gồm VAT vì vat_amount lưu riêng.',
-      'Giá vốn dùng snapshot tại thời điểm bán; dữ liệu trước migration chỉ có giá trị backfill gần đúng.',
+      'Giá vốn chỉ dùng cost_at_sale tại thời điểm bán; dòng thiếu giá vốn không bị coi là 0 và không công bố lợi nhuận đầy đủ.',
       'POS chưa có dữ liệu hoàn trả từng dòng sản phẩm.'
     ]
   };

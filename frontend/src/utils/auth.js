@@ -41,8 +41,7 @@ export function isFullAccessRole(role) {
 export function getRoleLabel(role) {
   const roleKey = String(role || '').toLowerCase();
 
-  if (roleKey === 'owner' || roleKey === 'admin') return 'Chủ cửa hàng';
-  if (roleKey === 'manager') return 'Quản lý';
+  if (isFullAccessRole(roleKey)) return 'Quản trị viên';
   if (['cashier', 'employee', 'staff'].includes(roleKey)) return 'Nhân viên';
 
   return role || 'Nhân viên';

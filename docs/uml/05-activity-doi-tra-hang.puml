@@ -1,0 +1,60 @@
+@startuml
+left to right direction
+skinparam linetype ortho
+skinparam nodesep 50
+skinparam ranksep 60
+
+|Quản trị viên|
+start
+:Chọn nghiệp vụ đổi hoặc trả hàng;
+if (Đổi sản phẩm bảo hành?) then (Có)
+  :Tra cứu phiếu bảo hành;
+  if (Đã tiếp nhận yêu cầu bảo hành?) then (Có)
+  else (Không)
+    :Nhập lỗi và tình trạng sản phẩm;
+    |Hệ thống|
+    :Tạo yêu cầu bảo hành trạng thái received;
+    :Đổi trạng thái phiếu bảo hành thành claimed;
+    |Quản trị viên|
+  endif
+  :Nhập sản phẩm đổi, SKU, số lượng và lý do;
+  :Xác nhận đổi sản phẩm;
+  |Giao diện|
+  :Gọi hàm điều chỉnh tồn cho hàng đổi;
+  note right
+    Hàm adjustInventoryForExchange()
+    hiện trả về thành công nhưng chưa gọi API.
+  end note
+  :Lưu trạng thái "Đã đổi mới" trong state;
+  :Lưu lịch sử đổi trong state;
+  :Thông báo đã ghi nhận đổi sản phẩm;
+  stop
+else (Không)
+  :Chọn đơn hàng cần trả/hủy;
+  :Nhập ghi chú và xác nhận hủy;
+  |Hệ thống|
+  :Xác thực quyền quản trị;
+  :Khóa và đọc đơn hàng;
+  if (Tìm thấy đơn hàng?) then (Có)
+    if (Đơn đang hoàn tất?) then (Có)
+      repeat
+        :Cộng lại tồn sản phẩm;
+        :Ghi biến động CANCEL_ORDER;
+      repeat while (Còn dòng hàng?) is (Có)
+      -> Không;
+      :Chuyển thanh toán sang refunded;
+      :Vô hiệu phiếu bảo hành;
+      if (Đơn có khách hàng?) then (Có)
+        :Hoàn tác điểm đã dùng và đã nhận;
+      endif
+    endif
+    :Cập nhật đơn thành cancelled;
+    :Commit giao dịch;
+    :Trả thông tin đơn đã hủy;
+    stop
+  else (Không)
+    :Rollback và thông báo không tìm thấy đơn;
+    stop
+  endif
+endif
+@enduml

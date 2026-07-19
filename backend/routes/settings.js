@@ -14,6 +14,7 @@ import {
   uploadShopLogo
 } from '../controllers/settingsController.js';
 import { validateSettings } from '../middleware/validate.js';
+import { verifyImageUpload } from '../security/imageUpload.js';
 
 const router = express.Router();
 
@@ -44,7 +45,14 @@ const upload = multer({
 
 router.get('/', auth, getSettings);
 router.put('/', auth, requireFullAccess, validateSettings, updateSettings);
-router.post('/logo', auth, requireFullAccess, upload.single('logo'), uploadShopLogo);
+router.post(
+  '/logo',
+  auth,
+  requireFullAccess,
+  upload.single('logo'),
+  verifyImageUpload,
+  uploadShopLogo
+);
 router.get('/vat', auth, getVatSettings);
 router.put('/vat', auth, requireFullAccess, validateSettings, updateVatSettings);
 router.get('/bank-transfer', auth, getBankTransferSettings);

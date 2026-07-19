@@ -61,7 +61,7 @@ export const DEFAULT_SETTINGS = {
 export const ROLE_BADGES = {
   owner: 'bg-purple-50 text-purple-700 ring-purple-200',
   admin: 'bg-purple-50 text-purple-700 ring-purple-200',
-  manager: 'bg-sky-50 text-sky-700 ring-sky-200',
+  manager: 'bg-purple-50 text-purple-700 ring-purple-200',
   cashier: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
   employee: 'bg-slate-100 text-slate-700 ring-slate-200',
   staff: 'bg-slate-100 text-slate-700 ring-slate-200'

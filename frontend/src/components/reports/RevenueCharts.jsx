@@ -248,10 +248,12 @@ export function GrossProfitChart({ trend }) {
       borderWidth: 2.5,
       pointRadius: 3,
       pointHoverRadius: 6,
+      pointStyle: 'circle',
       pointBackgroundColor: '#ffffff',
       pointBorderColor: '#8255e8',
       pointBorderWidth: 2,
-      tension: 0.35,
+      tension: 0,
+      cubicInterpolationMode: 'default',
       fill: true
     }]
   };
@@ -489,9 +491,12 @@ export function AiReportChart({ spec, revealIndex = 0 }) {
         hoverBackgroundColor: itemColors || undefined,
         borderDash: dataset.dashed ? [6, 4] : undefined,
         borderWidth: isTopProducts ? 0 : 2,
-        pointRadius: spec.type === 'line' ? 2 : undefined,
-        tension: 0.25,
-        cubicInterpolationMode: isBusinessTrend ? 'monotone' : undefined,
+        pointRadius: spec.type === 'line' ? 3 : undefined,
+        pointHoverRadius: spec.type === 'line' ? 5 : undefined,
+        pointStyle: spec.type === 'line' ? 'rect' : undefined,
+        pointBorderWidth: spec.type === 'line' ? 0 : undefined,
+        tension: 0,
+        cubicInterpolationMode: 'default',
         fill: false
       };
     })

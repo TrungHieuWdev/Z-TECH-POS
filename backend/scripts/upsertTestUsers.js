@@ -7,26 +7,26 @@ dotenv.config();
 const users = [
   {
     id: 1,
-    name: 'Chủ cửa hàng',
+    name: 'Quản trị viên',
     employeeCode: 'CH001',
     email: 'owner@pos.com',
     password: 'admin123',
-    role: 'owner'
+    role: 'admin'
   },
   {
     id: 2,
-    name: 'Quản lý',
+    name: 'Quản trị viên',
     employeeCode: 'QL001',
     email: 'manager@pos.com',
     password: 'admin123',
-    role: 'manager'
+    role: 'admin'
   },
   {
     id: 3,
     name: 'Nhân viên',
     employeeCode: 'NV001',
     email: 'employee@pos.com',
-    password: '123456',
+    password: 'NV001@123',
     role: 'employee'
   }
 ];

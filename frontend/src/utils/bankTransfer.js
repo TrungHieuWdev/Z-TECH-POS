@@ -63,7 +63,7 @@ export async function saveBankTransferSettings(settings) {
 }
 
 export function isBankTransferConfigured(settings = getBankTransferSettings()) {
-  return Boolean(settings.bankId && settings.accountNo && settings.accountName);
+  return Boolean(settings.bankName && settings.accountNo && settings.accountName);
 }
 
 export function buildTransferMemo() {

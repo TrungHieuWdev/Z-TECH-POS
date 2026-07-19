@@ -23,7 +23,9 @@ export default function KpiCard({
           <Icon size={18} strokeWidth={1.8} />
         </span>
       </div>
-      <p className="mt-3 truncate text-2xl font-black text-slate-950">{value}</p>
+      <p className="mt-3 truncate text-3xl font-bold tabular-nums tracking-tight text-slate-950">
+        {value}
+      </p>
       <div className="mt-2 flex min-h-6 items-center text-[11px] font-semibold text-slate-500">
         {detail || '\u00A0'}
       </div>

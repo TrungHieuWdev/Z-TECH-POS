@@ -1,8 +1,7 @@
 import jwt from 'jsonwebtoken';
 import { getJwtSecret } from '../config/auth.js';
 import { query } from '../config/db.js';
-
-const fullAccessRoles = new Set(['admin', 'owner', 'manager']);
+import { isAdministratorRole, normalizeRole } from '../utils/roles.js';
 
 export default async function auth(req, res, next) {
   const authHeader = req.headers.authorization;
@@ -20,7 +19,7 @@ export default async function auth(req, res, next) {
   try {
     const payload = jwt.verify(token, getJwtSecret());
     const rows = await query(
-      `SELECT id, name, email, employee_code, role, status
+      `SELECT id, name, email, employee_code, role, status, token_version
        FROM users
        WHERE id = ?
        LIMIT 1`,
@@ -30,12 +29,15 @@ export default async function auth(req, res, next) {
     if (!user || String(user.status || 'active').toLowerCase() !== 'active') {
       return res.status(401).json({ message: 'Tài khoản đã bị khóa hoặc không còn tồn tại' });
     }
+    if (Number(payload.tokenVersion || 0) !== Number(user.token_version || 0)) {
+      return res.status(401).json({ message: 'Phiên đăng nhập đã bị thu hồi' });
+    }
     req.user = {
       id: user.id,
       name: user.name,
       email: user.email,
       employeeCode: user.employee_code,
-      role: user.role
+      role: normalizeRole(user.role)
     };
     next();
   } catch (error) {
@@ -47,7 +49,7 @@ export default async function auth(req, res, next) {
 }
 
 export function hasFullAccess(user) {
-  return fullAccessRoles.has(String(user?.role || '').toLowerCase());
+  return isAdministratorRole(user?.role);
 }
 
 export function requireFullAccess(req, res, next) {

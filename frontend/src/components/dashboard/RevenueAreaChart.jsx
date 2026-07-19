@@ -200,13 +200,23 @@ export default function RevenueAreaChart({
               }}
             />
             <Area
-              type="monotone"
+              type="linear"
               dataKey="revenue"
               stroke="#74B8E0"
               strokeWidth={3}
               fill="url(#dashboardRevenueFill)"
-              dot={{ r: 4.5, fill: '#ffffff', stroke: '#74B8E0', strokeWidth: 2.5 }}
-              activeDot={{ r: 6, fill: '#ffffff', stroke: '#74B8E0', strokeWidth: 3 }}
+              dot={{
+                r: 4.5,
+                fill: '#ffffff',
+                stroke: '#74B8E0',
+                strokeWidth: 2.5
+              }}
+              activeDot={{
+                r: 6,
+                fill: '#ffffff',
+                stroke: '#74B8E0',
+                strokeWidth: 3
+              }}
             />
           </AreaChart>
         </ResponsiveContainer>

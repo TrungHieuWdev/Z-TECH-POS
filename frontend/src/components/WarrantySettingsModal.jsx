@@ -35,7 +35,7 @@ export default function WarrantySettingsModal({ isOpen, onClose, canEdit, userNa
       {tab === tabs[6] && <Section title="Lịch sử thay đổi chính sách" note="Lịch sử chỉ xem và không thể xóa."><Table heads={['Thời gian','Người chỉnh','Loại chính sách','Nội dung trước','Nội dung sau']} rows={data.history.length ? data.history.map((x) => [new Date(x.time).toLocaleString('vi-VN'),x.user,x.type,x.before,x.after]) : [['Chưa có thay đổi','','','','']]}/></Section>}
     </div>
     <div className="sticky -bottom-4 z-20 -mx-4 flex flex-wrap items-center justify-between gap-3 border-t bg-white px-4 py-4 shadow-[0_-8px_20px_rgba(15,23,42,0.06)] sm:-bottom-6 sm:-mx-6 sm:px-6"><p className="hidden max-w-3xl text-xs leading-5 text-gray-600 md:block">Thiết lập mới chỉ áp dụng cho hóa đơn mới. Phiếu bảo hành và hóa đơn đã bán giữ nguyên chính sách tại thời điểm phát hành.</p><div className="grid w-full grid-cols-2 gap-2 md:flex md:w-auto"><button onClick={onClose} className="h-10 border border-gray-300 px-3 text-sm font-semibold sm:px-5">Hủy</button><button disabled={!canEdit} onClick={() => setShowConfirm(true)} className="h-10 bg-brand-strong px-3 text-sm font-semibold text-white disabled:bg-gray-300 sm:px-5">Lưu thiết lập</button></div></div>
-    {showConfirm && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 px-4">
+    {showConfirm && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/25 px-4 backdrop-blur-[1px]">
       <div className="w-full max-w-lg bg-white p-6 shadow-xl">
         <h3 className="text-lg font-semibold text-gray-950">Xác nhận lưu thiết lập</h3>
         <p className="mt-3 text-sm leading-6 text-gray-700">Bạn có chắc chắn muốn lưu các thay đổi trong chính sách bảo hành?</p>

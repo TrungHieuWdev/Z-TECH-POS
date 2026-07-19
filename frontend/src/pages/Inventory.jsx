@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import api from '../api/axios';
 import KpiCard from '../components/KpiCard';
+import PageTitle from '../components/PageTitle';
 import Modal from '../components/Modal';
 import TablePagination from '../components/TablePagination';
 import { formatCurrency, formatDate } from '../utils/format';
@@ -212,19 +213,19 @@ export default function Inventory() {
   return (
     <div className="space-y-5">
       <header className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-extrabold text-gray-950">Kho hàng</h1>
-          <p className="mt-1 text-sm font-medium text-gray-500">Theo dõi tồn kho, nhập thêm hàng và điều chỉnh số lượng sản phẩm khi cần.</p>
-        </div>
+        <PageTitle
+          title="Quản lý Kho hàng"
+          description="Theo dõi tồn kho, nhập thêm hàng và điều chỉnh số lượng sản phẩm khi cần."
+        />
         {activeTab === 'current' && hasFullAccess && (
           <div className="flex flex-wrap items-center justify-end gap-3">
-            <button type="button" onClick={() => openModal('count')} className="inline-flex h-10 items-center gap-2 border border-[#69afd6] bg-white px-4 text-sm font-bold text-[#398fbd] hover:bg-sky-50">
-              <ClipboardCheck size={18} />
-              Kiểm kê kho
+            <button type="button" onClick={() => openModal('count')} className="inline-flex min-h-14 items-center gap-3 border border-[#69afd6] bg-white px-4 text-left text-[#398fbd] transition hover:bg-sky-50">
+              <ClipboardCheck size={21} className="shrink-0" />
+              <span><strong className="block text-sm">Kiểm kê kho</strong><small className="block text-xs font-medium text-[#579fc8]">Ghi nhận số đếm thực tế</small></span>
             </button>
-            <button type="button" onClick={() => openModal('adjust')} className="inline-flex h-10 items-center gap-2 bg-[#69afd6] px-4 text-sm font-bold text-white hover:bg-[#579fc8]">
-              <PackageCheck size={18} />
-              Điều chỉnh tồn kho
+            <button type="button" onClick={() => openModal('adjust')} className="inline-flex min-h-14 items-center gap-3 border border-[#69afd6] bg-[#69afd6] px-4 text-left text-white transition hover:bg-[#579fc8]">
+              <PackageCheck size={21} className="shrink-0" />
+              <span><strong className="block text-sm">Điều chỉnh tồn kho</strong><small className="block text-xs font-medium text-sky-50">Sửa tồn và ghi rõ nguyên nhân</small></span>
             </button>
           </div>
         )}
@@ -403,8 +404,20 @@ export default function Inventory() {
         </>}
       </section>
 
-      <Modal isOpen={isOpen} onClose={closeModal} title={mode === 'in' ? 'Nhập kho' : mode === 'count' ? 'Kiểm kê kho' : 'Điều chỉnh tồn kho'} headerActions={<><button type="button" onClick={closeModal} className="h-11 border border-[#69afd6] bg-white px-5 text-base font-bold text-[#398fbd] hover:bg-sky-50">Hủy</button><button type="submit" form="inventory-form" className="h-11 bg-[#69afd6] px-5 text-base font-bold text-white hover:bg-[#579fc8]">{mode === 'count' ? 'Lưu kiểm kê' : 'Lưu'}</button></>}>
+      <Modal isOpen={isOpen} onClose={closeModal} title={mode === 'in' ? 'Nhập kho' : mode === 'count' ? 'Kiểm kê kho' : 'Điều chỉnh tồn kho'} headerActions={<><button type="button" onClick={closeModal} className="h-11 border border-gray-300 bg-white px-5 text-base font-bold text-gray-600 hover:bg-gray-50">Hủy</button><button type="submit" form="inventory-form" className={`h-11 px-5 text-base font-bold text-white ${mode === 'count' ? 'bg-emerald-600 hover:bg-emerald-700' : mode === 'adjust' ? 'bg-amber-500 hover:bg-amber-600' : 'bg-[#69afd6] hover:bg-[#579fc8]'}`}>{mode === 'count' ? 'Xác nhận số kiểm kê' : mode === 'adjust' ? 'Lưu điều chỉnh' : 'Lưu'}</button></>}>
         <form id="inventory-form" onSubmit={handleSubmit} className="space-y-4">
+          {mode === 'count' && (
+            <div className="flex gap-3 border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+              <ClipboardCheck size={20} className="mt-0.5 shrink-0" />
+              <div><strong className="block">Đối chiếu số lượng thực tế</strong><span className="mt-1 block text-emerald-700">Hãy đếm hàng tại kho rồi nhập đúng số lượng đang có. Hệ thống sẽ tự tính phần chênh lệch.</span></div>
+            </div>
+          )}
+          {mode === 'adjust' && (
+            <div className="flex gap-3 border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+              <AlertTriangle size={20} className="mt-0.5 shrink-0 text-amber-600" />
+              <div><strong className="block">Thay đổi tồn kho có chủ đích</strong><span className="mt-1 block text-amber-800">Dùng khi hàng hư, mất, nhập sai hoặc xuất trả. Mọi thay đổi phải có lý do để đối soát.</span></div>
+            </div>
+          )}
           <label className="block">
             <span className="mb-1 block text-sm font-medium text-gray-700">Sản phẩm</span>
             <select value={form.product_id} onChange={(event) => setForm({ ...form, product_id: event.target.value })} className="w-full border border-gray-300 px-3 py-2 outline-none focus:border-sky-500" required>

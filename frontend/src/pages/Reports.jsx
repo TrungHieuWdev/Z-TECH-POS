@@ -2,9 +2,10 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useLocation } from 'react-router-dom';
 import {
-  BrainCircuit, Calculator, CalendarDays, CircleDollarSign, Download, Eye, FileSpreadsheet,
-  History, LoaderCircle, Minus, ReceiptText, RotateCcw, SlidersHorizontal, Trash2,
-  TrendingDown, TrendingUp, UserRound, X
+  AlertTriangle, ArrowRight, BrainCircuit, Calculator, CalendarDays, CheckCircle2,
+  CircleDollarSign, Download, Eye, FileSpreadsheet, History, Lightbulb,
+  LoaderCircle, Minus, ReceiptText, RotateCcw, SlidersHorizontal, Target,
+  Trash2, TrendingDown, TrendingUp, UserRound, X
 } from 'lucide-react';
 import { formatCurrency } from '../utils/format';
 import {
@@ -19,6 +20,7 @@ import {
 import { AiReportChart, CategoryRevenueChart, DailyRevenueChart, GrossProfitChart, PaymentChart, TopProductsChart } from '../components/reports/RevenueCharts';
 import Modal from '../components/Modal';
 import TablePagination from '../components/TablePagination';
+import PageLoading from '../components/PageLoading';
 
 const StableAiReportChart = memo(AiReportChart);
 const StableCategoryRevenueChart = memo(CategoryRevenueChart);
@@ -104,7 +106,7 @@ function ChangeBadge({ value, inverse = false }) {
   const number = Number(value || 0);
   return (
     <span className={`inline-flex px-2 py-0.5 text-xs font-bold ${changeTone(number, inverse)}`}>
-      {number > 0 ? '+' : ''}{number.toLocaleString('vi-VN')}%
+      {number > 0 ? '+' : ''}{number.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%
     </span>
   );
 }
@@ -452,10 +454,216 @@ function AiHistoryModal({
   );
 }
 
+const findingStyles = {
+  positive: {
+    label: 'Tích cực',
+    border: 'border-emerald-400',
+    accent: 'bg-emerald-500',
+    badge: 'bg-emerald-100 text-emerald-800',
+    surface: 'bg-emerald-50/70'
+  },
+  info: {
+    label: 'Thông tin',
+    border: 'border-cyan-400',
+    accent: 'bg-cyan-500',
+    badge: 'bg-cyan-100 text-cyan-800',
+    surface: 'bg-cyan-50/70'
+  },
+  warning: {
+    label: 'Cần chú ý',
+    border: 'border-amber-400',
+    accent: 'bg-amber-500',
+    badge: 'bg-amber-100 text-amber-900',
+    surface: 'bg-amber-50/70'
+  },
+  critical: {
+    label: 'Quan trọng',
+    border: 'border-rose-400',
+    accent: 'bg-rose-500',
+    badge: 'bg-rose-100 text-rose-800',
+    surface: 'bg-rose-50/70'
+  }
+};
+
+const actionStyles = {
+  high: {
+    label: 'Ưu tiên cao',
+    border: 'border-rose-300',
+    accent: 'bg-rose-500',
+    badge: 'bg-rose-100 text-rose-800'
+  },
+  medium: {
+    label: 'Ưu tiên trung bình',
+    border: 'border-amber-300',
+    accent: 'bg-amber-500',
+    badge: 'bg-amber-100 text-amber-900'
+  },
+  low: {
+    label: 'Ưu tiên thấp',
+    border: 'border-emerald-300',
+    accent: 'bg-emerald-500',
+    badge: 'bg-emerald-100 text-emerald-800'
+  }
+};
+
+function FindingCard({ item, index }) {
+  const style = findingStyles[item.severity] || findingStyles.info;
+
+  return (
+    <article className={`relative overflow-hidden border bg-white ${style.border}`}>
+      <div className={`absolute inset-y-0 left-0 w-1.5 ${style.accent}`} />
+
+      <div className="p-5 pl-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="grid h-8 w-8 shrink-0 place-items-center bg-slate-900 text-xs font-black text-white">
+              {String(index + 1).padStart(2, '0')}
+            </span>
+            <div>
+              <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-slate-500">
+                Vấn đề phân tích
+              </p>
+              <h4 className="mt-1 text-base font-extrabold text-slate-950">
+                {item.title}
+              </h4>
+            </div>
+          </div>
+
+          <span className={`px-2.5 py-1 text-[11px] font-extrabold ${style.badge}`}>
+            {style.label}
+          </span>
+        </div>
+
+        <div className={`mt-4 p-3 ${style.surface}`}>
+          <p className="text-sm font-medium leading-6 text-slate-800">
+            {item.insight}
+          </p>
+        </div>
+
+        {item.impact && (
+          <div className="mt-4 grid grid-cols-[24px_1fr] gap-3 border-t border-slate-200 pt-4">
+            <AlertTriangle size={20} className="mt-0.5 text-rose-600" />
+            <div>
+              <p className="text-[11px] font-extrabold uppercase tracking-wide text-rose-700">
+                Tác động đến cửa hàng
+              </p>
+              <p className="mt-1 text-sm leading-6 text-slate-700">
+                {item.impact}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {item.evidence?.length > 0 && (
+          <div className="mt-4 border-t border-slate-200 pt-4">
+            <p className="text-[11px] font-extrabold uppercase tracking-wide text-slate-500">
+              Số liệu cần ghi nhớ
+            </p>
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              {item.evidence.map((entry, evidenceIndex) => (
+                <div
+                  key={evidenceIndex}
+                  className="flex items-start gap-2 border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold leading-5 text-slate-700"
+                >
+                  <span className={`mt-1.5 h-2 w-2 shrink-0 ${style.accent}`} />
+                  <span>{entry}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </article>
+  );
+}
+
+function ActionCard({ action, index }) {
+  const style = actionStyles[action.priority] || actionStyles.medium;
+
+  return (
+    <article className={`overflow-hidden border bg-white ${style.border}`}>
+      <div className={`h-1.5 w-full ${style.accent}`} />
+
+      <div className="p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="grid h-9 w-9 shrink-0 place-items-center border-2 border-slate-900 text-sm font-black text-slate-900">
+              {index + 1}
+            </span>
+            <h4 className="text-base font-extrabold text-slate-950">
+              {action.title}
+            </h4>
+          </div>
+
+          <span className={`px-2.5 py-1 text-[11px] font-extrabold ${style.badge}`}>
+            {style.label}
+          </span>
+        </div>
+
+        <div className="mt-4 grid grid-cols-[24px_1fr] gap-3 bg-slate-50 p-3">
+          <Lightbulb size={20} className="mt-0.5 text-amber-600" />
+          <div>
+            <p className="text-[11px] font-extrabold uppercase tracking-wide text-slate-500">
+              Vì sao cần thực hiện
+            </p>
+            <p className="mt-1 text-sm leading-6 text-slate-700">
+              {action.reason}
+            </p>
+          </div>
+        </div>
+
+        {action.steps?.length > 0 && (
+          <div className="mt-4">
+            <p className="flex items-center gap-2 text-[11px] font-extrabold uppercase tracking-wide text-slate-600">
+              <Target size={16} className="text-cyan-700" />
+              Việc cần làm
+            </p>
+            <ol className="mt-3 space-y-2">
+              {action.steps.map((step, stepIndex) => (
+                <li
+                  key={stepIndex}
+                  className="grid grid-cols-[28px_1fr] items-start gap-3 border border-cyan-100 bg-cyan-50/60 p-3"
+                >
+                  <span className="grid h-7 w-7 place-items-center bg-cyan-700 text-xs font-black text-white">
+                    {stepIndex + 1}
+                  </span>
+                  <span className="pt-0.5 text-sm font-semibold leading-6 text-slate-800">
+                    {step}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
+
+        {action.expectedImpact && (
+          <div className="mt-4 grid grid-cols-[24px_1fr] gap-3 border border-emerald-200 bg-emerald-50 p-3">
+            <CheckCircle2 size={20} className="mt-0.5 text-emerald-700" />
+            <div>
+              <p className="text-[11px] font-extrabold uppercase tracking-wide text-emerald-800">
+                Kết quả mong đợi
+              </p>
+              <p className="mt-1 text-sm font-semibold leading-6 text-emerald-950">
+                {action.expectedImpact}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {action.evidence && (
+          <div className="mt-3 flex items-start gap-2 border-t border-slate-200 pt-3 text-xs leading-5 text-slate-500">
+            <ArrowRight size={15} className="mt-0.5 shrink-0" />
+            <span>
+              <strong className="text-slate-700">Căn cứ dữ liệu:</strong> {action.evidence}
+            </span>
+          </div>
+        )}
+      </div>
+    </article>
+  );
+}
+
 function AiPanel({ data, isLoading, error, historyEntry }) {
-  const priority = { high: 'Cao', medium: 'Trung bình', low: 'Thấp' };
-  const severity = { positive: 'Tích cực', info: 'Thông tin', warning: 'Cần chú ý', critical: 'Quan trọng' };
-  const findingTone = { positive: 'border-emerald-300 bg-emerald-50', info: 'border-cyan-300 bg-cyan-50', warning: 'border-amber-300 bg-amber-50', critical: 'border-rose-300 bg-rose-50' };
   if (!data && !isLoading && !error) return null;
   return (
     <section id="ai-analysis-panel" className="border border-slate-200 bg-white p-4 shadow-sm">
@@ -480,8 +688,57 @@ function AiPanel({ data, isLoading, error, historyEntry }) {
           <div className="border border-slate-200 p-5"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Nhận định theo bộ lọc</p><p className="mt-3 text-sm leading-7 text-slate-800">{data.executiveSummary}</p></div>
         </div>
         {(data.charts || []).length > 0 && <div><h3 className="mb-3 text-base font-extrabold text-slate-900">Biểu đồ phân tích</h3><div className="grid gap-4 lg:grid-cols-2">{data.charts.map((chart, index) => <article key={chart.id || index} className={`ai-chart-reveal border border-slate-200 p-4 ${index === 0 ? 'lg:col-span-2' : ''}`} style={{ '--ai-chart-delay': `${index * 160}ms` }}><h4 className="text-sm font-extrabold uppercase tracking-wide text-slate-800">{chart.title}</h4><div className="mt-3 h-64"><StableAiReportChart spec={chart} revealIndex={index} /></div></article>)}</div></div>}
-        {(data.findings || []).length > 0 && <div><h3 className="mb-3 text-base font-extrabold text-slate-900">Phân tích chi tiết</h3><div className="grid gap-3 lg:grid-cols-2">{data.findings.map((item, index) => <article key={`${item.title}-${index}`} className={`border p-4 ${findingTone[item.severity] || findingTone.info}`}><div className="flex items-start justify-between gap-3"><h4 className="font-extrabold text-slate-900">{item.title}</h4><span className="shrink-0 bg-white/70 px-2 py-1 text-[11px] font-bold text-slate-700">{severity[item.severity] || severity.info}</span></div><p className="mt-2 text-sm leading-6 text-slate-700">{item.insight}</p>{item.impact && <div className="mt-3 border-l-2 border-slate-400/50 pl-3"><p className="text-[11px] font-extrabold uppercase text-slate-500">Tác động</p><p className="mt-1 text-sm leading-5 text-slate-700">{item.impact}</p></div>}{item.evidence?.length > 0 && <div className="mt-3"><p className="text-[11px] font-extrabold uppercase text-slate-500">Số liệu dẫn chứng</p><ul className="mt-1 space-y-1">{item.evidence.map((entry, evidenceIndex) => <li key={evidenceIndex} className="flex gap-2 text-xs font-semibold leading-5 text-slate-600"><span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-slate-500" />{entry}</li>)}</ul></div>}</article>)}</div></div>}
-        {(data.actions || []).length > 0 && <div><h3 className="mb-3 text-base font-extrabold text-slate-900">Hành động đề xuất</h3><div className="grid gap-3 lg:grid-cols-2">{data.actions.map((action, actionIndex) => <article key={`${action.title}-${actionIndex}`} className="border border-slate-200 p-4"><div className="flex items-start justify-between gap-3"><h4 className="font-extrabold text-slate-900">{action.title}</h4><span className="h-fit shrink-0 bg-slate-100 px-2 py-1 text-[11px] font-bold text-slate-700">Ưu tiên {priority[action.priority] || priority.medium}</span></div><p className="mt-2 text-sm leading-6 text-slate-600">{action.reason}</p>{action.steps?.length > 0 && <ol className="mt-3 space-y-2">{action.steps.map((step, stepIndex) => <li key={stepIndex} className="flex gap-2 text-sm leading-5 text-slate-700"><span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-cyan-50 text-[11px] font-extrabold text-cyan-800">{stepIndex + 1}</span><span>{step}</span></li>)}</ol>}{action.expectedImpact && <p className="mt-3 border-t border-slate-100 pt-3 text-xs leading-5 text-slate-600"><strong className="text-slate-800">Kết quả mong đợi:</strong> {action.expectedImpact}</p>}{action.evidence && <p className="mt-2 text-xs font-semibold leading-5 text-slate-500">Căn cứ: {action.evidence}</p>}</article>)}</div></div>}
+        {(data.findings || []).length > 0 && (
+          <div>
+            <div className="mb-3 flex items-center gap-3">
+              <span className="h-6 w-1.5 bg-cyan-600" />
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900">
+                  Phân tích chi tiết
+                </h3>
+                <p className="mt-0.5 text-xs font-medium text-slate-500">
+                  Vấn đề, tác động và số liệu quan trọng cần nắm bắt
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              {data.findings.map((item, index) => (
+                <FindingCard
+                  key={`${item.title}-${index}`}
+                  item={item}
+                  index={index}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {(data.actions || []).length > 0 && (
+          <div>
+            <div className="mb-3 flex items-center gap-3">
+              <span className="h-6 w-1.5 bg-emerald-600" />
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900">
+                  Hành động đề xuất
+                </h3>
+                <p className="mt-0.5 text-xs font-medium text-slate-500">
+                  Danh sách công việc theo thứ tự ưu tiên và kết quả mong đợi
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              {data.actions.map((action, actionIndex) => (
+                <ActionCard
+                  key={`${action.title}-${actionIndex}`}
+                  action={action}
+                  index={actionIndex}
+                />
+              ))}
+            </div>
+          </div>
+        )}
       </div>}
     </section>
   );
@@ -697,12 +954,11 @@ export default function Reports() {
       ? `Chưa đủ dữ liệu cho toàn bộ ${selectedDays.toLocaleString('vi-VN')} ngày đã chọn. Hệ thống hiện có dữ liệu từ ${displayDate(dataAvailability.availableFrom)}; phần dữ liệu hiện có vẫn được hiển thị bên dưới.`
       : '';
   const trendUnit = { hour: 'GIỜ', day: 'NGÀY', week: 'TUẦN', month: 'THÁNG' }[dashboard?.trend?.grouping] || 'NGÀY';
-  const costRatio = metrics.netRevenue > 0 ? (Number(metrics.cost || 0) / Number(metrics.netRevenue)) * 100 : 0;
-  const grossMargin = metrics.netRevenue > 0 ? (Number(metrics.grossProfit || 0) / Number(metrics.netRevenue)) * 100 : 0;
+  const missingCostDetail = `Còn ${Number(metrics.missingCostProductCount || 0).toLocaleString('vi-VN')} sản phẩm đã bán trong kỳ thiếu giá vốn`;
   const kpis = [
     { label: 'Doanh thu thuần', value: metrics.netRevenue, change: metrics.changes?.netRevenue, tooltip: 'Doanh thu gộp - giảm giá - hoàn trả; không gồm VAT.', currency: true, icon: CircleDollarSign, iconTone: 'bg-blue-50 text-blue-700' },
-    { label: 'Giá vốn hàng bán', value: metrics.cost, change: metrics.changes?.cost, tooltip: 'Tổng giá vốn của sản phẩm thuộc các hóa đơn đã hoàn thành; hiện được tính theo cost_price hiện tại.', currency: true, icon: Calculator, iconTone: 'bg-rose-50 text-rose-700', detail: `Tỷ lệ giá vốn: ${costRatio.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%` },
-    { label: 'Lợi nhuận gộp', value: metrics.grossProfit, change: metrics.changes?.grossProfit, tooltip: 'Doanh thu thuần - giá vốn hàng bán.', currency: true, icon: TrendingUp, iconTone: 'bg-emerald-50 text-emerald-700', detail: `Biên lợi nhuận: ${grossMargin.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%` },
+    { label: 'Giá vốn hàng bán', value: metrics.cost, change: metrics.changes?.cost, tooltip: 'Tổng số lượng thực bán nhân giá vốn snapshot của từng dòng hóa đơn hoàn thành.', currency: true, unavailable: !metrics.costDataComplete, icon: Calculator, iconTone: 'bg-rose-50 text-rose-700', detail: metrics.costDataComplete ? `Tỷ lệ giá vốn: ${Number(metrics.costRatio || 0).toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%` : missingCostDetail },
+    { label: 'Lợi nhuận gộp', value: metrics.grossProfit, change: metrics.changes?.grossProfit, tooltip: 'Doanh thu thuần - giá vốn hàng bán.', currency: true, unavailable: !metrics.costDataComplete, icon: TrendingUp, iconTone: 'bg-emerald-50 text-emerald-700', detail: metrics.costDataComplete ? `Biên lợi nhuận: ${Number(metrics.grossMargin || 0).toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%` : missingCostDetail },
     { label: 'Đơn hoàn thành', value: metrics.completedOrders, change: metrics.changes?.completedOrders, tooltip: 'Số hóa đơn hoàn thành trong khoảng thời gian đã chọn.', suffix: ' đơn', icon: ReceiptText, iconTone: 'bg-amber-50 text-amber-700', detail: `Giá trị TB/đơn: ${formatCurrency(metrics.averageOrderValue)}` }
   ];
 
@@ -779,14 +1035,17 @@ export default function Reports() {
         </div>
       </Modal>
 
+      {loading ? (
+        <PageLoading message="Đang tải dữ liệu trang" />
+      ) : (
       <div className="space-y-5">
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {loading ? Array.from({ length: 4 }, (_, index) => <Skeleton key={index} className="h-32" />) : kpis.map(({ label, value, change, tooltip, currency, suffix = '', icon: Icon, iconTone, detail }) => (
+        {loading ? Array.from({ length: 4 }, (_, index) => <Skeleton key={index} className="h-32" />) : kpis.map(({ label, value, change, tooltip, currency, suffix = '', unavailable = false, icon: Icon, iconTone, detail }) => (
           <article key={label} className="border border-slate-200 bg-white p-4 shadow-sm" title={tooltip}>
             <div className="flex items-start justify-between gap-2"><p className="pt-1 text-xs font-extrabold uppercase tracking-wide text-slate-500">{label}</p><span className={`grid h-9 w-9 shrink-0 place-items-center rounded-md ${iconTone}`}><Icon size={18} strokeWidth={1.8} /></span></div>
-            <p className="mt-3 truncate text-2xl font-black text-slate-950">{currency ? formatCurrency(value) : `${Number(value || 0).toLocaleString('vi-VN')}${suffix}`}</p>
+            <p className="mt-3 truncate text-2xl font-black text-slate-950">{unavailable ? 'Chưa đủ giá vốn' : currency ? formatCurrency(value) : `${Number(value || 0).toLocaleString('vi-VN')}${suffix}`}</p>
             <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
-              {filters.compare && <><ChangeBadge value={change} /><span className="text-[11px] text-slate-500">kỳ trước</span></>}
+              {filters.compare && !unavailable && <><ChangeBadge value={change} /><span className="text-[11px] text-slate-500">kỳ trước</span></>}
               {detail && <span className="text-[11px] font-semibold text-slate-600">{filters.compare ? '· ' : ''}{detail}</span>}
             </div>
           </article>
@@ -831,6 +1090,7 @@ export default function Reports() {
       )}
 
       </div>
+      )}
     </div>
   );
 }

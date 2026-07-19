@@ -1,8 +1,15 @@
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
 import { lazy, Suspense, useEffect } from 'react';
 import toast, { Toaster } from 'react-hot-toast';
-import { canAccessPath, getToken, getUser } from './utils/auth';
-import { isFullAccessRole } from './utils/auth';
+import {
+  canAccessPath,
+  getToken,
+  getUser,
+  isFullAccessRole
+} from './utils/auth';
+import SessionSecurity from './components/SessionSecurity';
+import NetworkStatus from './components/NetworkStatus';
+import PageLoading from './components/PageLoading';
 
 const Layout = lazy(() => import('./components/Layout'));
 const Login = lazy(() => import('./pages/Login'));
@@ -26,7 +33,7 @@ const SettingsPage = lazy(() => import('./components/settings/SettingsPage'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 
 function PageLoader() {
-  return <main className="grid min-h-screen place-items-center bg-slate-50 text-sm font-medium text-slate-600">Đang tải Z-TECH POS...</main>;
+  return <PageLoading message="Đang tải dữ liệu trang" fullScreen />;
 }
 
 function ProtectedRoute() {
@@ -53,8 +60,10 @@ function HomePage() {
 
 export default function App() {
   return (
-    <BrowserRouter future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
+    <NetworkStatus>
+    <BrowserRouter future={{ v7_relativeSplatPath: true }}>
       <Toaster position="top-right" />
+      <SessionSecurity />
       <Suspense fallback={<PageLoader />}>
        <Routes>
         <Route path="/login" element={<Login />} />
@@ -62,7 +71,8 @@ export default function App() {
         <Route element={<ProtectedRoute />}>
           <Route element={<Layout />}>
             <Route element={<PermissionRoute />}>
-            <Route path="/" element={<HomePage />} />
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/dashboard" element={<HomePage />} />
             <Route path="/pos" element={<POS />} />
             <Route path="/products" element={<ProductManagement />} />
             <Route path="/products/promotions" element={<ProductManagement />} />
@@ -95,5 +105,6 @@ export default function App() {
        </Routes>
       </Suspense>
     </BrowserRouter>
+    </NetworkStatus>
   );
 }

@@ -1,0 +1,47 @@
+@startuml
+left to right direction
+skinparam linetype ortho
+skinparam nodesep 45
+skinparam ranksep 55
+
+|Quản trị viên|
+start
+:Mở chức năng nhập hàng;
+:Chọn nhà cung cấp;
+:Thêm sản phẩm, số lượng và giá nhập;
+:Nhập thông tin thanh toán và hạn thanh toán;
+:Gửi phiếu nhập;
+
+|Hệ thống|
+:Xác thực và kiểm tra toàn quyền;
+:Kiểm tra dữ liệu phiếu nhập;
+:Khóa và kiểm tra nhà cung cấp;
+if (Nhà cung cấp hợp lệ?) then (Có)
+  :Tạo phiếu nhập trạng thái hoàn tất;
+  :Sinh mã phiếu nhập;
+  repeat
+    :Khóa và đọc sản phẩm;
+    if (Sản phẩm tồn tại?) then (Có)
+      :Tạo chi tiết phiếu nhập;
+      :Cộng tồn và cập nhật giá vốn;
+      :Ghi biến động kho IMPORT;
+    else (Không)
+      :Rollback giao dịch;
+      :Thông báo không tìm thấy sản phẩm;
+      stop
+    endif
+  repeat while (Còn sản phẩm?) is (Có)
+  -> Không;
+  :Tính tổng tiền và trạng thái thanh toán;
+  :Cập nhật phiếu nhập;
+  :Commit giao dịch;
+  :Trả mã phiếu nhập;
+  |Quản trị viên|
+  :Hiển thị thông báo nhập kho thành công;
+  stop
+else (Không)
+  :Rollback giao dịch;
+  :Thông báo nhà cung cấp không hợp lệ;
+  stop
+endif
+@enduml

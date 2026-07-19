@@ -8,12 +8,25 @@ const refundJoin = `
     GROUP BY order_id
   ) rf ON rf.order_id = o.id`;
 
+const returnJoin = `
+  LEFT JOIN (
+    SELECT reference_id AS order_id, product_id, SUM(quantity) AS returned_quantity
+    FROM inventory_logs
+    WHERE type = 'RETURN' AND reference_type = 'ORDER'
+    GROUP BY reference_id, product_id
+  ) returned ON returned.order_id = o.id AND returned.product_id = oi.product_id`;
+
 const lineDiscount = `CASE WHEN o.subtotal > 0
   THEN (oi.subtotal / o.subtotal) * COALESCE(o.discount, 0) ELSE 0 END`;
 const lineRefund = `CASE WHEN o.subtotal > 0
   THEN (oi.subtotal / o.subtotal) * COALESCE(rf.refund_amount, 0) ELSE 0 END`;
 const lineNet = `(oi.subtotal - ${lineDiscount} - ${lineRefund})`;
-const lineCost = `(oi.quantity * COALESCE(oi.cost_price_snapshot, p.cost_price, 0))`;
+const soldQuantity = `GREATEST(oi.quantity - COALESCE(returned.returned_quantity, 0), 0)`;
+// Historical COGS must come from the immutable sale-time cost. Falling back
+// to products.cost_price would silently rewrite old profit after a price change.
+const unitCost = `NULLIF(oi.cost_at_sale, 0)`;
+const validCost = `(${unitCost} IS NOT NULL AND ${unitCost} > 0)`;
+const lineCost = `(${soldQuantity} * ${unitCost})`;
 
 function buildWhere(filters, { from = filters.from, to = filters.to, completedOnly = false } = {}) {
   const clauses = ['o.created_at >= ?', "o.created_at < DATE_ADD(?, INTERVAL 1 DAY)"];
@@ -51,12 +64,21 @@ export async function getAggregate(filters, range = {}) {
        COALESCE(SUM(CASE WHEN o.status='completed' THEN oi.subtotal ELSE 0 END), 0) AS gross_revenue,
        COALESCE(SUM(CASE WHEN o.status='completed' THEN ${lineDiscount} ELSE 0 END), 0) AS discount,
        COALESCE(SUM(CASE WHEN o.status='completed' THEN ${lineRefund} ELSE 0 END), 0) AS refunds,
-       COALESCE(SUM(CASE WHEN o.status='completed' THEN ${lineCost} ELSE 0 END), 0) AS cost,
+       CASE WHEN COUNT(CASE WHEN o.status='completed' AND ${soldQuantity} > 0 AND NOT ${validCost} THEN 1 END) = 0
+         THEN COALESCE(SUM(CASE WHEN o.status='completed' AND ${validCost} THEN ${lineCost} END), 0)
+         ELSE NULL END AS cost,
+       COALESCE(SUM(CASE WHEN o.status='completed' AND ${validCost} THEN ${lineCost} END), 0) AS known_cost,
+       COALESCE(SUM(CASE WHEN o.status='completed' THEN ${soldQuantity} ELSE 0 END), 0) AS products_sold,
+       COUNT(DISTINCT CASE WHEN o.status='completed' AND ${soldQuantity} > 0 AND NOT ${validCost}
+         THEN oi.product_id END) AS missing_cost_product_count,
+       COUNT(CASE WHEN o.status='completed' AND ${soldQuantity} > 0 AND NOT ${validCost}
+         THEN 1 END) AS missing_cost_line_count,
        COUNT(DISTINCT CASE WHEN o.status='completed' THEN o.id END) AS completed_orders
      FROM order_items oi
      JOIN orders o ON o.id = oi.order_id
      JOIN products p ON p.id = oi.product_id
      ${refundJoin}
+     ${returnJoin}
      WHERE ${where.sql}`,
     where.params
   );
@@ -79,11 +101,13 @@ export async function getDaily(filters, range = {}) {
   return query(
     `SELECT DATE_FORMAT(o.created_at, '%Y-%m-%d') AS date,
        COALESCE(SUM(${lineNet}), 0) AS net_revenue,
-       COALESCE(SUM(${lineNet} - ${lineCost}), 0) AS gross_profit
+       CASE WHEN COUNT(CASE WHEN ${soldQuantity} > 0 AND NOT ${validCost} THEN 1 END) = 0
+         THEN COALESCE(SUM(${lineNet} - ${lineCost}), 0) ELSE NULL END AS gross_profit
      FROM order_items oi
      JOIN orders o ON o.id = oi.order_id
      JOIN products p ON p.id = oi.product_id
      ${refundJoin}
+     ${returnJoin}
      WHERE ${where.sql}
      GROUP BY DATE_FORMAT(o.created_at, '%Y-%m-%d')
      ORDER BY date`,
@@ -96,11 +120,13 @@ export async function getHourlyTrend(filters) {
   return query(
     `SELECT HOUR(o.created_at) AS hour,
        COALESCE(SUM(${lineNet}), 0) AS net_revenue,
-       COALESCE(SUM(${lineNet} - ${lineCost}), 0) AS gross_profit
+       CASE WHEN COUNT(CASE WHEN ${soldQuantity} > 0 AND NOT ${validCost} THEN 1 END) = 0
+         THEN COALESCE(SUM(${lineNet} - ${lineCost}), 0) ELSE NULL END AS gross_profit
      FROM order_items oi
      JOIN orders o ON o.id = oi.order_id
      JOIN products p ON p.id = oi.product_id
      ${refundJoin}
+     ${returnJoin}
      WHERE ${where.sql}
      GROUP BY HOUR(o.created_at)
      ORDER BY hour`,
@@ -113,13 +139,14 @@ export async function getCategories(filters, range = {}) {
   return query(
     `SELECT p.category_id AS category_id,
        COALESCE(c.name, 'Chưa phân loại') AS name,
-       COALESCE(SUM(oi.quantity), 0) AS sold_quantity,
+       COALESCE(SUM(${soldQuantity}), 0) AS sold_quantity,
        COALESCE(SUM(${lineNet}), 0) AS net_revenue
      FROM order_items oi
      JOIN orders o ON o.id = oi.order_id
      JOIN products p ON p.id = oi.product_id
      LEFT JOIN categories c ON c.id = p.category_id
      ${refundJoin}
+     ${returnJoin}
      WHERE ${where.sql}
      GROUP BY p.category_id, c.name
      ORDER BY net_revenue DESC`,
@@ -193,27 +220,69 @@ export async function getProducts(filters, { exportAll = false } = {}) {
   const rows = await query(
     `SELECT p.id AS product_id, COALESCE(p.sku, '') AS sku, p.name,
        COALESCE(c.name, 'Chưa phân loại') AS category_name,
-       COALESCE(SUM(oi.quantity), 0) AS sold_quantity,
+       COALESCE(SUM(${soldQuantity}), 0) AS sold_quantity,
        COALESCE(SUM(oi.subtotal), 0) AS gross_revenue,
        COALESCE(SUM(${lineDiscount}), 0) AS discount,
        COALESCE(SUM(${lineRefund}), 0) AS refunds,
        COALESCE(SUM(${lineNet}), 0) AS net_revenue,
-       COALESCE(SUM(${lineCost}), 0) AS cost,
-       COALESCE(SUM(${lineNet} - ${lineCost}), 0) AS gross_profit,
-       CASE WHEN SUM(${lineNet}) <> 0
+       CASE WHEN COUNT(CASE WHEN ${soldQuantity} > 0 AND NOT ${validCost} THEN 1 END) = 0
+         THEN COALESCE(SUM(${lineCost}), 0) ELSE NULL END AS cost,
+       CASE WHEN COUNT(CASE WHEN ${soldQuantity} > 0 AND NOT ${validCost} THEN 1 END) = 0
+         THEN COALESCE(SUM(${lineNet} - ${lineCost}), 0) ELSE NULL END AS gross_profit,
+       CASE WHEN COUNT(CASE WHEN ${soldQuantity} > 0 AND NOT ${validCost} THEN 1 END) = 0 AND SUM(${lineNet}) <> 0
          THEN (SUM(${lineNet} - ${lineCost}) / SUM(${lineNet})) * 100 ELSE 0 END AS margin,
-       0 AS returned_quantity
+       COALESCE(SUM(returned.returned_quantity), 0) AS returned_quantity,
+       COUNT(CASE WHEN ${soldQuantity} > 0 AND NOT ${validCost} THEN 1 END) AS missing_cost_line_count
      FROM order_items oi
      JOIN orders o ON o.id=oi.order_id
      JOIN products p ON p.id=oi.product_id
      LEFT JOIN categories c ON c.id=p.category_id
      ${refundJoin}
+     ${returnJoin}
      WHERE ${where.sql}${searchClause}
      GROUP BY p.id, p.sku, p.name, c.name
      ORDER BY ${sortColumn} ${filters.sortOrder.toUpperCase()}, p.id ASC${pagingSql}`,
     dataParams
   );
   return { rows, total: Number(countRows[0]?.total || 0) };
+}
+
+export async function getMissingCostItems(filters, range = {}) {
+  const where = buildWhere(filters, { ...range, completedOnly: true });
+  return query(
+    `SELECT p.id AS product_id, p.sku, p.name,
+       SUM(${soldQuantity}) AS sold_quantity,
+       COUNT(*) AS invoice_line_count
+     FROM order_items oi
+     JOIN orders o ON o.id = oi.order_id
+     JOIN products p ON p.id = oi.product_id
+     ${returnJoin}
+     WHERE ${where.sql} AND ${soldQuantity} > 0 AND NOT ${validCost}
+     GROUP BY p.id, p.sku, p.name
+     ORDER BY p.sku, p.id`,
+    where.params
+  );
+}
+
+export async function getCostReconciliation(filters) {
+  const where = buildWhere(filters, { completedOnly: true });
+  return query(
+    `SELECT o.id AS order_id, o.order_number, oi.id AS order_item_id,
+       p.id AS product_id, p.sku, p.name,
+       ${soldQuantity} AS sold_quantity,
+       oi.unit_price, ${lineNet} AS net_revenue,
+       ${unitCost} AS unit_cost,
+       CASE WHEN ${validCost} THEN ${lineCost} ELSE NULL END AS total_cost,
+       CASE WHEN ${validCost} THEN 'complete' ELSE 'missing' END AS cost_status
+     FROM order_items oi
+     JOIN orders o ON o.id = oi.order_id
+     JOIN products p ON p.id = oi.product_id
+     ${refundJoin}
+     ${returnJoin}
+     WHERE ${where.sql} AND ${soldQuantity} > 0
+     ORDER BY o.created_at, o.id, oi.id`,
+    where.params
+  );
 }
 
 export async function getFilterOptions() {

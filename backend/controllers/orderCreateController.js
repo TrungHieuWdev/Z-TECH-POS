@@ -122,7 +122,7 @@ export async function create(req, res) {
           ...product,
           ...item,
           unit_price: unitPrice,
-          cost_price_snapshot: Number(product.cost_price || 0),
+          cost_at_sale: Number(product.cost_price) > 0 ? Number(product.cost_price) : null,
           subtotal: unitPrice * item.quantity
         };
       });
@@ -224,10 +224,10 @@ export async function create(req, res) {
         const orderItemResult = await db(
           `INSERT INTO order_items
            (order_id, product_id, quantity, purchased_quantity, gift_quantity, unit_price,
-            cost_price_snapshot, subtotal, warranty_enabled_snapshot, warranty_period_days_snapshot,
+            cost_price_snapshot, cost_at_sale, subtotal, warranty_enabled_snapshot, warranty_period_days_snapshot,
             warranty_type_snapshot, warranty_conditions_snapshot, warranty_exclusions_snapshot,
             warranty_note_snapshot, public_token)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             orderResult.insertId,
             item.product_id,
@@ -235,7 +235,8 @@ export async function create(req, res) {
             item.purchased_quantity,
             item.gift_quantity,
             item.unit_price,
-            item.cost_price_snapshot,
+            item.cost_at_sale,
+            item.cost_at_sale,
             item.subtotal,
             item.warranty_enabled,
             item.warranty_period_days,

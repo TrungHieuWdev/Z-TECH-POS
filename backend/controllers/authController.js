@@ -3,6 +3,8 @@ import jwt from 'jsonwebtoken';
 import { query } from '../config/db.js';
 import { getJwtExpiresIn, getJwtSecret } from '../config/auth.js';
 import { hasActiveShift } from '../services/shiftService.js';
+import { isAdministratorRole, normalizeRole } from '../utils/roles.js';
+import { validatePasswordPolicy } from '../security/passwordPolicy.js';
 
 function normalizeEmployeeCode(value = '') {
   return String(value).trim().toUpperCase();
@@ -24,7 +26,7 @@ export async function login(req, res) {
     }
 
     const users = await query(
-      `SELECT id, name, email, employee_code, password, role, status
+      `SELECT id, name, email, employee_code, password, role, status, token_version
        FROM users
        WHERE employee_code = ? OR email = ?
        LIMIT 1`,
@@ -46,7 +48,7 @@ export async function login(req, res) {
       return res.status(401).json({ message: 'Mật khẩu hoặc mã đăng nhập bạn nhập bị sai' });
     }
 
-    const fullAccess = ['owner', 'manager', 'admin'].includes(String(user.role || '').toLowerCase());
+    const fullAccess = isAdministratorRole(user.role);
     if (!fullAccess && !(await hasActiveShift(user))) {
       return res.status(403).json({ message: 'Quản lý cần mở và bắt đầu ca làm trước khi nhân viên đăng nhập' });
     }
@@ -56,11 +58,11 @@ export async function login(req, res) {
       name: user.name,
       email: user.email,
       employeeCode: user.employee_code || employeeCode,
-      role: user.role
+      role: normalizeRole(user.role)
     };
 
     const token = jwt.sign(
-      safeUser,
+      { ...safeUser, tokenVersion: Number(user.token_version || 0) },
       getJwtSecret(),
       { expiresIn: getJwtExpiresIn() }
     );
@@ -105,7 +107,7 @@ export async function getMe(req, res) {
       name: user.name,
       email: user.email,
       employeeCode: user.employee_code,
-      role: user.role,
+      role: normalizeRole(user.role),
       lastLoginAt: user.last_login_at || null
     });
   } catch (error) {
@@ -122,9 +124,8 @@ export async function changePassword(req, res) {
     if (!currentPassword || !newPassword || !confirmPassword) {
       return res.status(400).json({ message: 'Vui lòng nhập đầy đủ thông tin mật khẩu' });
     }
-    if (newPassword.length < 8) {
-      return res.status(400).json({ message: 'Mật khẩu mới phải có ít nhất 8 ký tự' });
-    }
+    const passwordPolicyError = validatePasswordPolicy(newPassword, req.user.employeeCode);
+    if (passwordPolicyError) return res.status(400).json({ message: passwordPolicyError });
     if (newPassword === currentPassword) {
       return res.status(400).json({ message: 'Mật khẩu mới phải khác mật khẩu hiện tại' });
     }
@@ -140,7 +141,14 @@ export async function changePassword(req, res) {
     if (!isMatch) return res.status(400).json({ message: 'Mật khẩu hiện tại không đúng' });
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
-    await query('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, req.user.id]);
+    await query(
+      `UPDATE users
+       SET password = ?,
+           password_changed_at = NOW(),
+           token_version = token_version + 1
+       WHERE id = ?`,
+      [hashedPassword, req.user.id]
+    );
 
     res.json({ message: 'Đổi mật khẩu thành công' });
   } catch (error) {

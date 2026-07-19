@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import api from '../api/axios';
 import KpiCard from '../components/KpiCard';
+import PageTitle from '../components/PageTitle';
 import Modal from '../components/Modal';
 import TablePagination from '../components/TablePagination';
 import WarrantySettingsModal from '../components/WarrantySettingsModal';
@@ -573,12 +574,10 @@ export default function Warranty() {
   return (
     <div className="w-full space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-extrabold text-gray-950">Bảo hành</h1>
-          <p className="mt-1 text-sm font-medium text-gray-500">
-            Tra cứu thời hạn, tiếp nhận yêu cầu và theo dõi quá trình xử lý bảo hành cho khách hàng.
-          </p>
-        </div>
+        <PageTitle
+          title="Quản lý Bảo hành"
+          description="Tra cứu thời hạn, tiếp nhận yêu cầu và theo dõi quá trình xử lý bảo hành cho khách hàng."
+        />
         <button
           type="button"
           onClick={() => setShowWarrantySettings(true)}
@@ -720,11 +719,7 @@ export default function Warranty() {
         onClose={closeModal}
         title="Chi tiết bảo hành"
         maxWidth="max-w-5xl"
-        headerActions={(
-          <button type="button" onClick={closeModal} className="h-10 rounded border border-gray-300 bg-white px-4 text-sm font-bold text-gray-700 transition hover:bg-gray-50">
-            Đóng
-          </button>
-        )}
+        showCloseButton
       >
         {selectedWarranty && (
           <div className="grid gap-5 text-sm xl:grid-cols-[1fr_280px]">
