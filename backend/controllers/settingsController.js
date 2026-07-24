@@ -1,4 +1,5 @@
 import { query } from '../config/db.js';
+import { del, put } from '@vercel/blob';
 
 const SETTING_KEYS = [
   'shop_name',
@@ -239,8 +240,30 @@ export async function uploadShopLogo(req, res) {
   try {
     if (!req.file) return res.status(400).json({ message: 'Vui lòng chọn file logo' });
 
-    const logoUrl = `/uploads/settings/${req.file.filename}`;
+    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+      return res.status(503).json({ message: 'Chưa cấu hình kho lưu trữ logo production' });
+    }
+
+    const extension = {
+      'image/png': 'png',
+      'image/jpeg': 'jpg',
+      'image/webp': 'webp'
+    }[req.file.mimetype];
+    const currentSettings = normalizeSettings(await readSettingsRows());
+    const blob = await put(`settings/shop-logo-${Date.now()}.${extension}`, req.file.buffer, {
+      access: 'public',
+      addRandomSuffix: true,
+      contentType: req.file.mimetype
+    });
+    const logoUrl = blob.url;
     await saveSettingsMap({ shop_logo_url: logoUrl }, req.user?.id);
+
+    const previousUrl = currentSettings.shopInfo.logoUrl;
+    if (previousUrl && previousUrl.includes('.public.blob.vercel-storage.com/')) {
+      del(previousUrl).catch((error) => {
+        console.warn('Khong the xoa logo Blob cu:', error.message);
+      });
+    }
     res.json({ logoUrl });
   } catch (error) {
     res.status(500).json({ message: 'Không thể tải logo cửa hàng', error: error.message });

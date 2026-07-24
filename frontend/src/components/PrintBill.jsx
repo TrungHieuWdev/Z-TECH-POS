@@ -1,6 +1,4 @@
 import { Phone, Printer, ShieldCheck } from 'lucide-react';
-import defaultLogo from '../assets/images/1111.png';
-import { getUploadedAssetUrl } from '../services/settingsService';
 import { getWarrantyLabel } from '../utils/warrantyPolicy';
 
 const paymentLabels = {
@@ -33,7 +31,6 @@ export default function PrintBill({ receipt, onPrint = () => window.print(), sho
   const shopName = shop.name || 'Z-TECH POS';
   const address = shop.address || '43 Ao Doi, Binh Tri Dong A, TP.HCM';
   const phone = shop.phone || '0374676623';
-  const logo = getUploadedAssetUrl(shop.logoUrl) || defaultLogo;
   const discount = Number(receipt.discount || 0) + Number(receipt.pointsDiscountAmount || 0);
   const footer = 'Hẹn gặp lại.';
 
@@ -47,7 +44,6 @@ export default function PrintBill({ receipt, onPrint = () => window.print(), sho
 
       <article className="print-bill" aria-label={`Hóa đơn ${receipt.orderNumber || ''}`}>
         <header className="bill-header">
-          <img src={logo} alt={`Logo ${shopName}`} className="bill-logo" />
           <h1>{shopName}</h1>
           <p>{address}</p>
           <p>Hotline: {phone}</p>

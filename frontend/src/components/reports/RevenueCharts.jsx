@@ -220,7 +220,7 @@ export function DailyRevenueChart({ trend }) {
       data: values,
       backgroundColor: values.map((value, index) => value === peak && peak > 0 ? SYSTEM_BLUE : colors[(index + 1) % colors.length]),
       hoverBackgroundColor: SYSTEM_BLUE,
-      borderRadius: 7,
+      borderRadius: 0,
       borderSkipped: false,
       maxBarThickness: 42
     }]
@@ -332,7 +332,7 @@ export function TopProductsChart({ items = [] }) {
       label: 'Doanh thu thuần',
       data: items.map((item) => item.netRevenue),
       backgroundColor: items.map((_, index) => palette[index % palette.length]),
-      borderRadius: 6,
+      borderRadius: 0,
       borderSkipped: false,
       maxBarThickness: 28
     }]

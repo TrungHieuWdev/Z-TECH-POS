@@ -2,18 +2,13 @@ import jwt from 'jsonwebtoken';
 import { getJwtSecret } from '../config/auth.js';
 import { query } from '../config/db.js';
 import { isAdministratorRole, normalizeRole } from '../utils/roles.js';
+import { getAccessToken } from '../security/sessionTokens.js';
 
 export default async function auth(req, res, next) {
-  const authHeader = req.headers.authorization;
-
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ message: 'Phiên đăng nhập không tồn tại' });
-  }
-
-  const token = authHeader.slice('Bearer '.length).trim();
+  const token = getAccessToken(req);
 
   if (!token) {
-    return res.status(401).json({ message: 'Phiên đăng nhập không hợp lệ' });
+    return res.status(401).json({ message: 'Phiên đăng nhập không tồn tại' });
   }
 
   try {

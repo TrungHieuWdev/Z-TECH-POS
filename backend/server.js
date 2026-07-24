@@ -26,6 +26,8 @@ import promotionRoutes from './routes/promotions.js';
 import supplierRoutes from './routes/suppliers.js';
 import purchaseOrderRoutes from './routes/purchaseOrders.js';
 import paymentRoutes from './routes/payments.js';
+import csrfProtection from './middleware/csrf.js';
+import requestLogger from './security/requestLogger.js';
 
 dotenv.config();
 
@@ -37,8 +39,26 @@ const uploadsDirectory = path.join(serverDirectory, 'uploads');
 
 function validateRuntimeConfig() {
   getJwtSecret();
-  if (isProduction && !String(process.env.FRONTEND_ORIGINS || process.env.FRONTEND_ORIGIN || '').trim()) {
+  const hasVercelOrigin = Boolean(process.env.VERCEL_URL || process.env.VERCEL_PROJECT_PRODUCTION_URL);
+  const databaseUrl = String(process.env.DATABASE_URL || process.env.MYSQL_URI || '').trim();
+  const databaseUser = databaseUrl
+    ? decodeURIComponent(new URL(databaseUrl).username)
+    : String(process.env.DB_USER || 'root');
+  const hasDatabasePassword = databaseUrl
+    ? Boolean(new URL(databaseUrl).password)
+    : Boolean(String(process.env.DB_PASSWORD || '').trim());
+
+  if (isProduction && !hasVercelOrigin && !String(process.env.FRONTEND_ORIGINS || process.env.FRONTEND_ORIGIN || '').trim()) {
     throw new Error('FRONTEND_ORIGINS is required in production');
+  }
+  if (isProduction && databaseUser.toLowerCase() === 'root') {
+    throw new Error('Không được dùng tài khoản MySQL root trong production');
+  }
+  if (isProduction && !hasDatabasePassword) {
+    throw new Error('DB_PASSWORD is required in production');
+  }
+  if (isProduction && String(process.env.MFA_ENCRYPTION_KEY || '').length < 32) {
+    throw new Error('MFA_ENCRYPTION_KEY must be at least 32 characters in production');
   }
 }
 
@@ -48,8 +68,12 @@ const configuredOrigins = String(process.env.FRONTEND_ORIGINS || process.env.FRO
   .split(',')
   .map((origin) => origin.trim().replace(/\/$/, ''))
   .filter(Boolean);
+const vercelOrigins = [process.env.VERCEL_URL, process.env.VERCEL_PROJECT_PRODUCTION_URL]
+  .filter(Boolean)
+  .map((hostname) => `https://${hostname}`);
 const allowedOrigins = new Set([
   ...configuredOrigins,
+  ...vercelOrigins,
   ...(!isProduction ? ['http://localhost:5173', 'http://127.0.0.1:5173'] : [])
 ]);
 
@@ -100,8 +124,9 @@ app.use((req, res, next) => {
     'camera=(self), microphone=(), geolocation=(), payment=()'
   );
 
-  if (req.path.startsWith('/api/auth')) {
+  if (req.path.startsWith('/api')) {
     res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Vary', 'Cookie, Origin');
   }
 
   next();
@@ -109,6 +134,7 @@ app.use((req, res, next) => {
 if (String(process.env.TRUST_PROXY || '').toLowerCase() === 'true') {
   app.set('trust proxy', 1);
 }
+app.use(requestLogger);
 app.use('/api/', rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: Number(process.env.API_RATE_LIMIT || 600),
@@ -117,6 +143,7 @@ app.use('/api/', rateLimit({
   message: { message: 'Quá nhiều yêu cầu, vui lòng thử lại sau' }
 }));
 app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || '1mb' }));
+app.use(csrfProtection);
 app.use((req, res, next) => {
   if (!isProduction) return next();
   const sendJson = res.json.bind(res);
@@ -129,7 +156,7 @@ app.use((req, res, next) => {
   };
   return next();
 });
-app.use('/uploads', express.static(uploadsDirectory, {
+if (!process.env.VERCEL) app.use('/uploads', express.static(uploadsDirectory, {
   dotfiles: 'deny',
   fallthrough: false,
   immutable: isProduction,
@@ -246,19 +273,22 @@ app.use((req, res) => {
   res.status(404).json({ message: 'Không tìm thấy API' });
 });
 
-const server = app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on http://0.0.0.0:${PORT}`);
-});
+let server;
+if (!process.env.VERCEL) {
+  server = app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running on http://0.0.0.0:${PORT}`);
+  });
 
-server.on('error', (error) => {
-  if (error.code === 'EADDRINUSE') {
-    console.error(`\nKhong the khoi dong backend: port ${PORT} dang duoc tien trinh khac su dung.`);
-    console.error(`Hay chay: npm run dev de tu dong giai phong port ${PORT}, hoac doi PORT trong file .env.\n`);
-    process.exit(1);
-  }
+  server.on('error', (error) => {
+    if (error.code === 'EADDRINUSE') {
+      console.error(`\nKhong the khoi dong backend: port ${PORT} dang duoc tien trinh khac su dung.`);
+      console.error(`Hay chay: npm run dev de tu dong giai phong port ${PORT}, hoac doi PORT trong file .env.\n`);
+      process.exit(1);
+    }
 
-  throw error;
-});
+    throw error;
+  });
+}
 
 let shuttingDown = false;
 async function shutdown(signal) {
@@ -280,5 +310,9 @@ async function shutdown(signal) {
   });
 }
 
-process.on('SIGTERM', () => shutdown('SIGTERM'));
-process.on('SIGINT', () => shutdown('SIGINT'));
+if (server) {
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
+}
+
+export default app;

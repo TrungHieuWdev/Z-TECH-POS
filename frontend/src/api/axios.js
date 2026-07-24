@@ -1,6 +1,4 @@
 import axios from 'axios';
-import { getToken } from '../utils/auth';
-
 function getApiBaseUrl() {
   // In development, Vite proxies /api to the backend so browser CORS is avoided entirely.
   if (import.meta.env.DEV) return '/api';
@@ -20,12 +18,14 @@ function getApiBaseUrl() {
 
 const api = axios.create({
   baseURL: getApiBaseUrl(),
-  timeout: 8000
+  timeout: 8000,
+  withCredentials: true
 });
 
 const CACHE_TTL = 30 * 1000;
 const responseCache = new Map();
 const pendingRequests = new Map();
+let refreshSessionRequest = null;
 
 function stableParams(params) {
   if (!params || typeof params !== 'object') return String(params || '');
@@ -41,7 +41,6 @@ export function clearApiCache() {
 }
 
 api.interceptors.request.use((config) => {
-  const token = getToken();
   const method = String(config.method || 'get').toLowerCase();
 
   if (method !== 'get') clearApiCache();
@@ -86,8 +85,14 @@ api.interceptors.request.use((config) => {
     }
   }
 
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+  if (!['get', 'head', 'options'].includes(method)) {
+    const csrfToken = document.cookie
+      .split('; ')
+      .find((entry) => entry.startsWith('ztech_csrf='))
+      ?.split('=')
+      .slice(1)
+      .join('=');
+    if (csrfToken) config.headers['X-CSRF-Token'] = decodeURIComponent(csrfToken);
   }
 
   return config;
@@ -106,9 +111,24 @@ api.interceptors.response.use(
     }
     return response;
   },
-  (error) => {
+  async (error) => {
     const requestUrl = String(error.config?.url || '');
     const isLoginRequest = requestUrl.includes('/auth/login');
+    const isRefreshRequest = requestUrl.includes('/auth/refresh');
+
+    if (error.response?.status === 401 && !isLoginRequest && !isRefreshRequest && !error.config?.__sessionRetried) {
+      try {
+        error.config.__sessionRetried = true;
+        if (!refreshSessionRequest) {
+          refreshSessionRequest = api.post('/auth/refresh')
+            .finally(() => { refreshSessionRequest = null; });
+        }
+        await refreshSessionRequest;
+        return api.request(error.config);
+      } catch {
+        // The refresh interceptor below clears the local user marker.
+      }
+    }
 
     if (error.response?.status === 401 && !isLoginRequest) {
       localStorage.removeItem('token');

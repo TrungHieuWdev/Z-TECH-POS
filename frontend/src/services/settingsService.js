@@ -49,3 +49,18 @@ export async function changeCurrentPassword(payload) {
   const { data } = await api.put('/auth/change-password', payload);
   return data;
 }
+
+export async function setupMfa() {
+  const { data } = await api.post('/auth/mfa/setup');
+  return data;
+}
+
+export async function enableMfa(code) {
+  const { data } = await api.post('/auth/mfa/enable', { code });
+  return data;
+}
+
+export async function disableMfa(payload) {
+  const { data } = await api.post('/auth/mfa/disable', payload);
+  return data;
+}

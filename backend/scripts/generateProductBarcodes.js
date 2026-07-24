@@ -57,10 +57,12 @@ function encodeEan13(value) {
 
 function barcodeSvg(value) {
   const bits = encodeEan13(value);
-  const moduleWidth = 2;
+  const moduleWidth = 2.2;
   const barHeight = 72;
   const textHeight = 24;
-  const quiet = 18;
+  // Chừa 12 module trắng mỗi bên (cao hơn mức tối thiểu của EAN-13)
+  // để tem vẫn dễ quét khi in trên máy in nhiệt có sai lệch nhỏ.
+  const quiet = moduleWidth * 12;
   const width = bits.length * moduleWidth + quiet * 2;
   const height = barHeight + textHeight;
   const bars = [...bits].map((bit, index) => (

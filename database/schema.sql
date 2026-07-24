@@ -48,8 +48,30 @@ CREATE TABLE users (
   last_login_at DATETIME NULL,
   token_version INT UNSIGNED NOT NULL DEFAULT 0,
   password_changed_at DATETIME NULL,
+  failed_login_attempts INT UNSIGNED NOT NULL DEFAULT 0,
+  locked_until DATETIME NULL,
+  last_failed_login_at DATETIME NULL,
+  mfa_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+  mfa_secret_encrypted TEXT NULL,
+  mfa_recovery_codes_json TEXT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE SET NULL
+);
+
+CREATE TABLE auth_sessions (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  refresh_token_hash CHAR(64) NOT NULL,
+  csrf_token_hash CHAR(64) NOT NULL,
+  user_agent VARCHAR(255),
+  ip_address VARCHAR(64),
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_used_at DATETIME NULL,
+  expires_at DATETIME NOT NULL,
+  revoked_at DATETIME NULL,
+  UNIQUE KEY uk_auth_sessions_refresh (refresh_token_hash),
+  INDEX idx_auth_sessions_user (user_id, revoked_at, expires_at),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE TABLE ai_report_analysis_results (

@@ -15,6 +15,7 @@ import {
   ReceiptText,
   ScanLine,
   Search,
+  ShoppingCart,
   Smartphone,
   UserRound,
   UserSearch,
@@ -71,7 +72,7 @@ const deviceFamilyOptions = [
 ];
 
 const initialCustomerForm = { name: '', phone: '', email: '', address: '' };
-const SCAN_AUTO_SUBMIT_DELAY = 350;
+const SCAN_AUTO_SUBMIT_DELAY = 150;
 
 function normalizeScanCode(value = '') {
   return String(value)
@@ -167,11 +168,15 @@ function MobileCartLauncher({ itemCount, onOpen }) {
     <button
       type="button"
       onClick={onOpen}
-      className="no-print fixed right-0 top-1/2 z-50 flex h-14 -translate-y-1/2 items-center gap-1 bg-[#0f3b46] px-2 text-white shadow-[0_10px_30px_rgba(15,59,70,0.3)] xl:hidden"
+      className="no-print fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-50 grid h-14 w-14 place-items-center rounded-full border-2 border-white bg-[#0f3b46] text-white shadow-[0_12px_32px_rgba(15,59,70,0.35)] transition active:scale-95 xl:hidden"
       aria-label="Mở giỏ hàng"
     >
-      <ChevronLeft size={20} />
-      <span className="grid h-6 min-w-6 place-items-center bg-[#74B8E0] px-1 text-xs font-extrabold text-white">{itemCount}</span>
+      <ShoppingCart size={25} strokeWidth={2.4} />
+      {itemCount > 0 && (
+        <span className="absolute -right-1 -top-1 grid h-6 min-w-6 place-items-center rounded-full border-2 border-white bg-[#74B8E0] px-1 text-[11px] font-extrabold leading-none text-white">
+          {itemCount > 99 ? '99+' : itemCount}
+        </span>
+      )}
     </button>
   );
 }
@@ -504,19 +509,6 @@ export default function POS() {
       if (scanBufferTimerRef.current) window.clearTimeout(scanBufferTimerRef.current);
     };
   }, [scanMode, isScanning]);
-
-  useEffect(() => {
-    if (!scanMode || isScanning) return undefined;
-    const code = String(scanCode || '').trim();
-    if (!code) return undefined;
-
-    const timer = window.setTimeout(() => {
-      processScannedCode(code);
-    }, SCAN_AUTO_SUBMIT_DELAY);
-
-    return () => window.clearTimeout(timer);
-  }, [scanCode, scanMode, isScanning]);
-
 
   useEffect(() => {
     if (!isMobileCartOpen) return undefined;
@@ -1561,7 +1553,7 @@ export default function POS() {
         />
       )}
 
-      <aside className={`fixed inset-x-0 bottom-0 z-[60] flex max-h-[88dvh] min-h-0 flex-col overflow-y-auto border-t border-[#c3c6d7] bg-white pb-14 shadow-[0_-12px_36px_rgba(15,59,70,0.18)] transition-transform duration-200 xl:static xl:max-h-none xl:translate-y-0 xl:overflow-hidden xl:border-l xl:border-t-0 xl:pb-0 xl:shadow-none ${isMobileCartOpen ? 'translate-y-0' : 'translate-y-full'}`}>
+      <aside className={`fixed inset-x-0 bottom-0 z-[60] flex h-[88dvh] min-h-0 flex-col overflow-hidden rounded-t-2xl border-t border-[#c3c6d7] bg-white shadow-[0_-12px_36px_rgba(15,59,70,0.18)] transition-transform duration-200 xl:static xl:h-auto xl:max-h-none xl:translate-y-0 xl:rounded-none xl:border-l xl:border-t-0 xl:shadow-none ${isMobileCartOpen ? 'translate-y-0' : 'translate-y-full'}`}>
         <div className={`border-b border-[#c3c6d7] bg-white px-2.5 py-2 xl:block ${mobileCartView === 'checkout' ? 'hidden' : 'block'}`}>
           <div className="mb-1 flex items-center justify-between">
             <span className="text-sm font-bold text-[#191c1e]">Chọn loại khách hàng</span>
@@ -1594,7 +1586,7 @@ export default function POS() {
           </div>
         </div>
 
-        <div className={`min-h-0 flex-none flex-col overflow-hidden px-2.5 py-2 xl:flex xl:flex-1 ${mobileCartView === 'checkout' ? 'hidden' : 'flex'}`}>
+        <div className={`min-h-0 flex-1 flex-col overflow-hidden px-2.5 pb-[calc(4.5rem+env(safe-area-inset-bottom))] pt-2 xl:flex xl:pb-2 ${mobileCartView === 'checkout' ? 'hidden' : 'flex'}`}>
           <div className="mb-1.5 flex items-center justify-between">
             <div className="flex items-center gap-2 text-sm font-bold text-[#191c1e]">
               <Smartphone size={19} className="text-brand-strong" />
@@ -1610,7 +1602,7 @@ export default function POS() {
             </div>
           </div>
 
-          <div className="max-h-[52dvh] min-h-0 flex-1 touch-pan-y space-y-2 overflow-y-auto overscroll-contain pr-1 xl:max-h-none">
+          <div className="min-h-0 flex-1 touch-pan-y space-y-2 overflow-y-auto overscroll-contain pr-1">
             {cart.length === 0 ? (
               <div className="rounded-xl border border-dashed border-[#c3c6d7] bg-[#f7f9fb] p-6 text-center text-sm font-medium text-[#737686]">
                 Chưa có sản phẩm trong giỏ hàng
@@ -1694,7 +1686,7 @@ export default function POS() {
           </div>
         </div>
 
-        <div className={`border-t border-[#c3c6d7] bg-[#f2f4f6] p-2.5 xl:block ${mobileCartView === 'checkout' ? 'block' : 'hidden'}`}>
+        <div className={`min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain border-t border-[#c3c6d7] bg-[#f2f4f6] p-2.5 pb-[calc(4.5rem+env(safe-area-inset-bottom))] xl:block xl:flex-none xl:pb-2 ${mobileCartView === 'checkout' ? 'block' : 'hidden'}`}>
           <button
             type="button"
             onClick={() => setMobileCartView('cart')}
@@ -1818,7 +1810,7 @@ export default function POS() {
             type="button"
             onClick={() => setMobileCartView('checkout')}
             disabled={!cart.length}
-            className="fixed inset-x-0 bottom-0 z-10 flex h-14 items-center justify-center gap-2 border-t border-[#c3c6d7] bg-[#0f3b46] px-4 text-sm font-bold uppercase text-white shadow-[0_-8px_20px_rgba(15,59,70,0.16)] disabled:opacity-50 xl:hidden"
+            className="absolute inset-x-0 bottom-0 z-10 flex h-[calc(3.5rem+env(safe-area-inset-bottom))] items-start justify-center gap-2 border-t border-[#c3c6d7] bg-[#0f3b46] px-4 pt-[18px] text-sm font-bold uppercase text-white shadow-[0_-8px_20px_rgba(15,59,70,0.16)] disabled:opacity-50 xl:hidden"
           >
             <span>Tiếp tục thanh toán · {formatCurrency(total)}</span>
             <ChevronRight size={19} />
@@ -1828,7 +1820,7 @@ export default function POS() {
             type="button"
             onClick={openCheckoutConfirm}
             disabled={loading}
-            className="fixed inset-x-0 bottom-0 z-10 flex h-14 items-center justify-center gap-2 border-t border-[#c3c6d7] bg-[#74B8E0] px-4 text-sm font-bold uppercase text-white shadow-[0_-8px_20px_rgba(15,59,70,0.16)] disabled:opacity-70 xl:hidden"
+            className="absolute inset-x-0 bottom-0 z-10 flex h-[calc(3.5rem+env(safe-area-inset-bottom))] items-start justify-center gap-2 border-t border-[#c3c6d7] bg-[#74B8E0] px-4 pt-[18px] text-sm font-bold uppercase text-white shadow-[0_-8px_20px_rgba(15,59,70,0.16)] disabled:opacity-70 xl:hidden"
           >
             <ReceiptText size={18} />
             <span>Thanh toán · {formatCurrency(total)}</span>
@@ -2151,7 +2143,7 @@ export default function POS() {
           </div>
         </div>
 
-        <div className={isTransferQrStep ? 'grid gap-x-6 gap-y-1 rounded-lg border border-[#d7eef3] p-3 text-sm md:grid-cols-2' : 'space-y-3 rounded-lg border border-[#d7eef3] p-4 text-sm'}>
+        <div className={isTransferQrStep ? 'space-y-3 rounded-lg border border-[#d7eef3] p-3 text-sm' : 'space-y-3 rounded-lg border border-[#d7eef3] p-4 text-sm'}>
           <div className="flex justify-between">
             <span>Tạm tính</span>
             <span>{formatCurrency(subtotal)}</span>
@@ -2166,18 +2158,18 @@ export default function POS() {
               <span>{formatCurrency(vatAmount)}</span>
             </div>
           )}
+          <div className="flex items-center justify-between gap-3">
+            <span>Phương thức</span>
+            <span className="font-bold">{getPaymentLabel(paymentMethod)}</span>
+          </div>
           <div className="mt-2 flex items-center justify-between rounded-lg border border-[#74B8E0] bg-[#e8f5fb] px-3 py-3 text-xl font-extrabold text-[#0f3b46] shadow-sm">
             <span>TỔNG CỘNG</span>
             <span className="text-brand-strong">{formatCurrency(total)}</span>
           </div>
         </div>
 
+        {isCashPayment && (
         <div className="space-y-3 rounded-lg border border-[#d7eef3] p-4 text-sm">
-          <div className="flex items-center justify-between gap-3">
-            <span>Phương thức</span>
-            <span className="font-bold">{getPaymentLabel(paymentMethod)}</span>
-          </div>
-          {isCashPayment && (
             <>
               <label className="grid gap-1.5">
                 <span className="font-semibold text-[#434655]">Tiền khách đưa</span>
@@ -2211,8 +2203,8 @@ export default function POS() {
                 </span>
               </div>
             </>
-          )}
         </div>
+        )}
 
         <div className="sticky bottom-0 z-20 -mx-3 -mb-3 flex justify-end border-t border-[#edf2f5] bg-white px-3 py-1.5">
           {checkoutActions}

@@ -1,7 +1,17 @@
 import express from 'express';
 import auth from '../middleware/auth.js';
 import rateLimit from 'express-rate-limit';
-import { changePassword, login, getMe } from '../controllers/authController.js';
+import {
+  changePassword,
+  disableMfa,
+  enableMfa,
+  getMe,
+  login,
+  logout,
+  refreshSession,
+  setupMfa,
+  verifyMfaLogin
+} from '../controllers/authController.js';
 import { validateChangePassword, validateLogin } from '../middleware/validate.js';
 
 const router = express.Router();
@@ -15,7 +25,13 @@ const loginLimiter = rateLimit({
 });
 
 router.post('/login', loginLimiter, validateLogin, login);
+router.post('/mfa/verify-login', loginLimiter, verifyMfaLogin);
+router.post('/refresh', refreshSession);
+router.post('/logout', logout);
 router.get('/me', auth, getMe);
 router.put('/change-password', auth, validateChangePassword, changePassword);
+router.post('/mfa/setup', auth, setupMfa);
+router.post('/mfa/enable', auth, enableMfa);
+router.post('/mfa/disable', auth, disableMfa);
 
 export default router;

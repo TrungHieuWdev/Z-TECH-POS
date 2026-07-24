@@ -96,7 +96,9 @@ function BarcodePreview({ value }) {
   if (!bits) return null;
 
   const moduleWidth = 1.5;
-  const quiet = 8;
+  // EAN-13 cần vùng trắng tối thiểu khoảng 11 module ở hai bên để đầu
+  // đọc phân biệt chính xác vạch bảo vệ với nội dung xung quanh.
+  const quiet = moduleWidth * 12;
   const width = bits.length * moduleWidth + quiet * 2;
   const height = 34;
 

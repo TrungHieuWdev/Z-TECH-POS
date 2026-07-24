@@ -168,7 +168,7 @@ function ScoreCircle({ value }) {
 
 function Panel({ title, subtitle, children, empty = false, emptyMessage = 'Chưa đủ dữ liệu phù hợp với bộ lọc.' }) {
   return (
-    <section className="overflow-hidden rounded-lg border border-slate-200 bg-white p-5 shadow-[0_4px_18px_rgba(15,23,42,0.04)]">
+    <section className="overflow-hidden border border-slate-200 bg-white p-5 shadow-[0_4px_18px_rgba(15,23,42,0.04)]">
       <div className="mb-5">
         <h2 className="text-sm font-black uppercase tracking-wide text-slate-800">{title}</h2>
         {subtitle && <p className="mt-1 text-xs font-medium text-slate-500">{subtitle}</p>}

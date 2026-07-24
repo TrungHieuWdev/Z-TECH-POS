@@ -1,8 +1,15 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Eye, EyeOff, LoaderCircle, Lock, Save } from 'lucide-react';
+import QRCode from 'qrcode';
 import { ROLE_BADGES } from '../../constants/settingsDefaults';
-import { changeCurrentPassword, getCurrentAccount } from '../../services/settingsService';
+import {
+  changeCurrentPassword,
+  disableMfa,
+  enableMfa,
+  getCurrentAccount,
+  setupMfa
+} from '../../services/settingsService';
 import { getRoleLabel } from '../../utils/auth';
 import { Header } from './PrintSettings';
 
@@ -18,6 +25,12 @@ export default function AccountSecuritySettings() {
   const [visible, setVisible] = useState({});
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [mfaSetup, setMfaSetup] = useState(null);
+  const [mfaQr, setMfaQr] = useState('');
+  const [mfaCode, setMfaCode] = useState('');
+  const [mfaPassword, setMfaPassword] = useState('');
+  const [mfaBusy, setMfaBusy] = useState(false);
+  const [recoveryCodes, setRecoveryCodes] = useState([]);
 
   useEffect(() => {
     let mounted = true;
@@ -60,6 +73,51 @@ export default function AccountSecuritySettings() {
 
   const roleKey = String(account?.role || '').toLowerCase();
 
+  const beginMfaSetup = async () => {
+    setMfaBusy(true);
+    try {
+      const data = await setupMfa();
+      setMfaSetup(data);
+      setMfaQr(await QRCode.toDataURL(data.otpauthUri, { width: 220, margin: 1 }));
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Không thể thiết lập xác thực hai lớp');
+    } finally {
+      setMfaBusy(false);
+    }
+  };
+
+  const confirmMfa = async () => {
+    setMfaBusy(true);
+    try {
+      const result = await enableMfa(mfaCode);
+      setAccount((current) => ({ ...current, mfaEnabled: true }));
+      setRecoveryCodes(result.recoveryCodes || []);
+      setMfaSetup(null);
+      setMfaQr('');
+      setMfaCode('');
+      toast.success('Đã bật xác thực hai lớp');
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Mã xác thực không hợp lệ');
+    } finally {
+      setMfaBusy(false);
+    }
+  };
+
+  const turnOffMfa = async () => {
+    setMfaBusy(true);
+    try {
+      await disableMfa({ password: mfaPassword, code: mfaCode });
+      setAccount((current) => ({ ...current, mfaEnabled: false }));
+      setMfaPassword('');
+      setMfaCode('');
+      toast.success('Đã tắt xác thực hai lớp');
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Không thể tắt xác thực hai lớp');
+    } finally {
+      setMfaBusy(false);
+    }
+  };
+
   return (
     <div className="space-y-5">
       <Header icon={Lock} title="Bảo mật tài khoản hiện tại" description="Xem nhanh tài khoản đang đăng nhập và đổi mật khẩu cá nhân." />
@@ -79,6 +137,53 @@ export default function AccountSecuritySettings() {
             </div>
             <Info label="Lần đăng nhập gần nhất" value={account?.lastLoginAt ? new Date(account.lastLoginAt).toLocaleString('vi-VN') : 'Chưa có dữ liệu'} />
           </>
+        )}
+      </section>
+
+      <section className="border border-[#d7e2ea] bg-white p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="font-extrabold text-[#191c1d]">Xác thực hai lớp (MFA)</h3>
+            <p className="mt-1 text-sm text-[#66727c]">Dùng Google Authenticator, Microsoft Authenticator hoặc ứng dụng TOTP tương thích.</p>
+          </div>
+          <span className={`px-3 py-1 text-xs font-extrabold ${account?.mfaEnabled ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+            {account?.mfaEnabled ? 'Đang bật' : 'Chưa bật'}
+          </span>
+        </div>
+
+        {!account?.mfaEnabled && !mfaSetup && (
+          <button type="button" disabled={mfaBusy} onClick={beginMfaSetup} className="mt-4 h-10 bg-brand px-4 text-sm font-bold text-white disabled:opacity-60">
+            Thiết lập MFA
+          </button>
+        )}
+
+        {mfaSetup && (
+          <div className="mt-4 grid gap-4 border-t border-[#e1e3e4] pt-4 md:grid-cols-[220px_1fr]">
+            {mfaQr && <img src={mfaQr} alt="Mã QR thiết lập MFA" className="h-[220px] w-[220px] border bg-white" />}
+            <div>
+              <p className="text-sm font-semibold text-[#34424d]">Quét QR, sau đó nhập mã 6 số để xác nhận.</p>
+              <p className="mt-2 break-all bg-[#f4f6f8] p-2 font-mono text-xs">{mfaSetup.secret}</p>
+              <input value={mfaCode} onChange={(event) => setMfaCode(event.target.value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" className="mt-3 h-10 w-48 border px-3 text-center font-extrabold tracking-[0.3em]" placeholder="000000" />
+              <button type="button" disabled={mfaBusy || mfaCode.length !== 6} onClick={confirmMfa} className="ml-2 h-10 bg-emerald-600 px-4 text-sm font-bold text-white disabled:opacity-60">Bật MFA</button>
+            </div>
+          </div>
+        )}
+
+      {account?.mfaEnabled && (
+          <div className="mt-4 flex flex-wrap gap-2 border-t border-[#e1e3e4] pt-4">
+            <input type="password" value={mfaPassword} onChange={(event) => setMfaPassword(event.target.value)} className="h-10 border px-3 text-sm" placeholder="Mật khẩu hiện tại" />
+            <input value={mfaCode} onChange={(event) => setMfaCode(event.target.value.replace(/\D/g, '').slice(0, 6))} inputMode="numeric" className="h-10 w-40 border px-3 text-center font-extrabold tracking-[0.25em]" placeholder="Mã 6 số" />
+            <button type="button" disabled={mfaBusy || !mfaPassword || mfaCode.length !== 6} onClick={turnOffMfa} className="h-10 border border-red-300 px-4 text-sm font-bold text-red-700 disabled:opacity-60">Tắt MFA</button>
+          </div>
+      )}
+
+        {recoveryCodes.length > 0 && (
+          <div className="mt-4 border border-amber-300 bg-amber-50 p-3">
+            <p className="font-extrabold text-amber-900">Lưu các mã khôi phục này ngay — mỗi mã chỉ dùng một lần.</p>
+            <div className="mt-2 grid grid-cols-2 gap-1 font-mono text-sm font-bold text-amber-950 sm:grid-cols-4">
+              {recoveryCodes.map((code) => <span key={code}>{code}</span>)}
+            </div>
+          </div>
         )}
       </section>
 

@@ -60,6 +60,9 @@ function LoginCard({
   remember,
   showPassword,
   errorMessage,
+  mfaChallenge,
+  mfaCode,
+  onMfaCodeChange,
   onFormChange,
   onRememberChange,
   onPasswordToggle,
@@ -79,7 +82,7 @@ function LoginCard({
       </div>
 
       <form onSubmit={onSubmit} className="space-y-4 sm:space-y-5">
-        <Field label="Mã đăng nhập hoặc email" icon={UserRound}>
+        {!mfaChallenge && <Field label="Mã đăng nhập hoặc email" icon={UserRound}>
           <input
             value={form.employeeCode}
             onChange={(event) => onFormChange('employeeCode', event.target.value.toUpperCase())}
@@ -88,9 +91,9 @@ function LoginCard({
             placeholder="Nhập mã đăng nhập hoặc email"
             required
           />
-        </Field>
+        </Field>}
 
-        <Field label="Mật khẩu" icon={LockKeyhole}>
+        {!mfaChallenge && <Field label="Mật khẩu" icon={LockKeyhole}>
           <input
             type={showPassword ? 'text' : 'password'}
             value={form.password}
@@ -109,7 +112,21 @@ function LoginCard({
           >
             {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
           </button>
-        </Field>
+        </Field>}
+
+        {mfaChallenge && <Field label="Mã xác thực hoặc mã khôi phục" icon={LockKeyhole}>
+          <input
+            value={mfaCode}
+            onChange={(event) => onMfaCodeChange(event.target.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 10))}
+            autoComplete="one-time-code"
+            className={`${inputClass} text-center text-lg font-extrabold tracking-[0.35em]`}
+            placeholder="000000"
+            minLength={6}
+            maxLength={10}
+            required
+            autoFocus
+          />
+        </Field>}
 
         {errorMessage && (
           <div className="border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
@@ -117,7 +134,7 @@ function LoginCard({
           </div>
         )}
 
-        <div className="flex items-center justify-between gap-4">
+        {!mfaChallenge && <div className="flex items-center justify-between gap-4">
           <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-[#26364d]">
             <span className="relative grid h-[18px] w-[18px] place-items-center">
               <input
@@ -131,14 +148,14 @@ function LoginCard({
             Ghi nhớ đăng nhập
           </label>
           <span className="text-sm font-medium text-[#4a9ddd]">Quên mật khẩu?</span>
-        </div>
+        </div>}
 
         <button
           type="submit"
           disabled={loading}
           className="flex h-[54px] w-full items-center justify-center gap-3 bg-gradient-to-r from-[#55a7e7] to-[#65b6ef] px-5 text-base font-semibold text-white shadow-[0_10px_24px_rgba(77,164,226,0.22)] transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-70"
         >
-          <span>{loading ? 'Đang đăng nhập...' : 'Đăng nhập'}</span>
+          <span>{loading ? 'Đang xác thực...' : mfaChallenge ? 'Xác nhận mã bảo mật' : 'Đăng nhập'}</span>
         </button>
       </form>
     </div>
@@ -152,6 +169,8 @@ export default function Login() {
   const [remember, setRemember] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [mfaChallenge, setMfaChallenge] = useState('');
+  const [mfaCode, setMfaCode] = useState('');
 
   const updateForm = (field, value) => {
     setErrorMessage('');
@@ -164,13 +183,22 @@ export default function Login() {
     setErrorMessage('');
 
     try {
-      const response = await api.post('/auth/login', {
-        employeeCode: form.employeeCode.trim().toUpperCase(),
-        password: form.password
-      });
+      const response = mfaChallenge
+        ? await api.post('/auth/mfa/verify-login', { challengeToken: mfaChallenge, code: mfaCode })
+        : await api.post('/auth/login', {
+            employeeCode: form.employeeCode.trim().toUpperCase(),
+            password: form.password,
+            remember
+          });
+      if (response.data.mfaRequired) {
+        setMfaChallenge(response.data.challengeToken);
+        setMfaCode('');
+        toast.success('Vui lòng nhập mã từ ứng dụng xác thực');
+        return;
+      }
       const user = response.data.user;
 
-      saveAuth(user, response.data.token, remember);
+      saveAuth(user, null, remember);
       toast.success('Đăng nhập thành công');
       navigate('/dashboard');
     } catch (error) {
@@ -202,7 +230,10 @@ export default function Login() {
             loading={loading}
             remember={remember}
             showPassword={showPassword}
-            errorMessage={errorMessage}
+        errorMessage={errorMessage}
+        mfaChallenge={mfaChallenge}
+        mfaCode={mfaCode}
+        onMfaCodeChange={setMfaCode}
             onFormChange={updateForm}
             onRememberChange={setRemember}
             onPasswordToggle={() => setShowPassword((current) => !current)}

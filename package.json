@@ -1,0 +1,18 @@
+{
+  "name": "z-tech-pos",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "engines": {
+    "node": ">=22 <25"
+  },
+  "scripts": {
+    "build": "npm run build --workspace frontend",
+    "test": "npm test --workspace backend",
+    "audit:production": "npm audit --omit=dev --audit-level=high"
+  }
+}

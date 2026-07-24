@@ -3,33 +3,28 @@ import { readJsonStorage } from './storage';
 
 const isUserRecord = (value) => Boolean(value && typeof value === 'object' && !Array.isArray(value));
 
-export function saveAuth(user, token, remember = false) {
+export function saveAuth(user, _token, remember = false) {
   const primaryStorage = remember ? localStorage : sessionStorage;
   const secondaryStorage = remember ? sessionStorage : localStorage;
 
-  primaryStorage.setItem('token', token);
   primaryStorage.setItem('user', JSON.stringify(user));
-  secondaryStorage.removeItem('token');
   secondaryStorage.removeItem('user');
+  localStorage.removeItem('token');
+  sessionStorage.removeItem('token');
 }
 
 export function getToken() {
   for (const storage of [localStorage, sessionStorage]) {
-    const token = storage.getItem('token');
-    if (!token) continue;
     const user = readJsonStorage(storage, 'user', null, isUserRecord);
-    if (user) return token;
-    storage.removeItem('token');
+    if (user) return 'http-only-cookie-session';
   }
   return null;
 }
 
 export function getUser() {
   for (const storage of [localStorage, sessionStorage]) {
-    if (!storage.getItem('token')) continue;
     const user = readJsonStorage(storage, 'user', null, isUserRecord);
     if (user) return user;
-    storage.removeItem('token');
   }
   return null;
 }
@@ -52,6 +47,17 @@ export function canAccessPath(pathname, user = getUser()) {
 }
 
 export function logout() {
+  const csrfCookie = document.cookie
+    .split('; ')
+    .find((entry) => entry.startsWith('ztech_csrf='))
+    ?.split('=')
+    .slice(1)
+    .join('=') || '';
+  fetch('/api/auth/logout', {
+    method: 'POST',
+    credentials: 'include',
+    headers: csrfCookie ? { 'X-CSRF-Token': decodeURIComponent(csrfCookie) } : {}
+  }).catch(() => {});
   localStorage.removeItem('token');
   localStorage.removeItem('user');
   sessionStorage.removeItem('token');
